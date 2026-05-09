@@ -14,14 +14,14 @@
     "api_key": "sk-lm-pkX06d0E:d1uXXht5QK5Iywk4D8Pr",
     "model": "qwen3.6-35b-a3b",
     "org_id": "",
-    "timeout": 300
-  },
-  "model": {
-    "temperature": 0.5,
-    "max_tokens": 32768,
-    "top_p": 1.0,
-    "frequency_penalty": 0,
-    "presence_penalty": 0
+    "timeout": 300,
+    "params": {
+      "max_tokens": 32768,
+      "temperature": 0.5,
+      "top_p": 1.0,
+      "frequency_penalty": 0,
+      "presence_penalty": 0
+    }
   },
   "conversation": {
     "max_history_messages": 20

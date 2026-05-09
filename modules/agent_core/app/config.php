@@ -57,13 +57,13 @@ class config extends Factory
                 'model'   => 'qwen3.6-35b-a3b',
                 'org_id'  => '',
                 'timeout' => 300,
-            ],
-            'model'        => [
-                'temperature'       => 0.5,
-                'max_tokens'        => 32768,
-                'top_p'             => 1.0,
-                'frequency_penalty' => 0,
-                'presence_penalty'  => 0
+                'params'  => [
+                    'temperature'       => 0.5,
+                    'max_tokens'        => 32768,
+                    'top_p'             => 1.0,
+                    'frequency_penalty' => 0,
+                    'presence_penalty'  => 0
+                ],
             ],
             'conversation' => [
                 'max_history_messages' => 20,

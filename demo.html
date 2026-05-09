@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AgentBee WebSocket 调试工具</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #1e1f2c;
+            color: #e4e4e7;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+            background: #2d2f3f;
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-height: calc(100vh - 40px);
+        }
+        .header {
+            padding: 16px 20px;
+            background: #252734;
+            border-bottom: 1px solid #3b3e52;
+        }
+        .header h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.6rem;
+            font-weight: 600;
+        }
+        .connection-panel {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 8px;
+        }
+        .url-input {
+            flex: 2;
+            min-width: 200px;
+            background: #1e1f2c;
+            border: 1px solid #4a4e6b;
+            border-radius: 40px;
+            padding: 10px 18px;
+            color: #fff;
+            font-size: 0.9rem;
+            font-family: monospace;
+        }
+        button {
+            background: #3b4b8c;
+            border: none;
+            border-radius: 40px;
+            padding: 10px 20px;
+            font-weight: 500;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        button:hover {
+            background: #4f61b0;
+        }
+        button.disconnect {
+            background: #6b3e4a;
+        }
+        button.disconnect:hover {
+            background: #8f4e5e;
+        }
+        .status {
+            margin-left: auto;
+            font-size: 0.85rem;
+            background: #1e1f2c;
+            padding: 6px 14px;
+            border-radius: 40px;
+            font-family: monospace;
+        }
+        .status.connected {
+            color: #7bdd6e;
+        }
+        .status.disconnected {
+            color: #f28b82;
+        }
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: #1e1f2c;
+        }
+        .message {
+            max-width: 85%;
+            padding: 10px 16px;
+            border-radius: 20px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        .sent {
+            align-self: flex-end;
+            background: #3b4b8c;
+            border-bottom-right-radius: 4px;
+        }
+        .received {
+            align-self: flex-start;
+            background: #2d2f3f;
+            border-bottom-left-radius: 4px;
+        }
+        .think-content {
+            font-style: italic;
+            color: #aaa;
+            border-left: 2px solid #555;
+            padding-left: 8px;
+            margin: 4px 0;
+        }
+        .system {
+            align-self: center;
+            background: #3c3144;
+            font-size: 0.8rem;
+            padding: 6px 14px;
+            max-width: 90%;
+            text-align: center;
+            color: #cfc6e0;
+        }
+        .input-area {
+            padding: 16px 20px;
+            background: #252734;
+            border-top: 1px solid #3b3e52;
+            display: flex;
+            gap: 12px;
+        }
+        .input-message {
+            flex: 1;
+            background: #1e1f2c;
+            border: 1px solid #4a4e6b;
+            border-radius: 40px;
+            padding: 12px 18px;
+            color: #fff;
+            font-size: 0.9rem;
+            resize: none;
+            font-family: inherit;
+        }
+        .input-message:focus {
+            outline: none;
+            border-color: #7b8cd9;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .message { max-width: 95%; }
+            .url-input { min-width: 140px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🐝 AgentBee · WebSocket 调试台</h1>
+        <div class="connection-panel">
+            <input type="text" id="wsUrl" class="url-input" value="ws://127.0.0.1:8686" placeholder="ws://host:port">
+            <button id="connectBtn" class="connect">🔌 连接</button>
+            <button id="disconnectBtn" class="disconnect" disabled>❌ 断开</button>
+            <div id="statusLabel" class="status disconnected">⚪ 未连接</div>
+        </div>
+    </div>
+    <div id="chatContainer" class="chat-area">
+        <div class="message system">💡 连接 WebSocket 后，即可发送消息。<br>每轮对话会保持上下文（会话绑定当前连接）。</div>
+    </div>
+    <div class="input-area">
+        <textarea id="messageInput" class="input-message" rows="1" placeholder="输入消息... (支持多行，Ctrl+Enter 或 Cmd+Enter 发送)" disabled></textarea>
+        <button id="sendBtn" disabled>📤 发送</button>
+    </div>
+</div>
+
+<script>
+    let ws = null;
+    let connected = false;
+
+    // 流式接收状态
+    let receiving = false;
+    let currentMsgDiv = null;
+    let currentThinkDiv = null;
+
+    const wsUrlInput = document.getElementById('wsUrl');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const statusLabel = document.getElementById('statusLabel');
+    const chatContainer = document.getElementById('chatContainer');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    function addSystemMessage(text) {
+        const div = document.createElement('div');
+        div.classList.add('system');
+        div.innerText = text;
+        chatContainer.appendChild(div);
+        div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function addSentMessage(text) {
+        const div = document.createElement('div');
+        div.classList.add('message', 'sent');
+        div.innerHTML = `<span style="font-weight:500;">📤 我</span><br>${escapeHtml(text)}`;
+        chatContainer.appendChild(div);
+        div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function startReceivedMessage() {
+        currentMsgDiv = document.createElement('div');
+        currentMsgDiv.classList.add('message', 'received');
+        currentMsgDiv.innerHTML = `<span style="font-weight:500;">🤖 AgentBee</span><br>`;
+        chatContainer.appendChild(currentMsgDiv);
+        receiving = true;
+        currentThinkDiv = null;
+    }
+
+    function appendThinkContent(text) {
+        if (!currentMsgDiv) startReceivedMessage();
+        if (!currentThinkDiv) {
+            currentThinkDiv = document.createElement('div');
+            currentThinkDiv.className = 'think-content';
+            currentMsgDiv.appendChild(currentThinkDiv);
+        }
+        currentThinkDiv.appendChild(document.createTextNode(text));
+        currentMsgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function appendContent(text) {
+        if (!currentMsgDiv) startReceivedMessage();
+        const textNode = document.createTextNode(text);
+        currentMsgDiv.appendChild(textNode);
+        currentMsgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function finishReceivedMessage() {
+        receiving = false;
+        currentMsgDiv = null;
+        currentThinkDiv = null;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function setUI(connectedState) {
+        connected = connectedState;
+        if (connected) {
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            messageInput.disabled = false;
+            sendBtn.disabled = false;
+            statusLabel.innerText = '🟢 已连接';
+            statusLabel.className = 'status connected';
+            wsUrlInput.disabled = true;
+        } else {
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            statusLabel.innerText = '🔴 未连接';
+            statusLabel.className = 'status disconnected';
+            wsUrlInput.disabled = false;
+            receiving = false;
+            currentMsgDiv = null;
+            currentThinkDiv = null;
+        }
+    }
+
+    function connectWebSocket() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+            addSystemMessage('已有连接，请先断开');
+            return;
+        }
+        let url = wsUrlInput.value.trim();
+        if (!url) {
+            addSystemMessage('请输入 WebSocket 地址');
+            return;
+        }
+        if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+            addSystemMessage('地址必须以 ws:// 或 wss:// 开头');
+            return;
+        }
+        addSystemMessage(`🔌 正在连接 ${url} ...`);
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+            setUI(true);
+            addSystemMessage('✅ WebSocket 连接已建立');
+            messageInput.focus();
+        };
+
+        ws.onmessage = (event) => {
+            let raw = event.data;
+            if (typeof raw !== 'string') return;
+
+            let msg;
+            try {
+                msg = JSON.parse(raw);
+            } catch(e) {
+                console.warn("非JSON消息，忽略", raw);
+                return;
+            }
+
+            if (msg.type === 'end') {
+                finishReceivedMessage();
+            } else if (msg.type === 'think') {
+                if (!receiving) startReceivedMessage();
+                appendThinkContent(msg.data);
+            } else if (msg.type === 'content') {
+                if (!receiving) startReceivedMessage();
+                appendContent(msg.data);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error', error);
+            addSystemMessage('❌ 连接错误，请查看控制台');
+        };
+
+        ws.onclose = (event) => {
+            setUI(false);
+            const reason = event.reason ? `, 原因: ${event.reason}` : '';
+            addSystemMessage(`🔌 连接已关闭 (code: ${event.code}${reason})`);
+            ws = null;
+        };
+    }
+
+    function disconnectWebSocket() {
+        if (ws) {
+            ws.close(1000, '用户主动断开');
+        } else {
+            setUI(false);
+        }
+    }
+
+    function sendMessage() {
+        if (!connected || !ws || ws.readyState !== WebSocket.OPEN) {
+            addSystemMessage('未连接，无法发送消息');
+            return;
+        }
+        let rawMsg = messageInput.value;
+        if (rawMsg.trim() === '') {
+            return;
+        }
+        ws.send(rawMsg);
+        addSentMessage(rawMsg);
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        receiving = false;
+        currentMsgDiv = null;
+        currentThinkDiv = null;
+    }
+
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(120, this.scrollHeight) + 'px';
+    });
+
+    messageInput.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    connectBtn.addEventListener('click', connectWebSocket);
+    disconnectBtn.addEventListener('click', disconnectWebSocket);
+    sendBtn.addEventListener('click', sendMessage);
+
+    addSystemMessage('🔧 使用说明：\n1. 点击「连接」建立 WebSocket 连接\n2. 输入任意文本与 Agent 对话（支持多行，Ctrl+Enter 发送）\n3. 对话上下文绑定当前连接，重新连接会重置会话');
+</script>
+</body>
+</html>

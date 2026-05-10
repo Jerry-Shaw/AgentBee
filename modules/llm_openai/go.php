@@ -120,7 +120,7 @@ class go extends Factory
 
         if ($data['type'] === 'end') {
             if (isset($data['data'])) {
-                $processor->addMemory(time(), 'user', json_encode(['role' => 'assistant', 'content' => $data['data']], JSON_FORMAT));
+                $processor->addMemory(time(), 'assistant', $data['data']);
             }
 
             $processor->sendMessage($socket_id, json_encode(['type' => 'end'], JSON_FORMAT));

@@ -21,30 +21,23 @@
 namespace modules\agent_core;
 
 use modules\agent_core\app\config;
-use modules\agent_core\app\openAi;
+use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\System;
-use Nervsys\Ext\libOpenAI;
 
-class go
+class go extends Factory
 {
     use System;
 
-    public openAi    $openAi;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
-    public libOpenAI $libOpenAI;
+
+    public processor $processor;
 
     public array $config = [];
 
     public string $temp_dir = '';
-
-    // 会话历史存储：key = socket_id, value = 消息数组
-    public array $sessions = [];
-
-    public array $queue      = [];
-    public bool  $in_process = false;
 
     /**
      * @throws \ReflectionException
@@ -63,9 +56,9 @@ class go
             }
         }
 
-        $this->openAi    = openAi::new();
         $this->socketMgr = SocketMgr::new();
         $this->procMgr   = ProcMgr::new('socket');
+        $this->processor = processor::new($this->socketMgr);
     }
 
     /**
@@ -104,44 +97,41 @@ class go
         }
     }
 
-    public function procChat(int $socket_id, array $messages): void
-    {
-        $this->openAi->chat($socket_id, $messages);
-    }
-
+    /**
+     * @param int    $socket_id
+     * @param string $ws_proto
+     *
+     * @return bool
+     */
     public function onClientHandshake(int $socket_id, string $ws_proto): bool
     {
         return true;
     }
 
+    /**
+     * @throws \ReflectionException
+     */
     public function onClientMessage(int $socket_id, string $message): void
     {
-        // 初始化会话历史
-        if (!isset($this->sessions[$socket_id])) {
-            $this->sessions[$socket_id] = [
-                ['role' => 'system', 'content' => '你是我的助手，请帮我解决这个问题']
-            ];
-        }
+        $this->processor->addMemory(time(), 'user', $message);
 
-        // 添加用户消息到历史
-        $this->sessions[$socket_id][] = ['role' => 'user', 'content' => $message];
-        $this->trimSessionHistory($socket_id);
+        $default_memory = $this->processor->getDefaultMemory();
+        $today_memory   = $this->processor->getMemory(strtotime(date('Y-m-d')));
 
         $task = [
-            'c'         => 'agent_core/procChat',
-            'socket_id' => $socket_id,
-            'messages'  => $this->sessions[$socket_id]
+            'c'        => $this->config['llm']['provider'] . '/chat',
+            'messages' => array_merge($default_memory, $today_memory),
         ];
 
         $this->procMgr->putJob(
             json_encode($task, JSON_FORMAT),
             function (string $output) use ($socket_id): void
             {
-                $this->openAi->onWorkerOutput($socket_id, $output, $this);
+                $this->processor->onWorkerOutput($socket_id, $output);
             },
             function (string $output) use ($socket_id): void
             {
-                $this->openAi->onWorkerError($socket_id, $output, $this);
+                $this->processor->onWorkerError($socket_id, $output);
             },
             '[DONE]'
         );
@@ -149,33 +139,22 @@ class go
         $this->procMgr->awaitJobs();
     }
 
-    private function trimSessionHistory(int $socket_id, int $max_messages = 20): void
-    {
-        $history = &$this->sessions[$socket_id];
-        if (count($history) <= $max_messages) {
-            return;
-        }
-
-        $system = [];
-        if (isset($history[0]['role']) && $history[0]['role'] === 'system') {
-            $system = [$history[0]];
-            array_shift($history);
-        }
-
-        $history = array_slice($history, -($max_messages - count($system)));
-
-        if (!empty($system)) {
-            array_unshift($history, $system[0]);
-        }
-    }
-
+    /**
+     * @param int $socket_id
+     *
+     * @return array
+     */
     public function onMessageSend(int $socket_id): array
     {
         return [];
     }
 
+    /**
+     * @param int $socket_id
+     *
+     * @return void
+     */
     public function onClientClose(int $socket_id): void
     {
-        unset($this->sessions[$socket_id]);
     }
 }

@@ -1,0 +1,14 @@
+{
+  "name": "llm_openai",
+  "version": "0.0.1",
+  "description": "OpenAPI Compatible API",
+  "author": "秋水之冰",
+  "email": "27206617@qq.com",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {
+  },
+  "requires": {
+    "php": ">=8.1"
+  }
+}

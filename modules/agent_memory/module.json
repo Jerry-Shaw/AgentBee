@@ -1,0 +1,14 @@
+{
+  "name": "agent_memory",
+  "version": "0.0.1",
+  "description": "agent_memory module for AgentBee",
+  "author": "秋水之冰",
+  "email": "27206617@qq.com",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {
+  },
+  "requires": {
+    "php": ">=8.1"
+  }
+}

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Agent Core module for AgentBee
+ * llm_openai module for AgentBee
  *
  * Copyright 2026 秋水之冰 <27206617@qq.com>
  *
@@ -18,14 +18,17 @@
  * limitations under the License.
  */
 
-namespace modules\agent_core\app;
+namespace modules\llm_openai;
 
+use modules\agent_core\app\config;
+use modules\agent_core\processor;
 use Nervsys\Core\Factory;
-use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Ext\libOpenAI;
 
-class openAi extends Factory
+class go extends Factory
 {
+    const END_MARKER = '[DONE]';
+
     public libOpenAI $libOpenAI;
 
     public array $config = [];
@@ -48,29 +51,27 @@ class openAi extends Factory
     }
 
     /**
-     * @param int   $socket_id
      * @param array $messages
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function chat(int $socket_id, array $messages): void
+    public function chat(array $messages): void
     {
         $content    = '';
         $stream_key = 'stream_' . uniqid('', true);
 
         $this->libOpenAI->addStreamCallback(
             $stream_key,
-            function (int|string $key, array $data, bool $finished) use ($socket_id, &$content): void
+            function (int|string $key, array $data, bool $finished) use (&$content): void
             {
                 if ($finished) {
                     echo json_encode([
-                            'type'       => 'end',
-                            'socket_id'  => $socket_id,
-                            'full_reply' => $content
+                            'type' => 'end',
+                            'data' => $content
                         ], JSON_FORMAT) . "\n";
 
-                    echo '[DONE]' . "\n";
+                    echo self::END_MARKER . "\n";
 
                     flush();
                     return;
@@ -87,11 +88,10 @@ class openAi extends Factory
                     return;
                 }
 
-                if ($text !== '') {
+                if ('' !== $text) {
                     echo json_encode([
-                            'type'      => $type,
-                            'data'      => $text,
-                            'socket_id' => $socket_id
+                            'type' => $type,
+                            'data' => $text
                         ], JSON_FORMAT) . "\n";
 
                     flush();
@@ -102,29 +102,44 @@ class openAi extends Factory
         $this->libOpenAI->removeStreamCallback($stream_key);
     }
 
-    public function onWorkerOutput(int $socket_id, string $output, object $agent_core): void
+    /**
+     * @param int       $socket_id
+     * @param string    $output
+     * @param processor $processor
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function onWorkerOutput(int $socket_id, string $output, processor $processor): void
     {
         $data = json_decode($output, true);
-        if (!$data) return;
 
-        $socket_id = $data['socket_id'];
+        if (is_null($data)) {
+            return;
+        }
 
         if ($data['type'] === 'end') {
-            // 更新会话历史
-            if (!empty($data['full_reply'])) {
-                $agent_core->sessions[$socket_id][] = ['role' => 'assistant', 'content' => $data['full_reply']];
+            if (isset($data['data'])) {
+                $processor->addMemory(time(), 'user', json_encode(['role' => 'assistant', 'content' => $data['data']], JSON_FORMAT));
             }
-            $agent_core->socketMgr->sendMessage($socket_id, $agent_core->socketMgr->wsEncode(json_encode(['type' => 'end'])));
+
+            $processor->sendMessage($socket_id, json_encode(['type' => 'end'], JSON_FORMAT));
         } else {
-            $agent_core->socketMgr->sendMessage($socket_id, $agent_core->socketMgr->wsEncode(json_encode([
+            $processor->sendMessage($socket_id, json_encode([
                 'type' => $data['type'],
                 'data' => $data['data']
-            ])));
+            ], JSON_FORMAT));
         }
     }
 
+    /**
+     * @param int    $socket_id
+     * @param string $output
+     * @param object $agent_core
+     *
+     * @return void
+     */
     public function onWorkerError(int $socket_id, string $output, object $agent_core): void
     {
-        var_dump($output);
     }
 }

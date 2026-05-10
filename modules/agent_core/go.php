@@ -21,6 +21,7 @@
 namespace modules\agent_core;
 
 use modules\agent_core\app\config;
+use modules\agent_core\app\openAi;
 use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\System;
@@ -30,6 +31,7 @@ class go
 {
     use System;
 
+    public openAi    $openAi;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
     public libOpenAI $libOpenAI;
@@ -61,32 +63,35 @@ class go
             }
         }
 
-        $this->procMgr   = ProcMgr::new();
+        $this->openAi    = openAi::new();
         $this->socketMgr = SocketMgr::new();
-        $this->libOpenAI = libOpenAI::new($this->config['llm']['api_url'], $this->config['llm']['api_key'], $this->config['llm']['org_id']);
-
-        register_shutdown_function(
-            function (): void
-            {
-                $this->procMgr->exit();
-            }
-        );
-
-        $this->procMgr
-            ->command([
-                $this->OSMgr->getPhpPath(),
-                $this->app->script_path,
-                '-c', '/' . ProcMgr::class . '/worker'
-            ])
-            ->setWorkDir($this->temp_dir)
-            ->runMP($this->config['worker']['count'] ?? 4, $this->config['worker']['max_executions'] ?? 10000);
+        $this->procMgr   = ProcMgr::new('socket');
     }
 
+    /**
+     * @return void
+     */
     public function start(): void
     {
         ini_set('memory_limit', $this->config['memory_limit'] ?? '4G');
 
         try {
+            register_shutdown_function(
+                function (): void
+                {
+                    $this->procMgr->exit();
+                }
+            );
+
+            $this->procMgr
+                ->command([
+                    $this->OSMgr->getPhpPath(),
+                    $this->app->script_path,
+                    '-c', procMgr::WORKER_STREAM
+                ])
+                ->setWorkDir($this->temp_dir)
+                ->runMP($this->config['worker']['count'] ?? 4, $this->config['worker']['max_executions'] ?? 10000);
+
             $this->socketMgr
                 ->setDebugMode($this->config['debug'])
                 ->setAliveTimeout($this->config['server']['ping_interval'] * 2)
@@ -99,6 +104,11 @@ class go
         }
     }
 
+    public function procChat(int $socket_id, array $messages): void
+    {
+        $this->openAi->chat($socket_id, $messages);
+    }
+
     public function onClientHandshake(int $socket_id, string $ws_proto): bool
     {
         return true;
@@ -106,15 +116,6 @@ class go
 
     public function onClientMessage(int $socket_id, string $message): void
     {
-        if ($this->in_process) {
-            $this->queue[] = $message;
-        } elseif (!empty($this->queue)) {
-            $this->queue[] = $message;
-            $message       = implode('\n\n', $this->queue);
-        }
-
-        $this->in_process = true;
-
         // 初始化会话历史
         if (!isset($this->sessions[$socket_id])) {
             $this->sessions[$socket_id] = [
@@ -126,47 +127,26 @@ class go
         $this->sessions[$socket_id][] = ['role' => 'user', 'content' => $message];
         $this->trimSessionHistory($socket_id);
 
-        $messages = $this->sessions[$socket_id];
+        $task = [
+            'c'         => 'agent_core/procChat',
+            'socket_id' => $socket_id,
+            'messages'  => $this->sessions[$socket_id]
+        ];
 
-        var_dump($messages);
+        $this->procMgr->putJob(
+            json_encode($task, JSON_FORMAT),
+            function (string $output) use ($socket_id): void
+            {
+                $this->openAi->onWorkerOutput($socket_id, $output, $this);
+            },
+            function (string $output) use ($socket_id): void
+            {
+                $this->openAi->onWorkerError($socket_id, $output, $this);
+            },
+            '[DONE]'
+        );
 
-        $callbackKey = 'stream_' . uniqid('', true);
-        $fullReply   = '';
-
-        $this->libOpenAI->addStreamCallback($callbackKey, function ($key, $data, $finished) use ($socket_id, $callbackKey, &$fullReply)
-        {
-            if ($finished) {
-                $this->in_process = false;
-                // 将 AI 回复追加到历史
-                if ($fullReply !== '') {
-                    $this->sessions[$socket_id][] = ['role' => 'assistant', 'content' => $fullReply];
-                }
-                $this->libOpenAI->removeStreamCallback($callbackKey);
-                $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode(['type' => 'end'], JSON_FORMAT)));
-                return;
-            }
-
-            // 区分 think 和 content
-            if (isset($data['choices'][0]['delta']['content'])) {
-                $text = $data['choices'][0]['delta']['content'];
-                $type = 'content';
-            } elseif (isset($data['choices'][0]['delta']['reasoning_content'])) {
-                $text = $data['choices'][0]['delta']['reasoning_content'];
-                $type = 'think';
-            } else {
-                return;
-            }
-
-            if ($text !== '') {
-                if ($type === 'content') {
-                    $fullReply .= $text;
-                }
-                $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode(['type' => $type, 'data' => $text], JSON_FORMAT)));
-            }
-        });
-
-        // 调用 AI（流式模式）
-        $this->libOpenAI->chat($messages, $this->config['llm']['model'], $this->config['model'], true);
+        $this->procMgr->awaitJobs();
     }
 
     private function trimSessionHistory(int $socket_id, int $max_messages = 20): void

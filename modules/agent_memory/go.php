@@ -54,7 +54,7 @@ class go extends Factory
      */
     public function setDefault(string $content): void
     {
-        $memory = json_encode(['role' => 'system', 'content' => date('Y-m-d H:i:s') . ': ' . $content], JSON_FORMAT);
+        $memory = json_encode(['role' => 'system', 'content' => $content], JSON_FORMAT);
         $mem_fp = fopen($this->default_men, 'wb');
 
         fwrite($mem_fp, $memory . "\n");
@@ -68,7 +68,7 @@ class go extends Factory
      */
     public function addDefault(string $content): void
     {
-        $memory = json_encode(['role' => 'system', 'content' => date('Y-m-d H:i:s') . ': ' . $content], JSON_FORMAT);
+        $memory = json_encode(['role' => 'system', 'content' => $content], JSON_FORMAT);
         $mem_fp = fopen($this->default_men, 'ab');
 
         fwrite($mem_fp, $memory . "\n");
@@ -165,17 +165,15 @@ class go extends Factory
     }
 
     /**
-     * @param int    $timestamp
      * @param string $role
      * @param string $content
      *
      * @return void
      */
-    public function add(int $timestamp, string $role, string $content): void
+    public function add(string $role, string $content): void
     {
-        $date     = date('Ymd', $timestamp);
-        $datetime = date('Y-m-d H:i:s', $timestamp);
-        $content  = $datetime . ': ' . $content;
+        $timestamp = time();
+        $date      = date('Ymd');
 
         $this->init($date);
 

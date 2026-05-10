@@ -120,15 +120,14 @@ class processor extends Factory
     }
 
     /**
-     * @param int    $timestamp
      * @param string $role
      * @param string $content
      *
      * @return void
      */
-    public function addMemory(int $timestamp, string $role, string $content): void
+    public function addMemory(string $role, string $content): void
     {
-        $this->agent_modules['memory']->add($timestamp, $role, $content);
+        $this->agent_modules['memory']->add($role, $content);
     }
 
     /**

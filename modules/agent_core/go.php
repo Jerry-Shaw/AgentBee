@@ -113,7 +113,11 @@ class go extends Factory
      */
     public function onClientMessage(int $socket_id, string $message): void
     {
-        $this->processor->addMemory(time(), 'user', $message);
+        if ('' === $message) {
+            return;
+        }
+
+        $this->processor->addMemory('user', $message);
 
         $default_memory = $this->processor->getDefaultMemory();
         $today_memory   = $this->processor->getMemory(strtotime(date('Y-m-d')));

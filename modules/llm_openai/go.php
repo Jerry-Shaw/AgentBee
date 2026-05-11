@@ -20,7 +20,6 @@
 
 namespace modules\llm_openai;
 
-use modules\agent_core\app\config;
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libOpenAI;
@@ -28,8 +27,6 @@ use Nervsys\Ext\libOpenAI;
 class go extends Factory
 {
     use core;
-
-    const END_MARKER = '[DONE]';
 
     public libOpenAI $libOpenAI;
 
@@ -123,16 +120,5 @@ class go extends Factory
                 'data' => $data['data']
             ], JSON_FORMAT));
         }
-    }
-
-    /**
-     * @param int    $socket_id
-     * @param string $output
-     * @param object $agent_core
-     *
-     * @return void
-     */
-    public function onWorkerError(int $socket_id, string $output, object $agent_core): void
-    {
     }
 }

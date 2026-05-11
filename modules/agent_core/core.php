@@ -97,7 +97,6 @@ trait core
         $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
     }
 
-
     /**
      * @param int $timestamp
      * @param int $offset

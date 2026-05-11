@@ -50,23 +50,24 @@ class go extends Factory
 
     /**
      * @param int   $socket_id
-     * @param array $messages
+     * @param array $llm_message
+     * @param array $user_message
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function chat(int $socket_id, array $messages): void
+    public function chat(int $socket_id, array $llm_message, array $user_message): void
     {
         $content    = '';
         $stream_key = 'stream_' . uniqid('', true);
 
         $this->libOpenAI->addStreamCallback(
             $stream_key,
-            function (int|string $key, array $data, bool $finished) use ($socket_id, &$content): void
+            function (int|string $key, array $data, bool $finished) use ($socket_id, $user_message, &$content): void
             {
                 if ($finished) {
                     $this->addMemory('assistant', $content);
-                    $this->sendMessage($socket_id, json_encode(['type' => 'end'], JSON_FORMAT));
+                    $this->sendMessage($socket_id, json_encode(['type' => 'end'] + $user_message, JSON_FORMAT));
 
                     return;
                 }
@@ -83,14 +84,19 @@ class go extends Factory
                 }
 
                 if ('' !== $text) {
-                    $this->sendMessage($socket_id, json_encode([
-                        'type' => $type,
-                        'data' => $text
-                    ], JSON_FORMAT));
+                    $this->sendMessage($socket_id,
+                        json_encode(
+                            [
+                                'type' => $type,
+                                'data' => $text
+                            ] + $user_message,
+                            JSON_FORMAT
+                        )
+                    );
                 }
             });
 
-        $this->libOpenAI->chat($messages, $this->agent_config['llm']['model'], $this->agent_config['llm']['params'], true);
+        $this->libOpenAI->chat($llm_message, $this->agent_config['llm']['model'], $this->agent_config['llm']['params'], true);
         $this->libOpenAI->removeStreamCallback($stream_key);
     }
 

@@ -11,7 +11,7 @@
   },
   "llm": {
     "provider": "llm_openai",
-    "api_url": "http://192.168.254.10:1234/v1",
+    "api_url": "http://127.0.0.1:1234/v1",
     "api_key": "sk-lm-pkX06d0E:d1uXXht5QK5Iywk4D8Pr",
     "model": "qwen3.6-35b-a3b",
     "org_id": "",
@@ -27,16 +27,10 @@
   "memory": {
     "provider": "agent_memory"
   },
-  "conversation": {
-    "provider": "llm_openai",
-    "max_history_messages": 20
-  },
-  "tools":{
-     "tool_search":{
-        "provider": "tool_search",
-        "index_path": "/mnt/data/index.json",
-        "search_path": "/mnt/data/search.json"
-     }
+  "tools": {
+    "tool_fileio": {
+      "provider": "tool_fileio"
+    }
   },
   "memory_limit": "4G",
   "debug": true

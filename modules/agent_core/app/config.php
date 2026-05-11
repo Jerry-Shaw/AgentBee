@@ -96,9 +96,11 @@ class config extends Factory
             'memory'       => [
                 'provider' => 'agent_memory',
             ],
-            'conversation' => [
-                'provider'             => 'llm_openai',
-                'max_history_messages' => 20,
+            'tools' => [
+                'tool_fileio' => [
+                    'provider' => 'tool_fileio',
+
+                ]
             ],
             'memory_limit' => '4G',
             'debug'        => true,

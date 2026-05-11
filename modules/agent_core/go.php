@@ -21,6 +21,7 @@
 namespace modules\agent_core;
 
 use modules\agent_core\app\config;
+use modules\agent_core\app\message;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
@@ -30,6 +31,8 @@ class go extends Factory
 {
     use core;
     use System;
+
+    public message $message;
 
     public string $temp_dir = '';
 
@@ -52,6 +55,7 @@ class go extends Factory
             }
         }
 
+        $this->message   = message::new();
         $this->socketMgr = SocketMgr::new();
         $this->procMgr   = ProcMgr::new('socket');
     }
@@ -112,14 +116,46 @@ class go extends Factory
             return;
         }
 
-        $this->addMemory('user', $message);
+        $end_data = [];
+        $llm_data = [];
+        $messages = str_contains($message, "\n") ? explode("\n", $message) : [$message];
 
-        $default_memory = $this->getDefaultMemory();
-        $today_memory   = $this->getMemory(strtotime(date('Y-m-d')));
+        foreach ($messages as $message) {
+            $data = json_decode($message, true);
 
-        $history = array_merge($default_memory, $today_memory);
+            if (!is_array($data) || !isset($data['type'])) {
+                continue;
+            }
 
-        $this->llm->chat($socket_id, $history);
+            $message_type = 'process_' . $data['type'];
+            $message_data = $this->message->$message_type($socket_id, $data);
+
+            if ($message_data['llm']) {
+                $llm_data[] = $message_data['text'];
+            }
+
+            unset($data['message']);
+            $end_data[] = $data;
+        }
+
+        $last_msg = array_pop($end_data);
+
+        foreach ($end_data as $send_end) {
+            $this->sendMessage($socket_id, json_encode(['type' => 'close'] + $send_end));
+        }
+
+        if (!empty($llm_data)) {
+            $llm_text = implode("\n", $llm_data);
+
+            $this->addMemory('user', $llm_text);
+
+            $default_memory = $this->getDefaultMemory();
+            $today_memory   = $this->getMemory(strtotime(date('Y-m-d')));
+
+            $history = array_merge($default_memory, $today_memory);
+
+            $this->llm->chat($socket_id, $history, $last_msg);
+        }
     }
 
     /**

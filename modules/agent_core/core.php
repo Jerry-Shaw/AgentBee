@@ -166,7 +166,7 @@ trait core
             $llm_result = [
                 'tool_call_id'  => $tool_call['id'],
                 'function_name' => $fn_name,
-                'result'        => $tool_result
+                'result'        => json_encode($tool_result, JSON_FORMAT)
             ];
 
             $results[] = $llm_result;

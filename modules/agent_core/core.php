@@ -21,6 +21,7 @@
 namespace modules\agent_core;
 
 use modules\agent_core\app\config;
+use Nervsys\Core\Lib\Error;
 use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 
@@ -30,6 +31,9 @@ trait core
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
 
+    public array $llm_params = [];
+
+    public array $agent_tools   = [];
     public array $agent_config  = [];
     public array $agent_modules = [];
 
@@ -39,16 +43,19 @@ trait core
      */
     public function initCore(): void
     {
-        $this->config       = config::new();
-        $this->socketMgr    = SocketMgr::new();
-        $this->procMgr      = ProcMgr::new('socket');
+        $this->config    = config::new();
+        $this->socketMgr = SocketMgr::new();
+        $this->procMgr   = ProcMgr::new('socket');
+
         $this->agent_config = $this->config->get();
+        $this->llm_params   = $this->agent_config['llm']['params'] ?? [];
 
         $this->initModules();
     }
 
     /**
      * @return void
+     * @throws \ReflectionException
      */
     public function initModules(): void
     {
@@ -64,15 +71,57 @@ trait core
 
             if ($called_module !== $config['provider']) {
                 $module = '\\modules\\' . $config['provider'] . '\\go';
-                $object = $module::new();
-            } else {
-                $object = $this;
-            }
 
-            $this->agent_modules[$name] = $object;
+                try {
+                    $this->agent_modules[$name] = $module::new();
+                } catch (\Throwable $throwable) {
+                    Error::new()->exceptionHandler($throwable, true, false);
+                    unset($throwable);
+                    continue;
+                }
+            }
         }
 
         unset($called_class, $pos_start, $pos_end, $called_module, $name, $config, $module, $object);
+    }
+
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function initTools(): void
+    {
+        if (!isset($this->agent_config['tools']) || !isset($this->agent_config['tools']['enabled'])) {
+            return;
+        }
+
+        if (true !== $this->agent_config['tools']['enabled']) {
+            return;
+        }
+
+        $this->llm_params['tools']           ??= [];
+        $this->agent_config['tools']['list'] ??= [];
+
+        foreach ($this->agent_config['tools']['list'] as $tool) {
+            $module_class = '\\modules\\' . $tool['name'] . '\\go';
+            $module_meta  = '\\modules\\' . $tool['name'] . '\\tool';
+
+            try {
+                $this->agent_tools[$tool['name']] = $module_class::new();
+
+                $this->llm_params['tools'] = array_merge($this->llm_params['tools'], $module_meta::META);
+            } catch (\Throwable $throwable) {
+                Error::new()->exceptionHandler($throwable, true, false);
+                unset($throwable);
+                continue;
+            }
+        }
+
+        if (!empty($this->llm_params['tools'])) {
+            $this->llm_params['tool_choice'] = 'auto';
+        }
+
+        unset($tool, $module_class, $module_meta);
     }
 
     /**
@@ -83,6 +132,14 @@ trait core
     public function getModule(string $name): object|null
     {
         return $this->agent_modules[$name] ?? null;
+    }
+
+    /**
+     * @return array
+     */
+    public function getLLMParams(): array
+    {
+        return $this->llm_params;
     }
 
     /**

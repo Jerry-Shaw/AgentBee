@@ -4,11 +4,23 @@
   "description": "File I/O tool module for AgentBee, provides OpenAI-standard tool definitions for file operations, delegating to Nervsys\\Ext\\libFileIO",
   "author": "秋水之冰",
   "entry": "go.php",
+  "type": "tool",
+  "keywords": [
+    "file",
+    "io",
+    "tool",
+    "agentbee",
+    "openai"
+  ],
+  "license": "Apache-2.0",
   "repo": "",
   "dependencies": {
-    "Nervsys\\Ext\\libFileIO": ">=1.0"
   },
   "requires": {
     "php": ">=8.1"
+  },
+  "config": {
+    "max_read_size": 1048576,
+    "sandbox_enabled": true
   }
 }

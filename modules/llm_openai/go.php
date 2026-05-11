@@ -52,11 +52,12 @@ class go extends Factory
      * @param int   $socket_id
      * @param array $llm_message
      * @param array $user_message
+     * @param array $llm_params
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function chat(int $socket_id, array $llm_message, array $user_message): void
+    public function chat(int $socket_id, array $llm_message, array $user_message, array $llm_params = []): void
     {
         $content    = '';
         $stream_key = 'stream_' . uniqid('', true);
@@ -96,7 +97,7 @@ class go extends Factory
                 }
             });
 
-        $this->libOpenAI->chat($llm_message, $this->agent_config['llm']['model'], $this->agent_config['llm']['params'], true);
+        $this->libOpenAI->chat($llm_message, $this->agent_config['llm']['model'], $llm_params, true);
         $this->libOpenAI->removeStreamCallback($stream_key);
     }
 

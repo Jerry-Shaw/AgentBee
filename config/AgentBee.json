@@ -25,12 +25,22 @@
     }
   },
   "memory": {
-    "provider": "agent_memory"
+    "provider": "agent_memory",
+    "enabled": true,
+    "max_history": 0
   },
   "tools": {
-    "tool_fileio": {
-      "provider": "tool_fileio"
-    }
+    "enabled": true,
+    "sandbox_enabled": true,
+    "list": [
+      {
+        "name": "tool_fileio"
+      }
+    ]
+  },
+  "logging": {
+    "level": "debug",
+    "file": "logs/agentbee.log"
   },
   "memory_limit": "4G",
   "debug": true

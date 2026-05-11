@@ -20,7 +20,6 @@
 
 namespace modules\agent_core;
 
-use modules\agent_core\app\config;
 use modules\agent_core\app\message;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\ProcMgr;
@@ -44,6 +43,7 @@ class go extends Factory
     {
         $this->init();
         $this->initCore();
+        $this->initTools();
         $this->initModules();
 
         $this->temp_dir = $this->app->root_path . DIRECTORY_SEPARATOR . 'temp';
@@ -128,6 +128,11 @@ class go extends Factory
             }
 
             $message_type = 'process_' . $data['type'];
+
+            if (!method_exists($this->message, $message_type)) {
+                continue;
+            }
+
             $message_data = $this->message->$message_type($socket_id, $data);
 
             if ($message_data['llm']) {
@@ -154,7 +159,7 @@ class go extends Factory
 
             $history = array_merge($default_memory, $today_memory);
 
-            $this->llm->chat($socket_id, $history, $last_msg);
+            $this->llm->chat($socket_id, $history, $last_msg, $this->getLLMParams());
         }
     }
 

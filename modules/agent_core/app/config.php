@@ -72,38 +72,47 @@ class config extends Factory
                 'host'          => '0.0.0.0',
                 'port'          => 8686,
                 'websocket'     => true,
-                'ping_interval' => 30,
+                'ping_interval' => 30
             ],
             'worker'       => [
                 'count'          => 4,
-                'max_executions' => 20000,
+                'max_executions' => 20000
             ],
             'llm'          => [
                 'provider' => 'llm_openai',
                 'api_url'  => 'http://127.0.0.1:1234/v1',
-                'api_key'  => '',
+                'api_key'  => 'sk-lm-pkX06d0E:d1uXXht5QK5Iywk4D8Pr',
                 'model'    => 'qwen3.6-35b-a3b',
                 'org_id'   => '',
                 'timeout'  => 300,
                 'params'   => [
-                    'temperature'       => 0.5,
                     'max_tokens'        => 32768,
+                    'temperature'       => 0.5,
                     'top_p'             => 1.0,
                     'frequency_penalty' => 0,
                     'presence_penalty'  => 0
-                ],
-            ],
-            'memory'       => [
-                'provider' => 'agent_memory',
-            ],
-            'tools' => [
-                'tool_fileio' => [
-                    'provider' => 'tool_fileio',
-
                 ]
             ],
+            'memory'       => [
+                'provider'    => 'agent_memory',
+                'enabled'     => true,
+                'max_history' => 0
+            ],
+            'tools'        => [
+                'enabled'         => true,
+                'sandbox_enabled' => true,
+                'list'            => [
+                    [
+                        'name' => 'tool_fileio'
+                    ]
+                ]
+            ],
+            'logging'      => [
+                'level' => 'debug',
+                'file'  => 'logs/agentbee.log'
+            ],
             'memory_limit' => '4G',
-            'debug'        => true,
+            'debug'        => true
         ];
 
         file_put_contents($config_file, json_encode($config, JSON_PRETTY));

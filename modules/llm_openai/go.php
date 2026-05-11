@@ -183,33 +183,4 @@ class go extends Factory
         $this->libOpenAI->chat($llm_message, $this->agent_config['llm']['model'], $llm_params, true);
         $this->libOpenAI->removeStreamCallback($stream_key);
     }
-
-    /**
-     * @param int    $socket_id
-     * @param string $output
-     *
-     * @return void
-     * @throws \ReflectionException
-     */
-    public function onWorkerOutput(int $socket_id, string $output): void
-    {
-        $data = json_decode($output, true);
-
-        if (is_null($data)) {
-            return;
-        }
-
-        if ($data['type'] === 'end') {
-            if (isset($data['data'])) {
-                $this->addMemory('assistant', $data['data']);
-            }
-
-            $this->sendMessage($socket_id, json_encode(['type' => 'end'], JSON_FORMAT));
-        } else {
-            $this->sendMessage($socket_id, json_encode([
-                'type' => $data['type'],
-                'data' => $data['data']
-            ], JSON_FORMAT));
-        }
-    }
 }

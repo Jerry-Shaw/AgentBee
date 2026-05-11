@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Agent Core module for AgentBee (Simplified version)
+ * Agent Core module for AgentBee
  *
  * Copyright 2026 秋水之冰 <27206617@qq.com>
  *
@@ -28,14 +28,8 @@ use Nervsys\Core\System;
 
 class go extends Factory
 {
+    use core;
     use System;
-
-    public ProcMgr   $procMgr;
-    public SocketMgr $socketMgr;
-
-    public processor $processor;
-
-    public array $config = [];
 
     public string $temp_dir = '';
 
@@ -46,7 +40,9 @@ class go extends Factory
     public function __construct()
     {
         $this->init();
-        $this->config   = config::new()->get();
+        $this->initCore();
+        $this->initModules();
+
         $this->temp_dir = $this->app->root_path . DIRECTORY_SEPARATOR . 'temp';
 
         if (!is_dir($this->temp_dir)) {
@@ -58,7 +54,6 @@ class go extends Factory
 
         $this->socketMgr = SocketMgr::new();
         $this->procMgr   = ProcMgr::new('socket');
-        $this->processor = processor::new($this->socketMgr);
     }
 
     /**
@@ -66,7 +61,7 @@ class go extends Factory
      */
     public function start(): void
     {
-        ini_set('memory_limit', $this->config['memory_limit'] ?? '4G');
+        ini_set('memory_limit', $this->agent_config['memory_limit'] ?? '4G');
 
         try {
             register_shutdown_function(
@@ -83,16 +78,16 @@ class go extends Factory
                     '-c', procMgr::WORKER_STREAM
                 ])
                 ->setWorkDir($this->temp_dir)
-                ->runMP($this->config['worker']['count'] ?? 4, $this->config['worker']['max_executions'] ?? 10000);
+                ->runMP($this->agent_config['worker']['count'] ?? 4, $this->agent_config['worker']['max_executions'] ?? 10000);
 
             $this->socketMgr
-                ->setDebugMode($this->config['debug'])
-                ->setAliveTimeout($this->config['server']['ping_interval'] * 2)
+                ->setDebugMode($this->agent_config['debug'])
+                ->setAliveTimeout($this->agent_config['server']['ping_interval'] * 2)
                 ->setEventListener('onHandshake', [$this, 'onClientHandshake'])
                 ->setEventListener('onMessage', [$this, 'onClientMessage'])
                 ->setEventListener('onSendString', [$this, 'onMessageSend'])
                 ->setEventListener('onClose', [$this, 'onClientClose'])
-                ->listenTo('tcp://' . $this->config['server']['host'] . ':' . $this->config['server']['port'], $this->config['server']['websocket']);
+                ->listenTo('tcp://' . $this->agent_config['server']['host'] . ':' . $this->agent_config['server']['port'], $this->agent_config['server']['websocket']);
         } catch (\Throwable) {
         }
     }
@@ -117,30 +112,14 @@ class go extends Factory
             return;
         }
 
-        $this->processor->addMemory('user', $message);
+        $this->addMemory('user', $message);
 
-        $default_memory = $this->processor->getDefaultMemory();
-        $today_memory   = $this->processor->getMemory(strtotime(date('Y-m-d')));
+        $default_memory = $this->getDefaultMemory();
+        $today_memory   = $this->getMemory(strtotime(date('Y-m-d')));
 
-        $task = [
-            'c'        => $this->config['llm']['provider'] . '/chat',
-            'messages' => array_merge($default_memory, $today_memory),
-        ];
+        $history = array_merge($default_memory, $today_memory);
 
-        $this->procMgr->putJob(
-            json_encode($task, JSON_FORMAT),
-            function (string $output) use ($socket_id): void
-            {
-                $this->processor->onWorkerOutput($socket_id, $output);
-            },
-            function (string $output) use ($socket_id): void
-            {
-                $this->processor->onWorkerError($socket_id, $output);
-            },
-            '[DONE]'
-        );
-
-        $this->procMgr->awaitJobs();
+        $this->llm->chat($socket_id, $history);
     }
 
     /**

@@ -1,43 +1,78 @@
 <?php
 
+/**
+ * Agent Core module for AgentBee
+ *
+ * Copyright 2026 秋水之冰 <27206617@qq.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 namespace modules\agent_core;
 
 use modules\agent_core\app\config;
-use Nervsys\Core\Factory;
+use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 
-class processor extends Factory
+trait core
 {
     public config    $config;
+    public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
 
     public array $agent_config  = [];
     public array $agent_modules = [];
 
     /**
+     * @return void
      * @throws \ReflectionException
      */
-    public function __construct(SocketMgr $socketMgr)
+    public function initCore(): void
     {
         $this->config       = config::new();
-        $this->socketMgr    = $socketMgr;
+        $this->socketMgr    = SocketMgr::new();
+        $this->procMgr      = ProcMgr::new('socket');
         $this->agent_config = $this->config->get();
 
-        foreach ($this->agent_config as $name => $config) {
-            if (isset($config['provider'])) {
-                $module = '\\modules\\' . $config['provider'] . '\\go';
-
-                $this->agent_modules[$name] = $module::new();
-            }
-        }
+        $this->initModules();
     }
 
     /**
-     * @return string
+     * @return void
      */
-    public function getDirPath(): string
+    public function initModules(): void
     {
-        return $this->config->config_dir;
+        $called_class  = get_class($this);
+        $pos_start     = strpos($called_class, '\\') + 1;
+        $pos_end       = strpos($called_class, '\\', $pos_start);
+        $called_module = substr($called_class, $pos_start, $pos_end - $pos_start);
+
+        foreach ($this->agent_config as $name => $config) {
+            if (!isset($config['provider'])) {
+                continue;
+            }
+
+            if ($called_module !== $config['provider']) {
+                $module = '\\modules\\' . $config['provider'] . '\\go';
+                $object = $module::new();
+            } else {
+                $object = $this;
+            }
+
+            $this->agent_modules[$name] = $object;
+        }
+
+        unset($called_class, $pos_start, $pos_end, $called_module, $name, $config, $module, $object);
     }
 
     /**
@@ -62,37 +97,6 @@ class processor extends Factory
         $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
     }
 
-    /**
-     * @param array $messages
-     *
-     * @return void
-     */
-    public function chat(array $messages): void
-    {
-        $this->agent_modules['llm']->chat($messages);
-    }
-
-    /**
-     * @param int    $socket_id
-     * @param string $output
-     *
-     * @return void
-     */
-    public function onWorkerOutput(int $socket_id, string $output): void
-    {
-        $this->agent_modules['llm']->onWorkerOutput($socket_id, $output, $this);
-    }
-
-    /**
-     * @param int    $socket_id
-     * @param string $output
-     *
-     * @return void
-     */
-    public function onWorkerError(int $socket_id, string $output): void
-    {
-        $this->agent_modules['llm']->onWorkerError($socket_id, $output, $this);
-    }
 
     /**
      * @param int $timestamp
@@ -156,5 +160,20 @@ class processor extends Factory
     public function addDefaultMemory(string $content): void
     {
         $this->agent_modules['memory']->addDefault($content);
+    }
+
+    /**
+     * @param string $name
+     *
+     * @return object
+     * @throws \Exception
+     */
+    public function __get(string $name): object
+    {
+        if (!isset($this->agent_modules[$name])) {
+            throw new \Exception('Module NOT found: "' . $name . '"');
+        }
+
+        return $this->agent_modules[$name];
     }
 }

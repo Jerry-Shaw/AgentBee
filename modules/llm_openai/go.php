@@ -21,59 +21,55 @@
 namespace modules\llm_openai;
 
 use modules\agent_core\app\config;
-use modules\agent_core\processor;
+use modules\agent_core\core;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libOpenAI;
 
 class go extends Factory
 {
+    use core;
+
     const END_MARKER = '[DONE]';
 
     public libOpenAI $libOpenAI;
-
-    public array $config = [];
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->config = config::new()->get();
+        $this->initCore();
 
         $this->libOpenAI = libOpenAI::new(
-            $this->config['llm']['api_url'],
-            $this->config['llm']['api_key'],
-            $this->config['llm']['org_id']
+            $this->agent_config['llm']['api_url'],
+            $this->agent_config['llm']['api_key'],
+            $this->agent_config['llm']['org_id']
         );
 
-        $this->libOpenAI->setApiModel($this->config['llm']['model']);
-        $this->libOpenAI->setModelParams($this->config['llm']['params']);
+        $this->libOpenAI->setApiModel($this->agent_config['llm']['model']);
+        $this->libOpenAI->setModelParams($this->agent_config['llm']['params']);
     }
 
     /**
+     * @param int   $socket_id
      * @param array $messages
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function chat(array $messages): void
+    public function chat(int $socket_id, array $messages): void
     {
         $content    = '';
         $stream_key = 'stream_' . uniqid('', true);
 
         $this->libOpenAI->addStreamCallback(
             $stream_key,
-            function (int|string $key, array $data, bool $finished) use (&$content): void
+            function (int|string $key, array $data, bool $finished) use ($socket_id, &$content): void
             {
                 if ($finished) {
-                    echo json_encode([
-                            'type' => 'end',
-                            'data' => $content
-                        ], JSON_FORMAT) . "\n";
+                    $this->addMemory('assistant', $content);
+                    $this->sendMessage($socket_id, json_encode(['type' => 'end'], JSON_FORMAT));
 
-                    echo self::END_MARKER . "\n";
-
-                    flush();
                     return;
                 }
 
@@ -89,28 +85,25 @@ class go extends Factory
                 }
 
                 if ('' !== $text) {
-                    echo json_encode([
-                            'type' => $type,
-                            'data' => $text
-                        ], JSON_FORMAT) . "\n";
-
-                    flush();
+                    $this->sendMessage($socket_id, json_encode([
+                        'type' => $type,
+                        'data' => $text
+                    ], JSON_FORMAT));
                 }
             });
 
-        $this->libOpenAI->chat($messages, $this->config['llm']['model'], $this->config['llm']['params'], true);
+        $this->libOpenAI->chat($messages, $this->agent_config['llm']['model'], $this->agent_config['llm']['params'], true);
         $this->libOpenAI->removeStreamCallback($stream_key);
     }
 
     /**
-     * @param int       $socket_id
-     * @param string    $output
-     * @param processor $processor
+     * @param int    $socket_id
+     * @param string $output
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function onWorkerOutput(int $socket_id, string $output, processor $processor): void
+    public function onWorkerOutput(int $socket_id, string $output): void
     {
         $data = json_decode($output, true);
 
@@ -120,12 +113,12 @@ class go extends Factory
 
         if ($data['type'] === 'end') {
             if (isset($data['data'])) {
-                $processor->addMemory('assistant', $data['data']);
+                $this->addMemory('assistant', $data['data']);
             }
 
-            $processor->sendMessage($socket_id, json_encode(['type' => 'end'], JSON_FORMAT));
+            $this->sendMessage($socket_id, json_encode(['type' => 'end'], JSON_FORMAT));
         } else {
-            $processor->sendMessage($socket_id, json_encode([
+            $this->sendMessage($socket_id, json_encode([
                 'type' => $data['type'],
                 'data' => $data['data']
             ], JSON_FORMAT));

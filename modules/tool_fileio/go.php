@@ -28,8 +28,9 @@ use Nervsys\Ext\libFileIO;
 
 class go extends Factory
 {
-    public string    $root_path       = '';
     public libFileIO $fileIO;
+
+    public string    $root_path       = '';
     public int       $max_read_size   = 1048576;
     public bool      $sandbox_enabled = true;
 

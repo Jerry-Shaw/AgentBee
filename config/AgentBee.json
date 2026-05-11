@@ -32,6 +32,7 @@
   "tools": {
     "enabled": true,
     "sandbox_enabled": true,
+    "root_path": "E:\\Projects\\Codes\\AgentBee\\workspace",
     "list": [
       {
         "name": "tool_fileio"

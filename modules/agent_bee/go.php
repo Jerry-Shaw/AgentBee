@@ -28,6 +28,7 @@ $ns = new Nervsys\NS();
 
 $root = dirname(__DIR__, 2);
 
+$ns->setDebugMode(true);
 $ns->setRootPath($root);
 $ns->setApiDir('modules');
 $ns->setMode(App::MODE_MODULE);

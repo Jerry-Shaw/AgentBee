@@ -101,6 +101,7 @@ class config extends Factory
             'tools'        => [
                 'enabled'         => true,
                 'sandbox_enabled' => true,
+                'root_path'       => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
                 'list'            => [
                     [
                         'name' => 'tool_fileio'

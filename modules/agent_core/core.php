@@ -31,6 +31,9 @@ trait core
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
 
+    public string $name  = 'AgentBee';
+    public string $uname = '';
+
     public array $llm_params = [];
 
     public array $agent_tools   = [];
@@ -49,6 +52,8 @@ trait core
 
         $this->agent_config = $this->config->get();
         $this->llm_params   = $this->agent_config['llm']['params'] ?? [];
+
+        $this->uname = php_uname();
 
         $this->initModules();
     }
@@ -107,9 +112,15 @@ trait core
             $module_meta  = '\\modules\\' . $tool['name'] . '\\tool';
 
             try {
+                $tool_meta = $module_meta::META;
+
+                foreach ($tool_meta as $key => $meta) {
+                    $tool_meta[$key]['function']['name'] = $tool['name'] . '/' . $meta['function']['name'];
+                }
+
                 $this->agent_tools[$tool['name']] = $module_class::new();
 
-                $this->llm_params['tools'] = array_merge($this->llm_params['tools'], $module_meta::META);
+                $this->llm_params['tools'] = array_merge($this->llm_params['tools'], $tool_meta);
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, true, false);
                 unset($throwable);
@@ -121,7 +132,48 @@ trait core
             $this->llm_params['tool_choice'] = 'auto';
         }
 
-        unset($tool, $module_class, $module_meta);
+        unset($tool, $module_class, $module_meta, $tool_meta, $key, $meta);
+    }
+
+    /**
+     * @param array $tool_calls
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function execTools(array $tool_calls): array
+    {
+        $results = [];
+
+        foreach ($tool_calls as $tool_call) {
+            $fn_name = $tool_call['function']['name'];
+            $fn_argv = json_decode($tool_call['function']['arguments'], true);
+
+            if (!str_contains($fn_name, '/')) {
+                continue;
+            }
+
+            [$module, $method] = explode('/', $fn_name);
+
+            try {
+                $tool_result = $this->agent_tools[$module]->$method(...$fn_argv);
+            } catch (\Throwable $throwable) {
+                Error::new()->exceptionHandler($throwable, true, false);
+                $tool_result = $throwable->getMessage();
+                unset($throwable);
+            }
+
+            $llm_result = [
+                'tool_call_id'  => $tool_call['id'],
+                'function_name' => $fn_name,
+                'result'        => $tool_result
+            ];
+
+            $results[] = $llm_result;
+        }
+
+        unset($tool_calls, $tool_call, $fn_name, $fn_argv, $module, $method, $tool_result, $llm_result);
+        return $results;
     }
 
     /**

@@ -40,9 +40,10 @@ class go extends Factory
         $this->libOpenAI = libOpenAI::new(
             $this->agent_config['llm']['api_url'],
             $this->agent_config['llm']['api_key'],
-            $this->agent_config['llm']['org_id']
+            '[DONE]'
         );
 
+        $this->libOpenAI->setOrgId($this->agent_config['llm']['org_id']);
         $this->libOpenAI->setApiModel($this->agent_config['llm']['model']);
         $this->libOpenAI->setModelParams($this->agent_config['llm']['params']);
     }

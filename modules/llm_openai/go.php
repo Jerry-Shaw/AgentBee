@@ -54,186 +54,234 @@ class go extends Factory
     }
 
     /**
+     * Start multi-turn conversation
+     *
      * @param int   $socket_id
-     * @param array $llm_message
-     * @param array $user_message
+     * @param array $history  Conversation history
+     * @param array $user_msg User message (contains sessionId)
      * @param array $llm_params
      *
      * @return void
      * @throws \ReflectionException
      * @throws \Throwable
      */
-    public function chat(int $socket_id, array $llm_message, array $user_message, array $llm_params = []): void
+    public function chat(int $socket_id, array $history, array $user_msg, array $llm_params): void
     {
-        $session_id = $user_message['sessionId'] ?? 'default';
-        $stack_id   = 'chat_' . $session_id;
-        $continue   = true;
+        $stack_id = 'chat_' . ($user_msg['sessionId'] ?? 'default');
+        $go_next  = true;
 
         $this->fiberMgr->createStack($stack_id);
 
-        while ($continue) {
-            $chat_massage = $llm_message;
+        while ($go_next) {
+            $snapshot = $history;
 
-            $this->fiberMgr->addTask($stack_id, function () use ($socket_id, $chat_massage, $user_message, $llm_params, &$continue, &$llm_message): array
-            {
-                $result = $this->chatStream($socket_id, $chat_massage, $user_message, $llm_params);
+            $this->fiberMgr->addTask(
+                $stack_id,
+                function () use ($socket_id, $snapshot, $user_msg, $llm_params, &$go_next, &$history): array
+                {
+                    $talk = $this->talk($socket_id, $snapshot, $user_msg, $llm_params);
 
-                $continue    = $result['continue'];
-                $llm_message = $result['llm_message'];
+                    $go_next = $talk['next'];
+                    $history = $talk['history'];
 
-                return $result;
-            });
+                    $result = ['next' => $go_next, 'history' => $history];
 
-            if (!$continue) {
-                break;
-            }
+                    unset($talk);
+                    return $result;
+                }
+            );
         }
 
         $this->fiberMgr->runStack($stack_id);
         $this->fiberMgr->clearStack($stack_id);
 
-        $this->sendMessage($socket_id, json_encode(['type' => 'end'] + $user_message, JSON_FORMAT));
+        $this->sendMsg($socket_id, $user_msg, 'end', null);
+
+        unset($socket_id, $history, $user_msg, $llm_params, $stack_id, $go_next, $snapshot);
     }
 
     /**
+     * Execute single conversation turn (streaming + tool calls)
+     *
      * @param int   $socket_id
-     * @param array $llm_message
-     * @param array $user_message
+     * @param array $history  Current conversation history
+     * @param array $user_msg User message
      * @param array $llm_params
      *
-     * @return array
+     * @return array ['next' => bool, 'history' => array]
      * @throws \ReflectionException
-     * @throws \Throwable
      */
-    private function chatStream(int $socket_id, array $llm_message, array $user_message, array $llm_params): array
+    private function talk(int $socket_id, array $history, array $user_msg, array $llm_params): array
     {
-        $content    = '';
-        $tool_calls = [];
-        $stream_key = 'stream_' . uniqid('', true);
+        $content = '';
+        $tools   = [];
+        $key     = 'stream_' . uniqid(time(), true);
 
-        $has_tool_calls  = false;
-        $new_llm_message = $llm_message;
+        $tool_calls   = false;
+        $full_history = $history;
 
         $this->libOpenAI->addStreamCallback(
-            $stream_key,
-            function (int|string $key, array $data, bool $finished) use ($socket_id, &$new_llm_message, $user_message, $llm_params, &$content, &$tool_calls, &$has_tool_calls): void
+            $key,
+            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $user_msg, &$content, &$tools, &$tool_calls, &$full_history): void
             {
-                if (true === $finished) {
-                    if (false === empty($tool_calls)) {
-                        $has_tool_calls = true;
-                        $this->addMemory('assistant', json_encode($tool_calls, JSON_FORMAT));
+                if (!$is_finished) {
+                    $this->sendStream($socket_id, $msg_data, $user_msg, $tools, $content);
+                } else {
+                    if ('' !== $content) {
+                        // Add to memory when finished with content
+                        $this->addMemory('assistant', $content);
+                    }
 
-                        // 构建 assistant 消息
-                        $assistant_msg = [
+                    if (!empty($tools)) {
+                        $tool_calls = true;
+
+                        $this->addMemory('assistant', json_encode($tools, JSON_FORMAT));
+
+                        $tools_msg = [
                             'role'       => 'assistant',
-                            'content'    => '',
+                            'content'    => $content,
                             'tool_calls' => []
                         ];
 
-                        foreach ($tool_calls as $tool_call) {
-                            $assistant_msg['tool_calls'][] = [
-                                'id'       => $tool_call['id'],
+                        foreach ($tools as $tool) {
+                            $tools_msg['tool_calls'][] = [
+                                'id'       => $tool['id'],
                                 'type'     => 'function',
                                 'function' => [
-                                    'name'      => $tool_call['function']['name'],
-                                    'arguments' => $tool_call['function']['arguments']
+                                    'name'      => $tool['function']['name'],
+                                    'arguments' => $tool['function']['arguments']
                                 ]
                             ];
                         }
 
-                        $new_llm_message[] = $assistant_msg;
+                        $full_history[] = $tools_msg;
 
-                        // 执行工具
-                        $tool_memories = [];
-                        $tool_results  = $this->execTools($tool_calls);
+                        $results = $this->execTools($tools);
 
-                        foreach ($tool_results as $tool_result) {
-                            $this->sendMessage($socket_id, json_encode([
-                                    'type' => 'tool_result',
-                                    'data' => $tool_result
-                                ] + $user_message, JSON_FORMAT));
+                        foreach ($results as $result) {
+                            $this->sendMsg($socket_id, $user_msg, 'tool_result', $result);
 
-                            $tool_msg = [
+                            $full_history[] = [
                                 'role'         => 'tool',
-                                'tool_call_id' => $tool_result['tool_call_id'],
-                                'content'      => $tool_result['result']
-                            ];
-
-                            $new_llm_message[] = $tool_msg;
-                            $tool_memories[]   = $tool_msg;
-                        }
-
-                        $this->addMemory('tool', json_encode($tool_memories, JSON_FORMAT));
-                    } else {
-                        if ('' !== $content) {
-                            $this->addMemory('assistant', $content);
-                        }
-                    }
-
-                    return;
-                }
-
-                // 流式数据处理
-                $delta = $data['choices'][0]['delta'] ?? [];
-
-                if (isset($delta['content']) && '' !== $delta['content']) {
-                    $text    = $delta['content'];
-                    $content .= $text;
-
-                    $this->sendMessage($socket_id, json_encode([
-                            'type' => 'content',
-                            'data' => $text
-                        ] + $user_message, JSON_FORMAT));
-                } elseif (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {
-                    $text = $delta['reasoning_content'];
-
-                    $this->sendMessage($socket_id, json_encode([
-                            'type' => 'think',
-                            'data' => $text
-                        ] + $user_message, JSON_FORMAT));
-                } elseif (isset($delta['tool_calls']) && !empty($delta['tool_calls'])) {
-                    foreach ($delta['tool_calls'] as $chunk) {
-                        $index = $chunk['index'];
-
-                        if (!isset($tool_calls[$index])) {
-                            $tool_calls[$index] = [
-                                'id'       => '',
-                                'type'     => '',
-                                'function' => ['name' => '', 'arguments' => '']
+                                'tool_call_id' => $result['tool_call_id'],
+                                'content'      => $result['result']
                             ];
                         }
 
-                        if (isset($chunk['id']) && '' !== $chunk['id']) {
-                            $tool_calls[$index]['id'] = $chunk['id'];
-                        }
+                        $this->addMemory('tool', json_encode($results, JSON_FORMAT));
 
-                        if (isset($chunk['type']) && '' !== $chunk['type']) {
-                            $tool_calls[$index]['type'] = $chunk['type'];
-                        }
-
-                        if (isset($chunk['function']['name']) && '' !== $chunk['function']['name']) {
-                            $tool_calls[$index]['function']['name'] = $chunk['function']['name'];
-                        }
-
-                        if (isset($chunk['function']['arguments']) && '' !== $chunk['function']['arguments']) {
-                            $tool_calls[$index]['function']['arguments'] .= $chunk['function']['arguments'];
-                        }
+                        unset($tools_msg, $tool, $results, $result);
                     }
-
-                    $this->sendMessage($socket_id, json_encode([
-                            'type' => 'tool_calls',
-                            'data' => $tool_calls
-                        ] + $user_message, JSON_FORMAT));
                 }
+
+                unset($msg_key, $msg_data, $is_finished);
             }
         );
 
-        $this->libOpenAI->chat($llm_message, $this->agent_config['llm']['model'], $llm_params, true);
-        $this->libOpenAI->removeStreamCallback($stream_key);
+        $this->libOpenAI->chat($history, $this->agent_config['llm']['model'], $llm_params, true);
+        $this->libOpenAI->removeStreamCallback($key);
 
-        return [
-            'continue'    => $has_tool_calls,
-            'llm_message' => $new_llm_message
+        $result = [
+            'next'    => $tool_calls,
+            'history' => $full_history
         ];
+
+        unset($socket_id, $history, $user_msg, $llm_params, $content, $tools, $key, $tool_calls, $full_history);
+        return $result;
+    }
+
+    /**
+     * Stream send formated data
+     *
+     * @param int    $socket_id
+     * @param array  $msg_data
+     * @param array  $user_msg
+     * @param array  $tools
+     * @param string $content
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    private function sendStream(int $socket_id, array $msg_data, array $user_msg, array &$tools, string &$content): void
+    {
+        $delta = $msg_data['choices'][0]['delta'] ?? [];
+
+        // Normal content
+        if (isset($delta['content']) && '' !== $delta['content']) {
+            $content .= $delta['content'];
+            $this->sendMsg($socket_id, $user_msg, 'content', $delta['content']);
+
+            unset($delta);
+            return;
+        }
+
+        // Reasoning content
+        if (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {
+            $this->sendMsg($socket_id, $user_msg, 'think', $delta['reasoning_content']);
+
+            unset($delta);
+            return;
+        }
+
+        // Tool calls
+        if (isset($delta['tool_calls']) && !empty($delta['tool_calls'])) {
+            foreach ($delta['tool_calls'] as $chunk) {
+                $idx = $chunk['index'];
+
+                if (!isset($tools[$idx])) {
+                    $tools[$idx] = [
+                        'id'       => '',
+                        'type'     => '',
+                        'function' => ['name' => '', 'arguments' => '']
+                    ];
+                }
+
+                if (isset($chunk['id']) && '' !== $chunk['id']) {
+                    $tools[$idx]['id'] = $chunk['id'];
+                }
+
+                if (isset($chunk['type']) && '' !== $chunk['type']) {
+                    $tools[$idx]['type'] = $chunk['type'];
+                }
+
+                if (isset($chunk['function']['name']) && '' !== $chunk['function']['name']) {
+                    $tools[$idx]['function']['name'] = $chunk['function']['name'];
+                }
+
+                if (isset($chunk['function']['arguments']) && '' !== $chunk['function']['arguments']) {
+                    $tools[$idx]['function']['arguments'] .= $chunk['function']['arguments'];
+                }
+
+                unset($chunk, $idx);
+            }
+
+            $this->sendMsg($socket_id, $user_msg, 'tool_calls', $tools);
+        }
+
+        unset($socket_id, $user_msg, $delta);
+    }
+
+    /**
+     * Send websocket message
+     *
+     * @param int    $socket_id
+     * @param array  $user_msg
+     * @param string $type
+     * @param mixed  $data
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    private function sendMsg(int $socket_id, array $user_msg, string $type, mixed $data): void
+    {
+        $payload = ['type' => $type];
+
+        if (!is_null($data)) {
+            $payload['data'] = $data;
+        }
+
+        $this->sendMessage($socket_id, json_encode($payload + $user_msg, JSON_FORMAT));
+
+        unset($socket_id, $user_msg, $type, $data, $payload);
     }
 }

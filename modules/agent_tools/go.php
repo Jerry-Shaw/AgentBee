@@ -65,7 +65,7 @@ class go extends Factory
         }
 
         $this->procMgr
-            ->command($this->buildCommand($program, $argv))
+            ->command([$program, ...$argv])
             ->setWorkDir($path)
             ->run()
             ->awaitProc(
@@ -344,27 +344,5 @@ class go extends Factory
         }
 
         return $path;
-    }
-
-    /**
-     * @param string $program
-     * @param array  $argv
-     *
-     * @return array
-     */
-    private function buildCommand(string $program, array $argv): array
-    {
-        $internals = [
-            'dir', 'echo', 'type', 'cd', 'del', 'erase',
-            'copy', 'move', 'rename', 'ren', 'mkdir', 'md',
-            'rmdir', 'rd', 'cls', 'color', 'title', 'pushd', 'popd'
-        ];
-
-        $command = PHP_OS_FAMILY === 'Windows' && in_array(strtolower($program), $internals, true)
-            ? ['cmd.exe', '/c', $program, ...$argv]
-            : [$program, ...$argv];
-
-        unset($program, $argv, $internals);
-        return $command;
     }
 }

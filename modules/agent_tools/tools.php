@@ -32,32 +32,42 @@ class tools
                 'name'        => 'exec',
                 'description' => "⚠️ DANGEROUS: Execute a system command.\n\n" .
                     "== Windows Platform ==\n" .
-                    "✅ RECOMMENDED (standalone executables):\n" .
-                    "   - 'powershell', 'ipconfig', 'git', 'python', 'node', 'where'\n" .
-                    "✅ AUTO-WRAPPED with cmd.exe /c (internal commands):\n" .
-                    "   - 'dir', 'cd', 'mkdir', 'rmdir', 'del', 'erase', 'copy', 'move', 'rename', 'ren'\n" .
-                    "❌ AVOID (unreliable on Windows):\n" .
-                    "   - 'echo' - use powershell: Write-Output\n" .
-                    "   - 'type' - use powershell: Get-Content\n" .
-                    "   - 'find' - use powershell: Select-String\n\n" .
+                    "✅ ALWAYS use 'powershell' as the program on Windows.\n" .
+                    "   The system does NOT wrap or transform commands. You must use the correct executable.\n\n" .
+                    "   Examples:\n" .
+                    "   - List directory: program='powershell', argv=['-Command', 'Get-ChildItem']\n" .
+                    "   - List directory with path: program='powershell', argv=['-Command', \"Get-ChildItem -Path 'C:\\\\Projects'\"]\n" .
+                    "   - Create directory: program='powershell', argv=['-Command', \"New-Item -ItemType Directory -Path 'C:\\\\test' -Force\"]\n" .
+                    "   - Delete file: program='powershell', argv=['-Command', \"Remove-Item -Path 'C:\\\\file.txt' -Force\"]\n" .
+                    "   - Copy file: program='powershell', argv=['-Command', \"Copy-Item -Path 'C:\\\\src.txt' -Destination 'C:\\\\dst.txt' -Force\"]\n" .
+                    "   - Show file content: program='powershell', argv=['-Command', \"Get-Content -Path 'C:\\\\file.txt'\"]\n" .
+                    "   - Get current directory: program='powershell', argv=['-Command', 'Get-Location']\n" .
+                    "   - Run git: program='powershell', argv=['-Command', 'git status']\n" .
+                    "   - Run ipconfig: program='powershell', argv=['-Command', 'ipconfig /all']\n" .
+                    "   - Run cmd.exe command: program='powershell', argv=['-Command', 'cmd /c dir']\n\n" .
+                    "❌ Do NOT use these directly (they will fail):\n" .
+                    "   - 'dir', 'mkdir', 'cd', 'del', 'copy', 'move', 'type', 'echo'\n" .
+                    "   These are NOT standalone executables on Windows.\n\n" .
                     "== Linux/Mac Platform ==\n" .
-                    "✅ Use (standalone executables):\n" .
-                    "   - 'ls', 'cat', 'pwd', 'echo', 'grep', 'find', 'git', 'python3', 'node'\n" .
-                    "   - 'ps', 'kill', 'df', 'du', 'free', 'top'\n\n" .
+                    "✅ Use standard commands directly (they are standalone executables):\n" .
+                    "   - 'ls', 'cat', 'pwd', 'mkdir', 'rm', 'cp', 'mv', 'grep', 'find', 'git', 'python3'\n" .
+                    "   Examples:\n" .
+                    "   - List directory: program='ls', argv=['-la', '/home']\n" .
+                    "   - Show file: program='cat', argv=['/etc/hostname']\n" .
+                    "   - Create directory: program='mkdir', argv=['-p', '/home/user/newdir']\n" .
+                    "   - Delete file: program='rm', argv=['file.txt']\n" .
+                    "   - Copy file: program='cp', argv=['src.txt', 'dst.txt']\n" .
+                    "   - Find text: program='grep', argv=['-r', 'pattern', './src']\n\n" .
                     "== Usage ==\n" .
                     "- 'program': Executable name only (string, REQUIRED)\n" .
+                    "  ✅ Windows: 'powershell' (ALWAYS)\n" .
+                    "  ✅ Linux/Mac: 'ls', 'cat', 'git', 'python3', etc.\n" .
                     "- 'argv': Array of arguments (array, REQUIRED) - use [] for no arguments\n" .
+                    "  ✅ Windows: argv=['-Command', 'Get-ChildItem']\n" .
+                    "  ✅ Linux: argv=['-la', '/home']\n" .
+                    "  ✅ No arguments: argv=[]\n" .
+                    "  ❌ WRONG: argv='-la /home'\n" .
                     "- 'path': Working directory (string, OPTIONAL) - defaults to workspace path\n\n" .
-                    "== Examples ==\n" .
-                    "Windows:\n" .
-                    "  - List directory: program='dir', argv=['C:\\\\Projects']\n" .
-                    "  - PowerShell: program='powershell', argv=['-Command', 'Get-ChildItem -Recurse']\n" .
-                    "  - IP config: program='ipconfig', argv=['/all']\n" .
-                    "  - Git status: program='git', argv=['status']\n" .
-                    "Linux/Mac:\n" .
-                    "  - List directory: program='ls', argv=['-la', '/home']\n" .
-                    "  - Show file: program='cat', argv=['/etc/hostname']\n" .
-                    "  - Find text: program='grep', argv=['-r', 'pattern', './src']\n\n" .
                     "== Security ==\n" .
                     "- ⚠️ NEVER use dangerous commands: 'rm -rf', 'del /f /s', 'format', 'shutdown', 'reboot'\n" .
                     "- ⚠️ AVOID shell operators: |, >, >>, <, &&, || (use array arguments instead)\n" .
@@ -73,19 +83,18 @@ class tools
                         'program' => [
                             'type'        => 'string',
                             'description' => "REQUIRED: Executable name only.\n" .
-                                "Windows: 'powershell', 'ipconfig', 'git', 'dir', 'mkdir', 'del'\n" .
-                                "Linux/Mac: 'ls', 'cat', 'pwd', 'grep', 'git', 'python3'\n" .
-                                "Do NOT include arguments or shell operators.\n" .
-                                "⚠️ Avoid 'echo' and 'type' on Windows - use 'powershell' instead"
+                                "✅ Windows: ALWAYS use 'powershell'\n" .
+                                "✅ Linux/Mac: 'ls', 'cat', 'pwd', 'mkdir', 'rm', 'cp', 'mv', 'grep', 'find', 'git', 'python3'\n" .
+                                "❌ Windows: Do NOT use 'dir', 'mkdir', 'cd', 'del', 'copy', 'move', 'type', 'echo' directly"
                         ],
                         'argv'    => [
                             'type'        => 'array',
                             'description' => "REQUIRED: Array of command arguments. MUST be an array type, NOT a string.\n" .
-                                "✅ CORRECT: argv=['-la', '/home']\n" .
-                                "✅ CORRECT: argv=['/all']\n" .
-                                "✅ CORRECT: argv=[] (no arguments)\n" .
-                                "❌ WRONG: argv='-la /home'\n" .
-                                "❌ WRONG: argv='C:\\\\Projects'",
+                                "✅ Windows: program='powershell', argv=['-Command', 'Get-ChildItem']\n" .
+                                "✅ Windows: program='powershell', argv=['-Command', \"Get-ChildItem -Path 'C:\\\\Projects'\"]\n" .
+                                "✅ Linux: program='ls', argv=['-la', '/home']\n" .
+                                "✅ No arguments: argv=[]\n" .
+                                "❌ WRONG: argv='-la /home'",
                             'items'       => ['type' => 'string']
                         ],
                         'path'    => [

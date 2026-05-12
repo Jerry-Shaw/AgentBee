@@ -39,45 +39,64 @@ class go extends Factory
     }
 
     /**
-     * @param string $command
+     * @param string $program
      * @param array  $argv
-     * @param string $workspace_path
+     * @param string $path
      *
      * @return array|string[]
      * @throws \ReflectionException
      */
-    public function exec(string $command, array $argv = [], string $workspace_path = ''): array
+    public function exec(string $program, array $argv = [], string $path = ''): array
     {
-        $command = str_getcsv($command, ' ', '"', '\\');
-
-        if (!empty($argv)) {
-            $command = array_merge($command, $argv);
-        }
-
-        if ('' === $workspace_path) {
-            $workspace_path = $this->agent_config['tools']['workspace_path'];
-        }
-
         $result = [
             'output' => '',
             'error'  => ''
         ];
 
+        if ('' === $path) {
+            $path = $this->agent_config['tools']['workspace_path'];
+        }
+
         $this->procMgr
-            ->command($command)
-            ->setWorkDir($workspace_path)
+            ->command($this->buildCommand($program, $argv))
+            ->setWorkDir($path)
             ->run()
             ->awaitProc(
-                function (string $stdout) use (&$result): void
+                function (string $output) use (&$result): void
                 {
-                    $result['output'] = $stdout;
+                    $result['output'] = $output;
+                    unset($output);
                 },
-                function (string $stdout) use (&$result): void
+                function (string $output) use (&$result): void
                 {
-                    $result['error'] = $stdout;
+                    $result['error'] = $output;
+                    unset($output);
                 }
             );
 
+        unset($program, $argv, $path);
         return $result;
+    }
+
+    /**
+     * @param string $program
+     * @param array  $argv
+     *
+     * @return array
+     */
+    private function buildCommand(string $program, array $argv): array
+    {
+        $internals = [
+            'dir', 'echo', 'type', 'cd', 'del', 'erase',
+            'copy', 'move', 'rename', 'ren', 'mkdir', 'md',
+            'rmdir', 'rd', 'cls', 'color', 'title', 'pushd', 'popd'
+        ];
+
+        $command = PHP_OS_FAMILY === 'Windows' && in_array(strtolower($program), $internals, true)
+            ? ['cmd.exe', '/c', $program, ...$argv]
+            : [$program, ...$argv];
+
+        unset($program, $argv, $internals);
+        return $command;
     }
 }

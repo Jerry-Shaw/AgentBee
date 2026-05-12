@@ -22,7 +22,7 @@
 
 namespace modules\agent_tools;
 
-class tool
+class tools
 {
     public const META = [
         // ==================== exec ====================

@@ -109,19 +109,19 @@ trait core
         $this->agent_config['tools']['list'] ??= [];
 
         foreach ($this->agent_config['tools']['list'] as $tool) {
-            $module_class = '\\modules\\' . $tool['name'] . '\\go';
-            $module_meta  = '\\modules\\' . $tool['name'] . '\\tool';
+            $tool_class = '\\modules\\' . $tool['name'] . '\\go';
+            $tool_meta  = '\\modules\\' . $tool['name'] . '\\tools';
 
             try {
-                $tool_meta = $module_meta::META;
+                $metadata = $tool_meta::META;
 
-                foreach ($tool_meta as $key => $meta) {
-                    $tool_meta[$key]['function']['name'] = $tool['name'] . '/' . $meta['function']['name'];
+                foreach ($metadata as $key => $meta) {
+                    $metadata[$key]['function']['name'] = $tool['name'] . '/' . $meta['function']['name'];
                 }
 
-                $this->agent_tools[$tool['name']] = $module_class::new();
+                $this->agent_tools[$tool['name']] = $tool_class::new();
 
-                $this->llm_params['tools'] = array_merge($this->llm_params['tools'], $tool_meta);
+                $this->llm_params['tools'] = array_merge($this->llm_params['tools'], $metadata);
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, true, false);
                 unset($throwable);
@@ -133,7 +133,7 @@ trait core
             $this->llm_params['tool_choice'] = 'auto';
         }
 
-        unset($tool, $module_class, $module_meta, $tool_meta, $key, $meta);
+        unset($tool, $tool_class, $tool_meta, $metadata, $key, $meta);
     }
 
     /**

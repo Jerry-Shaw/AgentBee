@@ -36,9 +36,6 @@
     "list": [
       {
         "name": "agent_tools"
-      },
-      {
-        "name": "tool_fileio"
       }
     ]
   },

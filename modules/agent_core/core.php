@@ -344,6 +344,13 @@ trait core
         $prompts[] = date('Y-m-d H:i:s');
         $prompts[] = '时区: ' . date_default_timezone_get();
         $prompts[] = '语言: ' . $lang_name;
+        $prompts[] = '';
+        $prompts[] = '=== Agent 自我开发指南 ===';
+        $prompts[] = '当遇到运行时错误，你可以在 Agent 根目录对应的模块目录中查找相关代码，协助用户定位并修复错误。';
+        $prompts[] = '错误日志位于：' . $this->app->log_path . '。可通过查看日志了解错误原因和严重程度。';
+        $prompts[] = 'Agent 采用模块化结构，所有模块位于：' . $this->app->root_path . strtr('/modules/', '/', DIRECTORY_SEPARATOR);
+        $prompts[] = '修复流程：查看错误日志 → 定位模块代码 → 分析问题原因 → 向用户提出修复建议 → 用户确认后执行修复（必须先备份原文件）。';
+        $prompts[] = '注意：修改代码前务必备份，确保修改符合模块规范，修复后建议进行基本测试验证。';
 
         $system_prompt = [
             'role'    => 'system',

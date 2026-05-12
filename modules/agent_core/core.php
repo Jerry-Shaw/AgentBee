@@ -21,6 +21,7 @@
 namespace modules\agent_core;
 
 use modules\agent_core\app\config;
+use Nervsys\Core\Lib\App;
 use Nervsys\Core\Lib\Error;
 use Nervsys\Core\Mgr\OSMgr;
 use Nervsys\Core\Mgr\ProcMgr;
@@ -28,13 +29,13 @@ use Nervsys\Core\Mgr\SocketMgr;
 
 trait core
 {
+    public App       $app;
     public OSMgr     $OSMgr;
     public config    $config;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
 
-    public string $name  = 'AgentBee';
-    public string $uname = '';
+    public string $name = 'AgentBee';
 
     public array $llm_params = [];
 
@@ -48,6 +49,7 @@ trait core
      */
     public function initCore(): void
     {
+        $this->app       = App::new();
         $this->OSMgr     = OSMgr::new();
         $this->config    = config::new();
         $this->socketMgr = SocketMgr::new();
@@ -55,10 +57,6 @@ trait core
 
         $this->agent_config = $this->config->get();
         $this->llm_params   = $this->agent_config['llm']['params'] ?? [];
-
-        $this->uname = php_uname();
-
-        $this->initModules();
     }
 
     /**

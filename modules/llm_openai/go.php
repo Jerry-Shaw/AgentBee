@@ -39,6 +39,7 @@ class go extends Factory
     {
         $this->initCore();
         $this->initTools();
+        $this->initModules();
 
         $this->fiberMgr = FiberMgr::new();
 

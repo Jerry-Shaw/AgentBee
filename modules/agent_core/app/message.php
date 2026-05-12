@@ -33,6 +33,7 @@ class message extends Factory
     public function __construct()
     {
         $this->initCore();
+        $this->initModules();
     }
 
     /**

@@ -37,6 +37,8 @@ class go extends Factory
      */
     public function __construct()
     {
+        $this->initCore();
+
         $this->fileIO       = libFileIO::new();
         $this->procMgr      = ProcMgr::new('socket');
         $this->agent_config = config::new()->get();
@@ -49,6 +51,7 @@ class go extends Factory
      *
      * @return array|string[]
      * @throws \ReflectionException
+     * @throws \Exception
      */
     public function exec(string $program, array $argv = [], string $path = ''): array
     {
@@ -125,16 +128,15 @@ class go extends Factory
      * @param bool   $append
      *
      * @return array
-     * @throws \ReflectionException
      */
     public function writeFile(string $path, string $content, bool $append = false): array
     {
         $file_path = $this->securePath($path);
 
         $dir = dirname($file_path);
-        $dir = $this->fileIO->mkPath($dir);
+        $dir = $this->mkPath($dir);
 
-        $file_path   = $dir . basename($path);
+        $file_path   = $dir . DIRECTORY_SEPARATOR . basename($path);
         $file_handle = fopen($file_path, $append ? 'ab' : 'wb');
 
         if (false === $file_handle) {
@@ -175,11 +177,10 @@ class go extends Factory
      * @param string $path
      *
      * @return array
-     * @throws \ReflectionException
      */
     public function createDirectory(string $path): array
     {
-        return ['created_path' => $this->fileIO->mkPath($this->securePath($path))];
+        return ['created_path' => $this->mkPath($this->securePath($path))];
     }
 
     /**
@@ -318,14 +319,30 @@ class go extends Factory
         );
 
         $parts = array_values($parts);
-
-        $path = $in_sandbox
-            ? rtrim($this->agent_config['tools']['workspace_path'] ?? $this->app->root_path, '\\/')
+        $path  = $in_sandbox
+            ? rtrim($this->agent_config['tools']['workspace_path'] ?? $this->app->root_path, '\\/') . DIRECTORY_SEPARATOR
             : (!str_contains($parts[0] ?? '', ':') ? '/' : '');
 
-        $path .= DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $parts);
+        $path .= implode(DIRECTORY_SEPARATOR, $parts);
 
         unset($in_sandbox, $parts);
+        return $path;
+    }
+
+    /**
+     * @param string $path
+     *
+     * @return string
+     */
+    private function mkPath(string $path): string
+    {
+        if (!is_dir($path)) {
+            try {
+                mkdir($path, 0777, true);
+            } catch (\Throwable) {
+            }
+        }
+
         return $path;
     }
 

@@ -30,33 +30,71 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'exec',
-                'description' => "⚠️ DANGEROUS: Execute a system command. This action can modify files, install software, or damage the system. Use with extreme caution. Always prefer specialized tools (readFile, writeFile, listDirectory, etc.) over raw command execution when possible.\n\n" .
+                'description' => "⚠️ DANGEROUS: Execute a system command.\n\n" .
+                    "== Windows Platform ==\n" .
+                    "✅ RECOMMENDED (standalone executables):\n" .
+                    "   - 'powershell', 'ipconfig', 'git', 'python', 'node', 'where'\n" .
+                    "✅ AUTO-WRAPPED with cmd.exe /c (internal commands):\n" .
+                    "   - 'dir', 'cd', 'mkdir', 'rmdir', 'del', 'erase', 'copy', 'move', 'rename', 'ren'\n" .
+                    "❌ AVOID (unreliable on Windows):\n" .
+                    "   - 'echo' - use powershell: Write-Output\n" .
+                    "   - 'type' - use powershell: Get-Content\n" .
+                    "   - 'find' - use powershell: Select-String\n\n" .
+                    "== Linux/Mac Platform ==\n" .
+                    "✅ Use (standalone executables):\n" .
+                    "   - 'ls', 'cat', 'pwd', 'echo', 'grep', 'find', 'git', 'python3', 'node'\n" .
+                    "   - 'ps', 'kill', 'df', 'du', 'free', 'top'\n\n" .
                     "== Usage ==\n" .
-                    "- 'program': Executable name only (e.g., 'ls', 'dir', 'echo', 'cat', 'type', 'ipconfig', 'powershell', 'git'). Do NOT include arguments.\n" .
-                    "- 'argv': Array of arguments (REQUIRED). Use [] for no arguments.\n" .
-                    "- 'path': Working directory (OPTIONAL). Defaults to workspace path.\n\n" .
-                    "== Notes ==\n" .
-                    "- Windows internal commands (dir, echo, type, cd, del, copy, mkdir, rmdir) are auto-wrapped with cmd.exe /c.\n" .
-                    "- Standalone executables (git, python, node, ipconfig, powershell) work directly.\n\n" .
+                    "- 'program': Executable name only (string, REQUIRED)\n" .
+                    "- 'argv': Array of arguments (array, REQUIRED) - use [] for no arguments\n" .
+                    "- 'path': Working directory (string, OPTIONAL) - defaults to workspace path\n\n" .
+                    "== Examples ==\n" .
+                    "Windows:\n" .
+                    "  - List directory: program='dir', argv=['C:\\\\Projects']\n" .
+                    "  - PowerShell: program='powershell', argv=['-Command', 'Get-ChildItem -Recurse']\n" .
+                    "  - IP config: program='ipconfig', argv=['/all']\n" .
+                    "  - Git status: program='git', argv=['status']\n" .
+                    "Linux/Mac:\n" .
+                    "  - List directory: program='ls', argv=['-la', '/home']\n" .
+                    "  - Show file: program='cat', argv=['/etc/hostname']\n" .
+                    "  - Find text: program='grep', argv=['-r', 'pattern', './src']\n\n" .
                     "== Security ==\n" .
-                    "- Never use: 'rm -rf', 'del /f /s', 'format', 'shutdown'\n" .
-                    "- Avoid shell operators: |, >, >>, <, &&, ||\n" .
-                    "- Commands have timeout protection (default 30s, max 300s)",
+                    "- ⚠️ NEVER use dangerous commands: 'rm -rf', 'del /f /s', 'format', 'shutdown', 'reboot'\n" .
+                    "- ⚠️ AVOID shell operators: |, >, >>, <, &&, || (use array arguments instead)\n" .
+                    "- Commands have timeout protection (default 30 seconds, max 300 seconds)\n" .
+                    "- Always prefer specialized tools (readFile, writeFile, listDirectory, searchFiles) over exec\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'program' => [
                             'type'        => 'string',
-                            'description' => "REQUIRED: Executable name only. Examples: 'ls', 'dir', 'cat', 'type', 'git', 'powershell'"
+                            'description' => "REQUIRED: Executable name only.\n" .
+                                "Windows: 'powershell', 'ipconfig', 'git', 'dir', 'mkdir', 'del'\n" .
+                                "Linux/Mac: 'ls', 'cat', 'pwd', 'grep', 'git', 'python3'\n" .
+                                "Do NOT include arguments or shell operators.\n" .
+                                "⚠️ Avoid 'echo' and 'type' on Windows - use 'powershell' instead"
                         ],
                         'argv'    => [
                             'type'        => 'array',
-                            'description' => "REQUIRED: Array of arguments. Use [] for no arguments.",
+                            'description' => "REQUIRED: Array of command arguments. MUST be an array type, NOT a string.\n" .
+                                "✅ CORRECT: argv=['-la', '/home']\n" .
+                                "✅ CORRECT: argv=['/all']\n" .
+                                "✅ CORRECT: argv=[] (no arguments)\n" .
+                                "❌ WRONG: argv='-la /home'\n" .
+                                "❌ WRONG: argv='C:\\\\Projects'",
                             'items'       => ['type' => 'string']
                         ],
                         'path'    => [
                             'type'        => 'string',
-                            'description' => "OPTIONAL: Working directory. Defaults to workspace path."
+                            'description' => "OPTIONAL: Working directory for command execution.\n" .
+                                "Defaults to workspace path if not specified.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Projects\\\\MyApp'\n" .
+                                "- Linux/Mac: '/home/user/project'"
                         ]
                     ],
                     'required'   => ['program', 'argv']
@@ -69,13 +107,30 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'readFile',
-                'description' => 'Read file content. For large files, use offset and limit to read in chunks.',
+                'description' => "Read file content. For large files, use offset and limit to read in chunks.\n\n" .
+                    "Returns: {\"content\": \"file content\"} on success, {\"error\": \"message\"} on failure.\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'   => ['type' => 'string', 'description' => 'REQUIRED: Path to the file'],
-                        'offset' => ['type' => 'integer', 'description' => 'Byte offset to start reading from. Default: 0'],
-                        'limit'  => ['type' => 'integer', 'description' => 'Maximum bytes to read. Default: 8192, Max: 1048576']
+                        'path'   => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Path to the file.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Users\\\\file.txt' or 'workspace/data.txt'\n" .
+                                "- Linux/Mac: '/home/user/file.txt' or 'workspace/data.txt'"
+                        ],
+                        'offset' => [
+                            'type'        => 'integer',
+                            'description' => "Byte offset to start reading from. Default: 0"
+                        ],
+                        'limit'  => [
+                            'type'        => 'integer',
+                            'description' => "Maximum bytes to read. Default: 8192 (8KB), Max: 1048576 (1MB)"
+                        ]
                     ],
                     'required'   => ['path']
                 ]
@@ -85,13 +140,30 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeFile',
-                'description' => 'Write content to a file, creating it if it does not exist. Use append to add to existing files.',
+                'description' => "Write content to a file, creating directories if needed. Use append to add to existing files.\n\n" .
+                    "Returns: {\"bytes_written\": N} on success, {\"error\": \"message\"} on failure.\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'    => ['type' => 'string', 'description' => 'REQUIRED: Path to the file'],
-                        'content' => ['type' => 'string', 'description' => 'REQUIRED: Content to write'],
-                        'append'  => ['type' => 'boolean', 'description' => 'If true, append instead of overwrite. Default: false']
+                        'path'    => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Path to the file.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Users\\\\file.txt' or 'workspace/data.txt'\n" .
+                                "- Linux/Mac: '/home/user/file.txt' or 'workspace/data.txt'"
+                        ],
+                        'content' => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Content to write to the file"
+                        ],
+                        'append'  => [
+                            'type'        => 'boolean',
+                            'description' => "If true, append to end of file instead of overwriting. Default: false"
+                        ]
                     ],
                     'required'   => ['path', 'content']
                 ]
@@ -103,11 +175,22 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'listDirectory',
-                'description' => 'List directory contents. Returns array with file/directory info.',
+                'description' => "List directory contents.\n\n" .
+                    "Returns: {\"contents\": [{\"filename\": \"...\", \"filepath\": \"...\", \"filesize\": N, \"isFile\": bool}]} on success, {\"error\": \"message\"} on failure.\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path' => ['type' => 'string', 'description' => 'REQUIRED: Directory path to list']
+                        'path' => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Directory path to list.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Projects' or 'workspace/src'\n" .
+                                "- Linux/Mac: '/home/user/project' or 'workspace/src'"
+                        ]
                     ],
                     'required'   => ['path']
                 ]
@@ -117,11 +200,22 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'createDirectory',
-                'description' => 'Create a directory and any necessary parent directories. Succeeds if already exists.',
+                'description' => "Create a directory and any necessary parent directories. Succeeds if already exists.\n\n" .
+                    "Returns: {\"created_path\": \"/full/path\"} on success, {\"error\": \"message\"} on failure.\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path' => ['type' => 'string', 'description' => 'REQUIRED: Directory path to create']
+                        'path' => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Directory path to create.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Projects\\\\NewFolder' or 'workspace/newdir'\n" .
+                                "- Linux/Mac: '/home/user/newproject' or 'workspace/newdir'"
+                        ]
                     ],
                     'required'   => ['path']
                 ]
@@ -131,11 +225,23 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'deleteFile',
-                'description' => '⚠️ DANGEROUS: Permanently delete a file. This action cannot be undone.',
+                'description' => "⚠️ DANGEROUS: Permanently delete a file. This action cannot be undone.\n\n" .
+                    "Returns: {\"deleted\": true} on success, {\"deleted\": false, \"error\": \"message\"} on failure.\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically\n\n" .
+                    "⚠️ Always warn the user before deleting important files.",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path' => ['type' => 'string', 'description' => 'REQUIRED: File path to delete']
+                        'path' => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: File path to delete.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Users\\\\file.txt' or 'workspace/data.txt'\n" .
+                                "- Linux/Mac: '/home/user/file.txt' or 'workspace/data.txt'"
+                        ]
                     ],
                     'required'   => ['path']
                 ]
@@ -145,11 +251,23 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'deleteDirectory',
-                'description' => '⚠️ DANGEROUS: Recursively delete a directory and all its contents. Cannot be undone.',
+                'description' => "⚠️ DANGEROUS: Recursively delete a directory and all its contents. Cannot be undone.\n\n" .
+                    "Returns: {\"deleted\": true, \"files_removed\": N} on success, {\"error\": \"message\"} on failure.\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically\n\n" .
+                    "⚠️ Always warn the user before deleting directories with contents.",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path' => ['type' => 'string', 'description' => 'REQUIRED: Directory path to delete']
+                        'path' => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Directory path to delete.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Projects\\\\OldFolder' or 'workspace/temp'\n" .
+                                "- Linux/Mac: '/home/user/oldproject' or 'workspace/temp'"
+                        ]
                     ],
                     'required'   => ['path']
                 ]
@@ -161,13 +279,35 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'searchFiles',
-                'description' => 'Search files matching a glob pattern. Returns array of file paths.',
+                'description' => "Search files matching a glob pattern.\n\n" .
+                    "Returns: {\"files\": [\"/path/to/file1\", \"/path/to/file2\"]} on success, {\"error\": \"message\"} on failure.\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'      => ['type' => 'string', 'description' => 'REQUIRED: Directory to search in'],
-                        'pattern'   => ['type' => 'string', 'description' => 'REQUIRED: Glob pattern (e.g., "*.php", "*.{json,xml}")'],
-                        'recursive' => ['type' => 'boolean', 'description' => 'Search subdirectories. Default: false']
+                        'path'      => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Directory path to search in.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Projects' or 'workspace/src'\n" .
+                                "- Linux/Mac: '/home/user/project' or 'workspace/src'"
+                        ],
+                        'pattern'   => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Glob pattern.\n" .
+                                "Examples:\n" .
+                                "- '*.php' - all PHP files\n" .
+                                "- '*.{json,xml}' - JSON or XML files\n" .
+                                "- 'test*' - files starting with 'test'\n" .
+                                "- '**/*.txt' - all txt files recursively (when recursive=true)"
+                        ],
+                        'recursive' => [
+                            'type'        => 'boolean',
+                            'description' => "If true, search subdirectories recursively. Default: false"
+                        ]
                     ],
                     'required'   => ['path', 'pattern']
                 ]
@@ -177,12 +317,30 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'copyDirectory',
-                'description' => 'Recursively copy a directory. Fails if destination already exists.',
+                'description' => "Recursively copy a directory. Fails if destination already exists.\n\n" .
+                    "Returns: {\"copied_files\": N, \"destination\": \"/path\"} on success, {\"error\": \"message\"} on failure.\n\n" .
+                    "📁 Path notes:\n" .
+                    "- Supports absolute paths (e.g., C:\\Windows, /etc) and relative paths\n" .
+                    "- Path traversals (..) are automatically resolved for security\n" .
+                    "- Use '/' or '\\' as separators - both work automatically\n\n" .
+                    "⚠️ Destination must not exist before copying to prevent accidental overwrites.",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'src' => ['type' => 'string', 'description' => 'REQUIRED: Source directory path'],
-                        'dst' => ['type' => 'string', 'description' => 'REQUIRED: Destination directory path']
+                        'src' => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Source directory path.\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Projects\\\\MyApp' or 'workspace/src'\n" .
+                                "- Linux/Mac: '/home/user/project' or 'workspace/src'"
+                        ],
+                        'dst' => [
+                            'type'        => 'string',
+                            'description' => "REQUIRED: Destination directory path (must not exist).\n" .
+                                "Examples:\n" .
+                                "- Windows: 'C:\\\\Backups\\\\MyApp' or 'workspace/backup'\n" .
+                                "- Linux/Mac: '/home/user/backup' or 'workspace/backup'"
+                        ]
                     ],
                     'required'   => ['src', 'dst']
                 ]

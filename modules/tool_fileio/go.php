@@ -32,7 +32,7 @@ class go extends Factory
 
     public string    $root_path       = '';
     public int       $max_read_size   = 1048576;
-    public bool      $sandbox_enabled = true;
+    public bool      $in_sandbox = true;
 
     /**
      * @throws \ReflectionException
@@ -48,7 +48,7 @@ class go extends Factory
     public function setRootPath(string $root_path): static
     {
         $this->root_path       = rtrim($root_path, '\\/');
-        $this->sandbox_enabled = true;
+        $this->in_sandbox = true;
         return $this;
     }
 
@@ -57,7 +57,7 @@ class go extends Factory
      */
     public function setSandboxEnabled(bool $enabled): static
     {
-        $this->sandbox_enabled = $enabled;
+        $this->in_sandbox = $enabled;
         return $this;
     }
 
@@ -301,7 +301,7 @@ class go extends Factory
         $full_path = realpath($full_path) ?: $full_path;
 
         // Sandbox boundary check
-        if ($this->sandbox_enabled && '' !== $this->root_path) {
+        if ($this->in_sandbox && '' !== $this->root_path) {
             $real_root = realpath($this->root_path);
             if (false !== $real_root && !str_starts_with($full_path, $real_root)) {
                 return false;

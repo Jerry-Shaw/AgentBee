@@ -1,7 +1,7 @@
 <?php
 
 /**
- * agent_memory module for AgentBee
+ * Agent Memory module for AgentBee
  *
  * Copyright 2026 秋水之冰 <27206617@qq.com>
  *

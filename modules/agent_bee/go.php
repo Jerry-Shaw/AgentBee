@@ -20,6 +20,8 @@
 
 declare(strict_types = 1);
 
+const AGENT_VERSION = '2026.5.12';
+
 use Nervsys\Core\Lib\App;
 
 require __DIR__ . '/../../../Nervsys/NS.php';

@@ -44,9 +44,9 @@ class go extends Factory
         $this->initTools();
         $this->initModules();
 
-        if (!is_dir($this->agent_config['tools']['root_path'])) {
+        if (!is_dir($this->agent_config['tools']['workspace_path'])) {
             try {
-                mkdir($this->agent_config['tools']['root_path'], 0777, true);
+                mkdir($this->agent_config['tools']['workspace_path'], 0777, true);
             } catch (\Throwable) {
             }
         }
@@ -77,7 +77,7 @@ class go extends Factory
                     $this->app->script_path,
                     '-c', procMgr::WORKER_STREAM
                 ])
-                ->setWorkDir($this->agent_config['tools']['root_path'])
+                ->setWorkDir($this->agent_config['tools']['workspace_path'])
                 ->runMP($this->agent_config['worker']['count'] ?? 4, $this->agent_config['worker']['max_executions'] ?? 10000);
 
             $this->socketMgr
@@ -105,6 +105,7 @@ class go extends Factory
 
     /**
      * @throws \ReflectionException
+     * @throws \Exception
      */
     public function onClientMessage(int $socket_id, string $message): void
     {
@@ -153,28 +154,7 @@ class go extends Factory
             $default_memory = $this->getDefaultMemory();
             $today_memory   = $this->getMemory(strtotime(date('Y-m-d')));
 
-            $default_memory[] = [
-                'role'    => 'system',
-                'content' => implode("\n", [
-                    '当前用户的操作系统是 ' . $this->uname,
-                    '当前 Agent 架构为 ' . $this->name . ' based on ' . NS_NAMESPACE . ' / ' . NS_VER,
-                    '运行环境为 PHP/' . PHP_VERSION,
-                    '',
-                    '当前工作目录: ' . getcwd(),
-                    '允许的文件操作根目录: ' . ($this->agent_config['tools']['root_path'] ?? getcwd()),
-                    '',
-                    '你可以使用以下工具来帮助用户：',
-                    json_encode($this->llm_params['tools'], JSON_FORMAT),
-                    '',
-                    '注意事项：',
-                    '- 文件操作只能在允许的根目录内进行',
-                    '- 危险操作（如删除文件）需要用户确认',
-                    '- 不要执行可能危害系统的命令',
-                    '- 回答时请使用中文',
-                    '',
-                    '当前时间: ' . date('Y-m-d H:i:s'),
-                ])
-            ];
+            $default_memory[] = $this->getSystemPrompt($this->agent_config['tools']['in_sandbox'] ?? true);
 
             $history = array_merge($default_memory, $today_memory);
 

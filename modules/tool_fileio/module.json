@@ -21,6 +21,6 @@
   },
   "config": {
     "max_read_size": 1048576,
-    "sandbox_enabled": true
+    "in_sandbox": true
   }
 }

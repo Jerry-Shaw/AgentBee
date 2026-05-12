@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Agent Core module for AgentBee (Simplified version)
+ * Agent Core module for AgentBee
  *
  * Copyright 2026 秋水之冰 <27206617@qq.com>
  *
@@ -99,12 +99,12 @@ class config extends Factory
                 'max_history' => 0
             ],
             'tools'        => [
-                'enabled'         => true,
-                'sandbox_enabled' => true,
-                'root_path'       => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
-                'list'            => [
+                'enabled'        => true,
+                'in_sandbox'     => true,
+                'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
+                'list'           => [
                     [
-                        'name' => 'tool_fileio'
+                        'name' => 'agent_tools'
                     ]
                 ]
             ],

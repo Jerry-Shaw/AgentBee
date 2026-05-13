@@ -51,6 +51,7 @@ class go extends Factory
      *
      * @return array|string[]
      * @throws \ReflectionException
+     * @throws \Exception
      */
     public function exec(string $program, array|string $argv = [], string $path = ''): array
     {
@@ -59,8 +60,13 @@ class go extends Factory
             'error'  => ''
         ];
 
-        if ('' === $path) {
-            $path = $this->agent_config['tools']['workspace_path'];
+        $path = '' === $path
+            ? $this->agent_config['tools']['workspace_path']
+            : $this->securePath($path);
+
+        if (empty($argv) && str_contains($program, ' ')) {
+            [$program, $args] = explode(' ', $program, 2);
+            $argv = explode(' ', $args);
         }
 
         if (is_string($argv)) {
@@ -82,12 +88,12 @@ class go extends Factory
             ->awaitProc(
                 function (string $output) use (&$result): void
                 {
-                    $result['output'] = $output;
+                    $result['output'] .= $output;
                     unset($output);
                 },
                 function (string $output) use (&$result): void
                 {
-                    $result['error'] = $output;
+                    $result['error'] .= $output;
                     unset($output);
                 }
             );
@@ -142,13 +148,12 @@ class go extends Factory
      */
     public function writeFile(string $path, string $content, bool $append = false): array
     {
-        $file_path = $this->securePath($path);
+        $path = $this->securePath($path);
 
-        $dir = dirname($file_path);
-        $dir = $this->mkPath($dir);
+        $dir_path = dirname($path);
+        $dir_path = $this->mkPath($dir_path);
 
-        $file_path   = $dir . DIRECTORY_SEPARATOR . basename($path);
-        $file_handle = fopen($file_path, $append ? 'ab' : 'wb');
+        $file_handle = fopen($path, $append ? 'ab' : 'wb');
 
         if (false === $file_handle) {
             return ['error' => 'Failed to open file for writing: ' . $path];
@@ -157,7 +162,7 @@ class go extends Factory
         $bytes = fwrite($file_handle, $content);
         fclose($file_handle);
 
-        unset($path, $content, $append, $file_path, $dir, $file_handle);
+        unset($path, $content, $append, $dir_path, $file_handle);
         return ['bytes_written' => $bytes ?: 0];
     }
 
@@ -206,7 +211,7 @@ class go extends Factory
         $full_path = $this->securePath($path);
 
         if (!is_file($full_path)) {
-            return ['deleted' => true, 'message' => 'File does not exist'];
+            return ['deleted' => false, 'message' => 'File does not exist'];
         }
 
         $result = unlink($full_path);
@@ -282,7 +287,7 @@ class go extends Factory
         $full_path = $this->securePath($path);
 
         if (!is_dir($full_path)) {
-            return ['deleted' => true, 'message' => 'Directory does not exist'];
+            return ['deleted' => false, 'message' => 'Directory does not exist'];
         }
 
         $removed = $this->fileIO->delDir($full_path);

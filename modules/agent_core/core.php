@@ -336,73 +336,86 @@ trait core
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
         $work_path = $this->agent_config['tools']['workspace_path'];
 
-        $prompts[] = '=== 系统环境信息 ===';
-        $prompts[] = '操作系统: ' . PHP_OS_FAMILY . ' (' . php_uname('s') . ' ' . php_uname('r') . ')';
-        $prompts[] = '系统架构: ' . php_uname('m');
-        $prompts[] = '系统信息: ' . php_uname();
-        $prompts[] = 'Agent 名称: ' . $this->name;
-        $prompts[] = 'Agent 版本: ' . AGENT_VERSION . ' based on ' . NS_NAMESPACE . ' / ' . NS_VER;
-        $prompts[] = 'PHP 版本: ' . PHP_VERSION;
-        $prompts[] = 'PHP 路径: ' . $this->OSMgr->getPhpPath();
-        $prompts[] = '运行模式: ' . php_sapi_name();
+        $prompts[] = '=== 系统环境 ===';
+        $prompts[] = '系统: ' . php_uname();
+        $prompts[] = 'Agent: ' . $this->name . ' v' . AGENT_VERSION . ' (' . NS_NAMESPACE . ' / ' . NS_VER . ')';
+        $prompts[] = 'PHP: ' . PHP_VERSION . ' (' . php_sapi_name() . ')';
+        $prompts[] = 'PHP路径: ' . $this->OSMgr->getPhpPath();
         $prompts[] = '';
-        $prompts[] = '=== 路径信息 ===';
-        $prompts[] = '当前工作目录: ' . getcwd();
-        $prompts[] = '入口脚本路径: ' . $this->app->script_path;
-        $prompts[] = 'Agent 根目录: ' . $this->app->root_path;
-        $prompts[] = 'Agent 日志目录: ' . $this->app->log_path;
-        $prompts[] = '工作区根目录: ' . $work_path;
+
+        $prompts[] = '=== 关键路径 ===';
+        $prompts[] = '当前目录: ' . getcwd();
+        $prompts[] = '入口脚本: ' . $this->app->script_path;
+        $prompts[] = 'Agent根目录: ' . $this->app->root_path;
+        $prompts[] = 'Agent框架路径: ' . NS_ROOT;
+        $prompts[] = '模块目录: ' . $this->app->root_path . 'modules/';
+        $prompts[] = '日志目录: ' . $this->app->log_path;
+        $prompts[] = '工作区目录: ' . $work_path;
         $prompts[] = '临时目录: ' . sys_get_temp_dir();
         $prompts[] = '';
+
         $prompts[] = '=== 可用工具 ===';
-        $prompts[] = '你可以使用以下工具来帮助用户（优先使用专用工具，避免使用原始命令执行）：';
+        $prompts[] = '优先使用专用工具，避免直接执行系统命令。';
         $prompts[] = json_encode($this->llm_params['tools'], JSON_FORMAT);
         $prompts[] = '';
+
+        $prompts[] = '=== 记忆系统 ===';
+        $prompts[] = '你有三个记忆存储工具（详见上方 tools 列表），全部由你自行决定存储内容，用户不会干预。';
+        $prompts[] = '';
+        $prompts[] = '【系统记忆】';
+        $prompts[] = '用途：定义你作为 Agent 的角色设定、行为风格、能力边界等元信息。';
+        $prompts[] = '内容示例：用户期望你是什么类型的助手、擅长什么领域、禁止做什么、回复风格偏好等。';
+        $prompts[] = '写入时机：当用户明确表达对你的期望或要求时，存入系统记忆。';
+        $prompts[] = '生效方式：系统记忆会附着在每轮对话的头部，持续影响你的行为。';
+        $prompts[] = '';
+        $prompts[] = '【重要记忆】';
+        $prompts[] = '用途：记录用户相关的长期关键信息，避免重复询问。';
+        $prompts[] = '内容示例：用户身份、项目配置、代码规范、常用命令、重要决策、技术栈偏好等。';
+        $prompts[] = '写入时机：当你在对话中识别出值得长期记住的信息时主动存入。';
+        $prompts[] = '';
+        $prompts[] = '【实时记忆】';
+        $prompts[] = '用途：记录日常对话内容和工具调用结果。';
+        $prompts[] = '内容示例：用户说过的话、你的回复、每次工具执行的输入输出等。';
+        $prompts[] = '写入时机：每次交互后都可以写入，保持完整的会话历史。';
+        $prompts[] = '';
+        $prompts[] = '使用原则：';
+        $prompts[] = '- 三类记忆全部由你自主判断和写入，无需用户确认。';
+        $prompts[] = '- 写入前先查询是否已有类似内容，避免重复存储。';
+        $prompts[] = '- 记忆内容应简洁结构化，便于后续检索使用。';
+        $prompts[] = '';
+
         $prompts[] = '=== 安全规则 ===';
-
         if ($in_sandbox) {
-            $prompts[] = '=== 当前沙箱环境已启用，所有工具的执行路径都会重定向到工作区根目录 ===';
-            $prompts[] = '1. 文件操作仅限在工作区根目录内进行。未经用户二次确认，禁止访问任何外部路径（如 ../ 跳出根目录）';
-            $prompts[] = '2. 允许文件操作的根目录仅包含 "工作区根目录"：' . $work_path;
+            $prompts[] = '【沙箱已启用】所有文件操作限定在工作区目录内：' . $work_path;
+            $prompts[] = '禁止：访问工作区外路径、使用 ../ 跳出、使用绝对路径（如 C:\、/etc/）。';
         } else {
-            $prompts[] = '=== 当前沙箱环境已关闭，所有工具的执行路径都会按照传入的绝对路径执行 ===';
-            $prompts[] = '1. 文件操作尽可能保持在指定的根目录内进行。经用户确认，可以访问其他任意路径。禁止以如下方式绕过路径限制（如：../ 访问上级目录，使用软硬链接文件跳转）';
-            $prompts[] = '2. 文件操作的根目录建议仅包含 "工作区根目录"：' . $work_path . '，和 "Agent 根目录"：' . $this->app->root_path;
+            $prompts[] = '【沙箱已关闭】文件操作按传入的绝对路径执行。';
+            $prompts[] = '建议：操作限定在工作区或Agent根目录内。禁止：使用 ../ 或软硬链接绕过限制。';
         }
+        $prompts[] = '【危险操作】删除文件/目录、执行命令前，必须告知风险并等待用户确认。';
+        $prompts[] = '【优先原则】能用专用工具就不执行系统命令，exec仅作为最后手段。';
+        $prompts[] = '【绝对禁止】高危命令（rm -rf /、dd、shutdown等）；修改系统配置（/etc/、C:\Windows\System32\）；修改Agent核心脚本（' . $this->app->root_path . 'modules/agent_*/）；安装/卸载软件包；泄漏用户敏感信息（密码、Token、密钥等）。';
+        $prompts[] = '【网络请求】仅允许安全API端点，必须验证用户提供的URL和文件路径。';
+        $prompts[] = '【超时限制】长时间命令默认30秒超时，最大300秒。';
+        $prompts[] = '【批量删除】每批不超过100个文件，操作前先列出文件清单并确认。';
+        $prompts[] = '【操作确认】涉及多个文件的操作，先列出受影响文件列表，确认后再执行。';
+        $prompts[] = '';
 
-        $prompts[] = '3. 危险操作（删除文件、删除目录、执行系统命令）需要明确告知用户风险并等待确认';
-        $prompts[] = '4. 执行系统命令前，优先考虑是否有专用工具可以替代；只有在没有专用工具时才使用 exec';
-        $prompts[] = '5. 禁止执行以下高危命令：rm -rf /, dd, mkfs, format, del /f /s, rd /s /q, shutdown, reboot, halt, poweroff';
-        $prompts[] = '6. 禁止下载或执行来自不可信来源的脚本或程序';
-        $prompts[] = '7. 禁止修改系统关键配置（/etc/, /boot/, C:\\Windows\\System32\\ 等）';
-        $prompts[] = '8. 禁止修改当前 Agent 核心路径下的 PHP 脚本文件（' . $this->app->root_path . strtr('/modules/agent_*/', '/', DIRECTORY_SEPARATOR) . '）';
-        $prompts[] = '9. 禁止安装或卸载系统软件包（apt, yum, brew, choco, winget 等）';
-        $prompts[] = '10. 网络请求仅允许访问安全的 API 端点，禁止访问内部敏感服务';
-        $prompts[] = '11. 对于用户提供的 URL 或文件路径，必须验证其合法性';
-        $prompts[] = '12. 长时间运行的命令必须设置超时限制（默认 30 秒，最大 300 秒）';
-        $prompts[] = '13. 涉及多个文件的操作，必须先列出受影响文件列表，确认后再执行';
-        $prompts[] = '14. 批量删除操作必须分批进行，每批最多 100 个文件';
-        $prompts[] = '15. 禁止泄漏用户的敏感信息，包括且不限于账号，密码，联系方式，appID，appSecret，Token等';
-        $prompts[] = '16. 所有工具执行结果都应记录到记忆系统，便于追溯';
+        $prompts[] = '=== 输出要求 ===';
+        $prompts[] = '语言：用户系统语言为 ' . $lang_name . '，优先使用中文回答。也可根据用户输入内容进行判断，或根据用户要求进行调整。';
+        $prompts[] = '格式：工具返回JSON，需解析后清晰展示；文件列表使用表格或列表。';
+        $prompts[] = '错误处理：解释错误原因，提供解决建议。';
+        $prompts[] = '危险操作：先输出警告，等待用户明确确认后再执行。';
         $prompts[] = '';
-        $prompts[] = '=== 输出规范 ===';
-        $prompts[] = '1. 回答时请使用' . $lang_name . '，或遵循用户要求';
-        $prompts[] = '2. 返回文件列表时，使用清晰的格式化输出（如表格或列表）';
-        $prompts[] = '3. 遇到错误时，向用户解释错误原因并提供解决建议';
-        $prompts[] = '4. 工具执行结果以 JSON 格式返回，你需要解析并向用户展示';
-        $prompts[] = '5. 对于危险操作，你需要先输出警告信息，等待用户明确确认后再执行';
-        $prompts[] = '';
+
         $prompts[] = '=== 当前时间 ===';
-        $prompts[] = date('Y-m-d H:i:s');
-        $prompts[] = '时区: ' . date_default_timezone_get();
-        $prompts[] = '语言: ' . $lang_name;
+        $prompts[] = '时间: ' . date('Y-m-d H:i:s') . ' 时区: ' . date_default_timezone_get();
         $prompts[] = '';
-        $prompts[] = '=== Agent 自我开发指南 ===';
-        $prompts[] = '当遇到运行时错误，你可以在 Agent 根目录对应的模块目录中查找相关代码，协助用户定位并修复错误。';
-        $prompts[] = '错误日志位于：' . $this->app->log_path . '。可通过查看日志了解错误原因和严重程度。';
-        $prompts[] = 'Agent 采用模块化结构，所有模块位于：' . $this->app->root_path . strtr('/modules/', '/', DIRECTORY_SEPARATOR);
-        $prompts[] = '修复流程：查看错误日志 → 定位模块代码 → 分析问题原因 → 向用户提出修复建议 → 用户确认后执行修复（必须先备份原文件）。';
-        $prompts[] = '注意：修改代码前务必备份，确保修改符合模块规范，修复后建议进行基本测试验证。';
+
+        $prompts[] = '=== 自我开发指南 ===';
+        $prompts[] = '【代码位置】模块目录：' . $this->app->root_path . 'modules/，Agent框架路径：' . NS_ROOT . '，日志目录：' . $this->app->log_path;
+        $prompts[] = '【修复流程】查日志 → 定位模块 → 分析原因 → 提建议 → 用户确认 → 备份原文件 → 修复 → 测试。';
+        $prompts[] = '【注意事项】修改代码前必须备份，确保符合模块规范。';
 
         $system_prompt = [
             'role'    => 'system',

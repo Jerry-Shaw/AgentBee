@@ -128,11 +128,12 @@ class go extends Factory
         }
 
         fseek($file_handle, $offset);
-        $content = fread($file_handle, $limit);
+        $content = fread($file_handle, 0 === $limit ? filesize($full_path) : $limit);
+        $content = (string)mb_convert_encoding($content, 'UTF-8', 'auto');
         fclose($file_handle);
 
         unset($path, $offset, $limit, $full_path, $file_handle);
-        return ['content' => $content ?: ''];
+        return ['content' => $content];
     }
 
     /**
@@ -162,39 +163,6 @@ class go extends Factory
 
         unset($path, $content, $append, $dir_path, $file_handle);
         return ['bytes_written' => $bytes ?: 0];
-    }
-
-    /**
-     * List directory contents
-     *
-     * @param string $path
-     *
-     * @return array
-     */
-    public function listDirectory(string $path): array
-    {
-        $full_path = $this->securePath($path);
-
-        if (!is_dir($full_path)) {
-            return ['error' => "Directory not found: {$path}"];
-        }
-
-        $contents = $this->fileIO->getDirContents($full_path);
-
-        unset($path, $full_path);
-        return ['contents' => $contents];
-    }
-
-    /**
-     * Create directory
-     *
-     * @param string $path
-     *
-     * @return array
-     */
-    public function createDirectory(string $path): array
-    {
-        return ['created_path' => $this->mkPath($this->securePath($path))];
     }
 
     /**
@@ -239,6 +207,55 @@ class go extends Factory
 
         unset($path, $pattern, $recursive, $full_path);
         return ['files' => $files];
+    }
+
+    /**
+     * @param string $path
+     *
+     * @return array
+     */
+    public function getFileSize(string $path): array
+    {
+        $path = $this->securePath($path);
+
+        if (!is_file($path)) {
+            return ['error' => 'File not found: ' . $path];
+        }
+
+        return ['filesize' => filesize($path)];
+    }
+
+    /**
+     * List directory contents
+     *
+     * @param string $path
+     *
+     * @return array
+     */
+    public function listDirectory(string $path): array
+    {
+        $full_path = $this->securePath($path);
+
+        if (!is_dir($full_path)) {
+            return ['error' => "Directory not found: {$path}"];
+        }
+
+        $contents = $this->fileIO->getDirContents($full_path);
+
+        unset($path, $full_path);
+        return ['contents' => $contents];
+    }
+
+    /**
+     * Create directory
+     *
+     * @param string $path
+     *
+     * @return array
+     */
+    public function createDirectory(string $path): array
+    {
+        return ['created_path' => $this->mkPath($this->securePath($path))];
     }
 
     /**

@@ -83,13 +83,20 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'readFile',
-                'description' => "读取文件内容\n\n" .
-                    "成功返回：{\"content\": \"文件内容\"}\n" .
+                'description' => "读取文件内容（支持分块读取或一次读完）\n\n" .
+                    "成功返回：{\"content\": \"文件内容（UTF-8编码）\"}\n" .
                     "失败返回：{\"error\": \"错误信息\"}\n\n" .
                     "参数：\n" .
                     "- 'path'：必填，文件路径\n" .
-                    "- 'offset'：可选，从第几个字节开始读，默认 0\n" .
-                    "- 'limit'：可选，最多读多少字节，默认 8192（8KB）",
+                    "- 'offset'：可选，从第几个字节开始读，默认 0（基于原始文件字节偏移）\n" .
+                    "- 'limit'：可选，最多读多少字节，默认 8192（8KB）。\n" .
+                    "   🔥 特殊值：limit = 0 表示读取整个文件（自动获取文件大小，一次性返回全部内容）\n\n" .
+                    "📌 使用建议：\n" .
+                    "   - 小文件（< 1MB）：建议设置 limit = 0 直接读完\n" .
+                    "   - 大文件（> 1MB）：建议分块读取，每次 limit = 4096 或 8192，通过循环累加 offset\n" .
+                    "   - 获取文件总大小：可使用 getFileSize 工具\n\n" .
+                    "⚠️ 注意：offset 和 limit 基于原始文件字节数，但返回的 content 已自动转换为 UTF-8，\n" .
+                    "   转换后长度可能略有差异，但不影响按 offset/limit 分块（偏移量仍按原文件字节计算）。",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -99,11 +106,11 @@ class tools
                         ],
                         'offset' => [
                             'type'        => 'integer',
-                            'description' => "可选，从第几个字节开始读，默认 0"
+                            'description' => "可选，从第几个字节开始读，默认 0。注意：offset 是原始文件的字节偏移量"
                         ],
                         'limit'  => [
                             'type'        => 'integer',
-                            'description' => "可选，最多读多少字节，默认 8192（8KB）"
+                            'description' => "可选，最多读多少字节，默认 8192（8KB）。设置为 0 则读取整个文件"
                         ]
                     ],
                     'required'   => ['path']
@@ -140,6 +147,89 @@ class tools
                         ]
                     ],
                     'required'   => ['path', 'content']
+                ]
+            ]
+        ],
+
+        // ==================== 删除文件 ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'deleteFile',
+                'description' => "⚠️ 危险操作：永久删除文件，无法撤销\n\n" .
+                    "成功返回：{\"deleted\": true}\n" .
+                    "失败返回：{\"deleted\": false, \"error\": \"错误信息\"}\n\n" .
+                    "参数：\n" .
+                    "- 'path'：必填，文件路径\n\n" .
+                    "⚠️ 删除重要文件前必须警告用户",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'path' => [
+                            'type'        => 'string',
+                            'description' => "必填：文件路径"
+                        ]
+                    ],
+                    'required'   => ['path']
+                ]
+            ]
+        ],
+
+        // ==================== 搜索文件 ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'searchFiles',
+                'description' => "用 glob 模式搜索文件\n\n" .
+                    "成功返回：{\"files\": [\"文件路径1\", \"文件路径2\"]}\n" .
+                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
+                    "参数：\n" .
+                    "- 'path'：必填，搜索的目录路径\n" .
+                    "- 'pattern'：必填，glob 模式，如 '*.php'、'*.{json,xml}'\n" .
+                    "- 'recursive'：可选，是否递归搜索子目录，默认 false",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'path'      => [
+                            'type'        => 'string',
+                            'description' => "必填：搜索的目录路径"
+                        ],
+                        'pattern'   => [
+                            'type'        => 'string',
+                            'description' => "必填：glob 模式，如 '*.php'、'*.{json,xml}'"
+                        ],
+                        'recursive' => [
+                            'type'        => 'boolean',
+                            'description' => "可选，是否递归搜索子目录，默认 false"
+                        ]
+                    ],
+                    'required'   => ['path', 'pattern']
+                ]
+            ]
+        ],
+
+        // ==================== 获取文件大小 ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'getFileSize',
+                'description' => "获取文件的大小（字节数）\n\n" .
+                    "成功返回：{\"filesize\": 字节数}\n" .
+                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
+                    "参数：\n" .
+                    "- 'path'：必填，文件路径\n\n" .
+                    "📌 用途：\n" .
+                    "   - 判断文件大小，决定是否使用 limit=0 一次性读取\n" .
+                    "   - 用于分块读取时计算总块数和循环终止条件",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'path' => [
+                            'type'        => 'string',
+                            'description' => "必填：文件路径"
+                        ]
+                    ],
+                    'required'   => ['path']
                 ]
             ]
         ],
@@ -190,87 +280,6 @@ class tools
             ]
         ],
 
-        // ==================== 删除文件 ====================
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'deleteFile',
-                'description' => "⚠️ 危险操作：永久删除文件，无法撤销\n\n" .
-                    "成功返回：{\"deleted\": true}\n" .
-                    "失败返回：{\"deleted\": false, \"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，文件路径\n\n" .
-                    "⚠️ 删除重要文件前必须警告用户",
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'path' => [
-                            'type'        => 'string',
-                            'description' => "必填：文件路径"
-                        ]
-                    ],
-                    'required'   => ['path']
-                ]
-            ]
-        ],
-
-        // ==================== 删除目录 ====================
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'deleteDirectory',
-                'description' => "⚠️ 危险操作：递归删除整个目录及所有内容，无法撤销\n\n" .
-                    "成功返回：{\"deleted\": true, \"files_removed\": 删除文件数}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，目录路径\n\n" .
-                    "⚠️ 删除有内容的目录前必须警告用户",
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'path' => [
-                            'type'        => 'string',
-                            'description' => "必填：目录路径"
-                        ]
-                    ],
-                    'required'   => ['path']
-                ]
-            ]
-        ],
-
-        // ==================== 搜索文件 ====================
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'searchFiles',
-                'description' => "用 glob 模式搜索文件\n\n" .
-                    "成功返回：{\"files\": [\"文件路径1\", \"文件路径2\"]}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，搜索的目录路径\n" .
-                    "- 'pattern'：必填，glob 模式，如 '*.php'、'*.{json,xml}'\n" .
-                    "- 'recursive'：可选，是否递归搜索子目录，默认 false",
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'path'      => [
-                            'type'        => 'string',
-                            'description' => "必填：搜索的目录路径"
-                        ],
-                        'pattern'   => [
-                            'type'        => 'string',
-                            'description' => "必填：glob 模式，如 '*.php'、'*.{json,xml}'"
-                        ],
-                        'recursive' => [
-                            'type'        => 'boolean',
-                            'description' => "可选，是否递归搜索子目录，默认 false"
-                        ]
-                    ],
-                    'required'   => ['path', 'pattern']
-                ]
-            ]
-        ],
-
         // ==================== 复制目录 ====================
         [
             'type'     => 'function',
@@ -296,6 +305,30 @@ class tools
                         ]
                     ],
                     'required'   => ['src', 'dst']
+                ]
+            ]
+        ],
+
+        // ==================== 删除目录 ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'deleteDirectory',
+                'description' => "⚠️ 危险操作：递归删除整个目录及所有内容，无法撤销\n\n" .
+                    "成功返回：{\"deleted\": true, \"files_removed\": 删除文件数}\n" .
+                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
+                    "参数：\n" .
+                    "- 'path'：必填，目录路径\n\n" .
+                    "⚠️ 删除有内容的目录前必须警告用户",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'path' => [
+                            'type'        => 'string',
+                            'description' => "必填：目录路径"
+                        ]
+                    ],
+                    'required'   => ['path']
                 ]
             ]
         ]

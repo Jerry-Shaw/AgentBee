@@ -20,19 +20,15 @@
 
 declare(strict_types = 1);
 
-const AGENT_VERSION = '2026.5.12';
+const AGENT_VERSION = '2026.5.13';
 
 use Nervsys\Core\Lib\App;
 
 require __DIR__ . '/../../../Nervsys/NS.php';
 
-$ns = new Nervsys\NS();
-
 $root = dirname(__DIR__, 2);
 
-$ns->setDebugMode(true);
-$ns->setRootPath($root);
-$ns->setApiDir('modules');
-$ns->setMode(App::MODE_MODULE);
+$ns = new Nervsys\NS($root, 'modules', App::MODE_MODULE);
 
+$ns->setDebugMode(true);
 $ns->go();

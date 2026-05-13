@@ -62,11 +62,11 @@ class tools
                     "- 'program': Executable name only (string, REQUIRED)\n" .
                     "  ✅ Windows: 'powershell' (ALWAYS)\n" .
                     "  ✅ Linux/Mac: 'ls', 'cat', 'git', 'python3', etc.\n" .
-                    "- 'argv': Array of arguments (array, REQUIRED) - use [] for no arguments\n" .
-                    "  ✅ Windows: argv=['-Command', 'Get-ChildItem']\n" .
-                    "  ✅ Linux: argv=['-la', '/home']\n" .
-                    "  ✅ No arguments: argv=[]\n" .
-                    "  ❌ WRONG: argv='-la /home'\n" .
+                    "- 'argv': Array or JSON string of arguments (REQUIRED) - use [] or '[]' for no arguments\n" .
+                    "  ✅ As array: argv=['-Command', 'Get-ChildItem']\n" .
+                    "  ✅ As JSON string: argv='[\"-Command\", \"Get-ChildItem\"]'\n" .
+                    "  ✅ As simple string (space-separated): argv='-Command Get-ChildItem'\n" .
+                    "  ✅ No arguments: argv=[] or argv='[]'\n" .
                     "- 'path': Working directory (string, OPTIONAL) - defaults to workspace path\n\n" .
                     "== Security ==\n" .
                     "- ⚠️ NEVER use dangerous commands: 'rm -rf', 'del /f /s', 'format', 'shutdown', 'reboot'\n" .
@@ -88,13 +88,19 @@ class tools
                                 "❌ Windows: Do NOT use 'dir', 'mkdir', 'cd', 'del', 'copy', 'move', 'type', 'echo' directly"
                         ],
                         'argv'    => [
-                            'type'        => 'array',
-                            'description' => "REQUIRED: Array of command arguments. MUST be an array type, NOT a string.\n" .
-                                "✅ Windows: program='powershell', argv=['-Command', 'Get-ChildItem']\n" .
-                                "✅ Windows: program='powershell', argv=['-Command', \"Get-ChildItem -Path 'C:\\\\Projects'\"]\n" .
-                                "✅ Linux: program='ls', argv=['-la', '/home']\n" .
-                                "✅ No arguments: argv=[]\n" .
-                                "❌ WRONG: argv='-la /home'",
+                            'type'        => ['array', 'string'],
+                            'description' => "REQUIRED: Arguments. Can be array OR JSON string OR space-separated string.\n\n" .
+                                "✅ CORRECT formats:\n" .
+                                "   - As array: argv=['-Command', 'Get-ChildItem']\n" .
+                                "   - As JSON string: argv='[\"-Command\", \"Get-ChildItem\"]'\n" .
+                                "   - As simple string: argv='-Command Get-ChildItem'\n" .
+                                "   - No arguments: argv=[] or argv='[]' or argv=''\n\n" .
+                                "❌ WRONG: DO NOT use unescaped quotes inside JSON strings.\n\n" .
+                                "📝 Examples:\n" .
+                                "   - Windows: program='powershell', argv=['-Command', 'Get-ChildItem']\n" .
+                                "   - Linux: program='ls', argv=['-la', '/home']\n" .
+                                "   - Git status: program='git', argv=['status']\n" .
+                                "   - Echo: program='echo', argv=['Hello World']",
                             'items'       => ['type' => 'string']
                         ],
                         'path'    => [

@@ -45,15 +45,14 @@ class go extends Factory
     }
 
     /**
-     * @param string $program
-     * @param array  $argv
-     * @param string $path
+     * @param string       $program
+     * @param array|string $argv
+     * @param string       $path
      *
      * @return array|string[]
      * @throws \ReflectionException
-     * @throws \Exception
      */
-    public function exec(string $program, array $argv = [], string $path = ''): array
+    public function exec(string $program, array|string $argv = [], string $path = ''): array
     {
         $result = [
             'output' => '',
@@ -62,6 +61,18 @@ class go extends Factory
 
         if ('' === $path) {
             $path = $this->agent_config['tools']['workspace_path'];
+        }
+
+        if (is_string($argv)) {
+            $parsed = json_decode($argv, true);
+
+            if (is_array($parsed)) {
+                $argv = $parsed;
+            } else {
+                $argv = str_contains($argv, ' ') ? explode(' ', $argv) : [$argv];
+            }
+
+            unset($parsed);
         }
 
         $this->procMgr
@@ -283,50 +294,6 @@ class go extends Factory
         }
 
         return ['deleted' => true, 'files_removed' => $removed];
-    }
-
-    /**
-     * Secure target path and prevent path traversal
-     *
-     * @param string $path
-     *
-     * @return string
-     */
-    private function securePath(string $path): string
-    {
-        $in_sandbox = $this->agent_config['tools']['in_sandbox'] ?? true;
-
-        $path  = strtr($path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
-        $parts = explode(DIRECTORY_SEPARATOR, $path);
-
-        $parts = array_filter(
-            $parts,
-            function (string $segment) use ($in_sandbox): bool
-            {
-                $segment = trim($segment, '.');
-
-                if ('' === $segment) {
-                    return false;
-                }
-
-                if ($in_sandbox && str_contains($segment, ':')) {
-                    return false;
-                }
-
-                unset($segment);
-                return true;
-            }
-        );
-
-        $parts = array_values($parts);
-        $path  = $in_sandbox
-            ? rtrim($this->agent_config['tools']['workspace_path'] ?? $this->app->root_path, '\\/') . DIRECTORY_SEPARATOR
-            : (!str_contains($parts[0] ?? '', ':') ? '/' : '');
-
-        $path .= implode(DIRECTORY_SEPARATOR, $parts);
-
-        unset($in_sandbox, $parts);
-        return $path;
     }
 
     /**

@@ -57,6 +57,8 @@ trait core
 
         $this->agent_config = $this->config->get();
         $this->llm_params   = $this->agent_config['llm']['params'] ?? [];
+
+        $this->agent_config['tools']['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
     }
 
     /**
@@ -178,6 +180,56 @@ trait core
     }
 
     /**
+     * Secure target path and prevent path traversal
+     *
+     * @param string $path
+     *
+     * @return string
+     */
+    private function securePath(string $path): string
+    {
+        $in_sandbox = $this->agent_config['tools']['in_sandbox'] ?? true;
+
+        $path  = strtr($path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
+        $parts = explode(DIRECTORY_SEPARATOR, $path);
+
+        $parts = array_filter(
+            $parts,
+            function (string $segment) use ($in_sandbox): bool
+            {
+                $segment = trim($segment, '.');
+
+                if ('' === $segment) {
+                    return false;
+                }
+
+                if ($in_sandbox && str_contains($segment, ':')) {
+                    return false;
+                }
+
+                unset($segment);
+                return true;
+            }
+        );
+
+        if ($in_sandbox) {
+            $drive = current($parts);
+
+            if (str_contains($drive, ':')) {
+                array_shift($parts);
+            }
+
+            array_unshift($parts, rtrim($this->agent_config['tools']['workspace_path'], '\\/'));
+        }
+
+        $parts = array_values($parts);
+        $path  = implode(DIRECTORY_SEPARATOR, $parts);
+
+        unset($in_sandbox, $parts);
+        return $path;
+    }
+
+    /**
      * @param string $name
      *
      * @return object|null
@@ -282,7 +334,7 @@ trait core
         $prompts   = [];
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
-        $work_path = $this->agent_config['tools']['workspace_path'] ?? $this->app->root_path;
+        $work_path = $this->agent_config['tools']['workspace_path'];
 
         $prompts[] = '=== 系统环境信息 ===';
         $prompts[] = '操作系统: ' . PHP_OS_FAMILY . ' (' . php_uname('s') . ' ' . php_uname('r') . ')';

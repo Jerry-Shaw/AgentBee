@@ -36,6 +36,9 @@
     "list": [
       {
         "name": "agent_tools"
+      },
+      {
+        "name": "agent_memory"
       }
     ]
   },

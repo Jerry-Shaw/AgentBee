@@ -105,6 +105,9 @@ class config extends Factory
                 'list'           => [
                     [
                         'name' => 'agent_tools'
+                    ],
+                    [
+                        'name' => 'agent_memory'
                     ]
                 ]
             ],

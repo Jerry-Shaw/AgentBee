@@ -1,7 +1,7 @@
 {
   "name": "agent_memory",
-  "version": "0.0.1",
-  "description": "Agent Memory module for AgentBee",
+  "version": "0.1.0",
+  "description": "三层记忆管理系统 - System/Important/Daily，使用JSONL格式存储，支持模糊搜索和上下文获取",
   "author": "秋水之冰",
   "email": "27206617@qq.com",
   "entry": "go.php",

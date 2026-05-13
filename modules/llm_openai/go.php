@@ -128,15 +128,15 @@ class go extends Factory
                 if (!$is_finished) {
                     $this->sendStream($socket_id, $msg_data, $user_msg, $tools, $content);
                 } else {
-                    if ('' !== $content) {
+                    // if ('' !== $content) {
                         // Add to memory when finished with content
-                        $this->addMemory('assistant', $content);
-                    }
+                        // $this->addMemory('assistant', $content);
+                    // }
 
                     if (!empty($tools)) {
                         $tool_calls = true;
 
-                        $this->addMemory('assistant', json_encode($tools, JSON_FORMAT));
+                        // $this->addMemory('assistant', json_encode($tools, JSON_FORMAT));
 
                         $tools_msg = [
                             'role'       => 'assistant',
@@ -169,7 +169,7 @@ class go extends Factory
                             ];
                         }
 
-                        $this->addMemory('tool', json_encode($results, JSON_FORMAT));
+                        // $this->addMemory('tool', json_encode($results, JSON_FORMAT));
 
                         unset($tools_msg, $tool, $results, $result);
                     }

@@ -1,7 +1,9 @@
 <?php
 
 /**
- * Agent Memory module for AgentBee
+ * Memory module for AgentBee - Three-layer memory management system
+ *
+ * Provides system/important/daily memory storage using JSONL format.
  *
  * Copyright 2026 秋水之冰 <27206617@qq.com>
  *
@@ -20,217 +22,298 @@
 
 namespace modules\agent_memory;
 
+use modules\agent_core\core;
 use Nervsys\Core\Factory;
-use Nervsys\Core\Lib\App;
 
 class go extends Factory
 {
-    public array $memories = [];
+    use core;
 
-    public string $memory_path = '';
-
-    public string $default_men = '';
+    private string $memory_path;
+    private string $system_file;
+    private string $important_file;
+    private string $daily_dir;
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->memory_path = App::new()->root_path . DIRECTORY_SEPARATOR . 'memory';
-        $this->default_men = $this->memory_path . DIRECTORY_SEPARATOR . 'default.mem';
+        $this->initCore();
 
-        if (!is_dir($this->memory_path)) {
-            try {
-                mkdir($this->memory_path, 0777, true);
-            } catch (\Throwable) {
-            }
+        $base                 = dirname(__FILE__);
+        $this->memory_path    = $base . DIRECTORY_SEPARATOR;
+        $this->system_file    = $this->memory_path . 'system.txt';
+        $this->important_file = $this->memory_path . 'important.txt';
+        $this->daily_dir      = $this->memory_path . 'daily' . DIRECTORY_SEPARATOR;
+
+        if (!is_dir($this->daily_dir)) {
+            mkdir($this->daily_dir, 0777, true);
         }
     }
 
     /**
-     * @param string $content
+     * Save a memory entry (append mode, JSONL format)
      *
-     * @return void
-     */
-    public function setDefault(string $content): void
-    {
-        $memory = json_encode(['role' => 'system', 'content' => $content], JSON_FORMAT);
-        $mem_fp = fopen($this->default_men, 'wb');
-
-        fwrite($mem_fp, $memory . "\n");
-        fclose($mem_fp);
-    }
-
-    /**
-     * @param string $content
+     * @param string $level   'system', 'important', or 'daily'
+     * @param string $role    'user', 'assistant', or 'system'
+     * @param string $content Memory content
      *
-     * @return void
+     * @return array ['saved' => true, 'path' => ...] or ['error' => ...]
      */
-    public function addDefault(string $content): void
+    public function save(string $level, string $role, string $content): array
     {
-        $memory = json_encode(['role' => 'system', 'content' => $content], JSON_FORMAT);
-        $mem_fp = fopen($this->default_men, 'ab');
-
-        fwrite($mem_fp, $memory . "\n");
-        fclose($mem_fp);
-    }
-
-    /**
-     * @return array
-     */
-    public function getDefault(): array
-    {
-        if (!is_file($this->default_men)) {
-            return [];
+        if (!in_array($level, ['system', 'important', 'daily'], true)) {
+            return ['error' => "Invalid level: {$level}"];
+        }
+        if (!in_array($role, ['user', 'assistant', 'system'], true)) {
+            return ['error' => "Invalid role: {$role}"];
         }
 
-        $default = [];
-        $mem_fp  = fopen($this->default_men, 'rb');
+        $line = json_encode(['role' => $role, 'content' => $content], JSON_FORMAT);
+        if (false === $line) {
+            return ['error' => 'JSON encode failed'];
+        }
 
-        while (!feof($mem_fp)) {
-            $line = fgets($mem_fp);
-            $line = trim($line);
+        $target_file = $this->getTargetFile($level);
+        $dir         = dirname($target_file);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
 
+        $handle = fopen($target_file, 'ab');
+        if (false === $handle) {
+            return ['error' => "Cannot open file: {$target_file}"];
+        }
+        fwrite($handle, $line . "\n");
+        fclose($handle);
+
+        $result = ['saved' => true, 'path' => $target_file];
+        unset($level, $role, $content, $line, $target_file, $dir, $handle);
+        return $result;
+    }
+
+    /**
+     * Read memory entries with pagination (supports date selection for daily layer)
+     *
+     * @param string $level  'system', 'important', or 'daily'
+     * @param int    $offset Line offset (zero-based)
+     * @param int    $length Maximum number of lines to return (0 = all)
+     * @param string $date   YYYYMMDD, only for daily layer, default empty (today)
+     *
+     * @return array ['messages' => [...], 'total' => int] or ['error' => ...]
+     */
+    public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
+    {
+        if (!in_array($level, ['system', 'important', 'daily'], true)) {
+            return ['error' => "Invalid level: {$level}"];
+        }
+
+        $target_file = $this->getTargetFile($level, $date);
+        if (!is_file($target_file)) {
+            return ['messages' => [], 'total' => 0];
+        }
+
+        $handle = fopen($target_file, 'rb');
+        if (false === $handle) {
+            return ['error' => "Cannot open file: {$target_file}"];
+        }
+
+        $all_messages = [];
+        while (false !== ($line = fgets($handle))) {
+            $line = rtrim($line, "\r\n");
             if ('' === $line) {
                 continue;
             }
-
-            $default[] = $line;
+            $msg = json_decode($line, true);
+            if (is_array($msg) && isset($msg['role'], $msg['content'])) {
+                $all_messages[] = ['role' => $msg['role'], 'content' => $msg['content']];
+            }
         }
+        fclose($handle);
 
-        $default = $this->formatMemories($default);
+        $total = count($all_messages);
+        if (0 === $length) {
+            $length = $total;
+        }
+        $selected = array_slice($all_messages, $offset, $length);
 
-        fclose($mem_fp);
-        return $default;
-    }
-
-    /**
-     * @param int $timestamp
-     * @param int $offset
-     * @param int $length
-     *
-     * @return array
-     */
-    public function get(int $timestamp, int $offset = 0, int $length = 100): array
-    {
-        $date = date('Ymd', $timestamp);
-
-        $this->init($date);
-
-        $result = array_filter($this->memories[$date], fn($key) => $key >= $timestamp, ARRAY_FILTER_USE_KEY);
-        $result = array_values($result);
-        $result = array_slice($result, $offset, $length);
-
-        $result = $this->formatMemories($result);
-
-        unset($timestamp, $offset, $length, $date);
+        $result = ['messages' => $selected, 'total' => $total];
+        unset($all_messages, $selected);
         return $result;
     }
 
     /**
-     * @param int   $timestamp
-     * @param array $keywords
-     * @param int   $offset
-     * @param int   $length
+     * Search memory with keyword matching (case-insensitive, AND/OR mode)
+     * Supports date range for daily layer and cross-layer search.
      *
-     * @return array
+     * @param string $level      'system', 'important', 'daily', or 'all'
+     * @param array  $keywords   List of keywords (case-insensitive)
+     * @param int    $offset     Result offset for pagination
+     * @param int    $length     Maximum results (0 = all)
+     * @param string $mode       'or' (any keyword) or 'and' (all keywords)
+     * @param string $start_date YYYYMMDD, only for daily layer
+     * @param string $end_date   YYYYMMDD, only for daily layer
+     *
+     * @return array ['messages' => [...], 'total' => int] or ['error' => ...]
      */
-    public function search(int $timestamp, array $keywords, int $offset = 0, int $length = 100): array
+    public function search(
+        string $level,
+        array  $keywords,
+        int    $offset = 0,
+        int    $length = 100,
+        string $mode = 'or',
+        string $start_date = '',
+        string $end_date = ''
+    ): array
     {
-        $date = date('Ymd', $timestamp);
+        if (!in_array($level, ['system', 'important', 'daily', 'all'], true)) {
+            return ['error' => "Invalid level: {$level}"];
+        }
+        if (!in_array($mode, ['or', 'and'], true)) {
+            return ['error' => "Invalid mode: {$mode}"];
+        }
+        if (empty($keywords)) {
+            return ['error' => 'Keywords cannot be empty'];
+        }
 
-        $this->init($date);
+        $keywords_lower   = array_map('strtolower', $keywords);
+        $levels_to_search = ('all' === $level) ? ['system', 'important', 'daily'] : [$level];
+        $results          = [];
 
-        $result = array_filter(
-            $this->memories[$date],
-            function (string $value) use ($keywords)
-            {
-                foreach ($keywords as $keyword) {
-                    if (false !== stripos($value, $keyword)) {
-                        return true;
+        // Build list of daily files within date range
+        $daily_files = [];
+        if (in_array('daily', $levels_to_search, true)) {
+            $start = ('' === $start_date) ? '00000000' : $this->validateDate($start_date);
+            $end   = ('' === $end_date) ? '99999999' : $this->validateDate($end_date);
+            if ($start > $end) {
+                [$start, $end] = [$end, $start];
+            }
+            $all_daily = glob($this->daily_dir . '*.txt');
+            if (false !== $all_daily) {
+                foreach ($all_daily as $file) {
+                    $filename = basename($file, '.txt');
+                    if (ctype_digit($filename) && 8 === strlen($filename) && $filename >= $start && $filename <= $end) {
+                        $daily_files[] = $file;
                     }
                 }
-
-                return false;
+                sort($daily_files);
             }
-        );
+        }
 
-        $result = array_values($result);
-        $result = array_slice($result, $offset, $length);
+        foreach ($levels_to_search as $lvl) {
+            if ('daily' === $lvl) {
+                $files = $daily_files;
+            } else {
+                $files = $this->getTargetFiles($lvl);
+            }
 
-        $result = $this->formatMemories($result);
+            foreach ($files as $file) {
+                if (!is_file($file)) {
+                    continue;
+                }
+                $handle = fopen($file, 'rb');
+                if (false === $handle) {
+                    continue;
+                }
+                while (false !== ($line = fgets($handle))) {
+                    $line = rtrim($line, "\r\n");
+                    if ('' === $line) {
+                        continue;
+                    }
+                    $lower_line = strtolower($line);
+                    $matched    = false;
 
-        unset($timestamp, $offset, $length, $date);
+                    if ('or' === $mode) {
+                        foreach ($keywords_lower as $kw) {
+                            if (str_contains($lower_line, $kw)) {
+                                $matched = true;
+                                break;
+                            }
+                        }
+                    } else {
+                        $matched = true;
+                        foreach ($keywords_lower as $kw) {
+                            if (!str_contains($lower_line, $kw)) {
+                                $matched = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!$matched) {
+                        continue;
+                    }
+
+                    $msg = json_decode($line, true);
+                    if (is_array($msg) && isset($msg['role'], $msg['content'])) {
+                        $results[] = ['role' => $msg['role'], 'content' => $msg['content']];
+                    }
+                }
+                fclose($handle);
+                unset($handle);
+            }
+            unset($files);
+        }
+
+        $total = count($results);
+        if (0 === $length) {
+            $length = $total;
+        }
+        $selected = array_slice($results, $offset, $length);
+
+        $result = ['messages' => $selected, 'total' => $total];
+        unset($results, $selected, $daily_files);
         return $result;
     }
 
-    /**
-     * @param string $role
-     * @param string $content
-     *
-     * @return void
-     */
-    public function add(string $role, string $content): void
+    // ---------- Private helper methods ----------
+
+    private function getTargetFile(string $level, string $date = ''): string
     {
-        $timestamp = time();
-        $date      = date('Ymd');
-
-        $this->init($date);
-
-        $memory = json_encode(['role' => $role, 'content' => $content], JSON_FORMAT);
-
-        $this->memories[$date][$timestamp] = $memory;
-
-        $mem_file = $this->memory_path . DIRECTORY_SEPARATOR . $date . '.mem';
-        $mem_fp   = fopen($mem_file, 'ab');
-
-        fwrite($mem_fp, $timestamp . ':' . $memory . "\n");
-        fclose($mem_fp);
-    }
-
-    /**
-     * @param array $memories
-     *
-     * @return array
-     */
-    private function formatMemories(array $memories): array
-    {
-        foreach ($memories as $key => $memory) {
-            $memories[$key] = json_decode($memory, true);
-        }
-
-        return $memories;
-    }
-
-    /**
-     * @param int $date
-     *
-     * @return void
-     */
-    private function init(int $date): void
-    {
-        if (!isset($this->memories[$date])) {
-            $mem_file = $this->memory_path . DIRECTORY_SEPARATOR . $date . '.mem';
-
-            if (!is_file($mem_file)) {
-                return;
-            }
-
-            $mem_fp = fopen($mem_file, 'rb');
-
-            while (!feof($mem_fp)) {
-                $line = fgets($mem_fp);
-
-                if (!str_contains($line, ':')) {
-                    continue;
+        switch ($level) {
+            case 'system':
+                return $this->system_file;
+            case 'important':
+                return $this->important_file;
+            case 'daily':
+                if ('' === $date) {
+                    $date = date('Ymd');
+                } else {
+                    $date = $this->validateDate($date);
                 }
-
-                [$timestamp, $memory] = explode(':', $line, 2);
-
-                $this->memories[$date][$timestamp] = $memory;
-            }
-
-            fclose($mem_fp);
+                return $this->daily_dir . $date . '.txt';
+            default:
+                return '';
         }
+    }
+
+    private function getTargetFiles(string $level): array
+    {
+        switch ($level) {
+            case 'system':
+                return [$this->system_file];
+            case 'important':
+                return [$this->important_file];
+            case 'daily':
+                $files = glob($this->daily_dir . '*.txt');
+                return false === $files ? [] : $files;
+            default:
+                return [];
+        }
+    }
+
+    private function validateDate(string $date): string
+    {
+        if (!ctype_digit($date) || 8 !== strlen($date)) {
+            return date('Ymd');
+        }
+        $year  = (int)substr($date, 0, 4);
+        $month = (int)substr($date, 4, 2);
+        $day   = (int)substr($date, 6, 2);
+        if (!checkdate($month, $day, $year)) {
+            return date('Ymd');
+        }
+        return $date;
     }
 }

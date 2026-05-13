@@ -129,16 +129,9 @@ class go extends Factory
         }
 
         if (!empty($llm_data)) {
-            $llm_text = implode("\n", $llm_data);
-
-            $this->addMemory('user', $llm_text);
-
-            $default_memory = $this->getDefaultMemory();
-            $today_memory   = $this->getMemory(strtotime(date('Y-m-d')));
-
-            $default_memory[] = $this->getSystemPrompt($this->agent_config['tools']['in_sandbox'] ?? true);
-
-            $history = array_merge($default_memory, $today_memory);
+            $history   = [];
+            $history[] = $this->getSystemPrompt($this->agent_config['tools']['in_sandbox'] ?? true);
+            $history[] = ['role' => 'user', 'content' => implode("\n", $llm_data)];
 
             $this->llm->chat($socket_id, $history, $last_msg, $this->getLLMParams());
         }

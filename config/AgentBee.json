@@ -12,12 +12,12 @@
   "llm": {
     "provider": "llm_openai",
     "api_url": "http://127.0.0.1:1234/v1",
-    "api_key": "sk-lm-pkX06d0E:d1uXXht5QK5Iywk4D8Pr",
+    "api_key": "sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS",
     "model": "qwen3.6-27b",
     "org_id": "",
-    "timeout": 300,
+    "timeout": 600,
     "params": {
-      "max_tokens": 32768,
+      "max_tokens": 4096,
       "temperature": 0.5,
       "top_p": 1.0,
       "frequency_penalty": 0,

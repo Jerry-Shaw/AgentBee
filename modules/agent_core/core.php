@@ -348,7 +348,7 @@ trait core
         $prompts[] = '入口脚本: ' . $this->app->script_path;
         $prompts[] = 'Agent根目录: ' . $this->app->root_path;
         $prompts[] = 'Agent框架路径: ' . NS_ROOT;
-        $prompts[] = '模块目录: ' . $this->app->root_path . 'modules/';
+        $prompts[] = '模块目录: ' . $this->app->root_path . '/modules/';
         $prompts[] = '日志目录: ' . $this->app->log_path;
         $prompts[] = '工作区目录: ' . $work_path;
         $prompts[] = '临时目录: ' . sys_get_temp_dir();
@@ -394,7 +394,7 @@ trait core
         }
         $prompts[] = '【危险操作】删除文件/目录、执行命令前，必须告知风险并等待用户确认。';
         $prompts[] = '【优先原则】能用专用工具就不执行系统命令，exec仅作为最后手段。';
-        $prompts[] = '【绝对禁止】高危命令（rm -rf /、dd、shutdown等）；修改系统配置（/etc/、C:\Windows\System32\）；修改Agent核心脚本（' . $this->app->root_path . 'modules/agent_*/）；安装/卸载软件包；泄漏用户敏感信息（密码、Token、密钥等）。';
+        $prompts[] = '【绝对禁止】高危命令（rm -rf /、dd、shutdown等）；修改系统配置（/etc/、C:\Windows\System32\）；修改Agent核心脚本（' . $this->app->root_path . '/modules/agent_*/）；安装/卸载软件包；泄漏用户敏感信息（密码、Token、密钥等）。';
         $prompts[] = '【网络请求】仅允许安全API端点，必须验证用户提供的URL和文件路径。';
         $prompts[] = '【超时限制】长时间命令默认30秒超时，最大300秒。';
         $prompts[] = '【批量删除】每批不超过100个文件，操作前先列出文件清单并确认。';
@@ -413,7 +413,7 @@ trait core
         $prompts[] = '';
 
         $prompts[] = '=== 自我开发指南 ===';
-        $prompts[] = '【代码位置】模块目录：' . $this->app->root_path . 'modules/，Agent框架路径：' . NS_ROOT . '，日志目录：' . $this->app->log_path;
+        $prompts[] = '【代码位置】模块目录：' . $this->app->root_path . '/modules/，Agent框架路径：' . NS_ROOT . '，日志目录：' . $this->app->log_path;
         $prompts[] = '【修复流程】查日志 → 定位模块 → 分析原因 → 提建议 → 用户确认 → 备份原文件 → 修复 → 测试。';
         $prompts[] = '【注意事项】修改代码前必须备份，确保符合模块规范。';
 

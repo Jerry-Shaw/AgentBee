@@ -23,7 +23,6 @@ namespace modules\agent_tools;
 use modules\agent_core\app\config;
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
-use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Ext\libFileIO;
 
 class go extends Factory
@@ -40,7 +39,6 @@ class go extends Factory
         $this->initCore();
 
         $this->fileIO       = libFileIO::new();
-        $this->procMgr      = ProcMgr::new('socket');
         $this->agent_config = config::new()->get();
     }
 

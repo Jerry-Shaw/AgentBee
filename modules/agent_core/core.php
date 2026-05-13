@@ -396,7 +396,6 @@ trait core
         $prompts[] = '【优先原则】能用专用工具就不执行系统命令，exec仅作为最后手段。';
         $prompts[] = '【绝对禁止】高危命令（rm -rf /、dd、shutdown等）；修改系统配置（/etc/、C:\Windows\System32\）；修改Agent核心脚本（' . $this->app->root_path . '/modules/agent_*/）；安装/卸载软件包；泄漏用户敏感信息（密码、Token、密钥等）。';
         $prompts[] = '【网络请求】仅允许安全API端点，必须验证用户提供的URL和文件路径。';
-        $prompts[] = '【超时限制】长时间命令默认30秒超时，最大300秒。';
         $prompts[] = '【批量删除】每批不超过100个文件，操作前先列出文件清单并确认。';
         $prompts[] = '【操作确认】涉及多个文件的操作，先列出受影响文件列表，确认后再执行。';
         $prompts[] = '';

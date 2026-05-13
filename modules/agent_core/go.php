@@ -22,7 +22,6 @@ namespace modules\agent_core;
 
 use modules\agent_core\app\message;
 use Nervsys\Core\Factory;
-use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\System;
 
@@ -53,7 +52,6 @@ class go extends Factory
 
         $this->message   = message::new();
         $this->socketMgr = SocketMgr::new();
-        $this->procMgr   = ProcMgr::new('socket');
     }
 
     /**
@@ -64,22 +62,6 @@ class go extends Factory
         ini_set('memory_limit', $this->agent_config['memory_limit'] ?? '4G');
 
         try {
-            register_shutdown_function(
-                function (): void
-                {
-                    $this->procMgr->exit();
-                }
-            );
-
-            $this->procMgr
-                ->command([
-                    $this->OSMgr->getPhpPath(),
-                    $this->app->script_path,
-                    '-c', procMgr::WORKER_STREAM
-                ])
-                ->setWorkDir($this->agent_config['tools']['workspace_path'])
-                ->runMP($this->agent_config['worker']['count'] ?? 4, $this->agent_config['worker']['max_executions'] ?? 10000);
-
             $this->socketMgr
                 ->setDebugMode($this->agent_config['debug'])
                 ->setAliveTimeout($this->agent_config['server']['ping_interval'] * 2)

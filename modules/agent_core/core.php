@@ -150,7 +150,7 @@ trait core
 
         foreach ($tool_calls as $tool_call) {
             $fn_name = $tool_call['function']['name'];
-            $fn_argv = json_decode($tool_call['function']['arguments'], true);
+            $fn_argv = json_decode($tool_call['function']['arguments'], true) ?? [];
 
             if (!str_contains($fn_name, '/')) {
                 continue;
@@ -186,7 +186,7 @@ trait core
      *
      * @return string
      */
-    private function securePath(string $path): string
+    public function securePath(string $path): string
     {
         $in_sandbox = $this->agent_config['tools']['in_sandbox'] ?? true;
 

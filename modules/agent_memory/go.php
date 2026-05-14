@@ -35,12 +35,19 @@ class go extends Factory
     private string $system_file;
     private string $important_file;
 
+    public array $session_history       = [];
+    public int   $session_history_limit = 20;
+
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
         $this->initCore();
+
+        if (isset($this->agent_config['memory']['max_history'])) {
+            $this->session_history_limit = $this->agent_config['memory']['max_history'];
+        }
 
         $this->memory_path = $this->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
 
@@ -310,6 +317,23 @@ class go extends Factory
 
         unset($results, $selected, $daily_files);
         return $result;
+    }
+
+    /**
+     * @param array $content
+     *
+     * @return array
+     */
+    public function addSessionHistory(array $content): array
+    {
+        $this->session_history[] = $content;
+
+        if (count($this->session_history) > $this->session_history_limit) {
+            array_shift($this->session_history);
+        }
+
+        unset($content);
+        return $this->session_history;
     }
 
     /**

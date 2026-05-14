@@ -30,5 +30,5 @@ $root = dirname(__DIR__, 2);
 
 $ns = new Nervsys\NS($root, 'modules', App::MODE_MODULE);
 
-$ns->setDebugMode(false);
+$ns->setDebugMode(true);
 $ns->go();

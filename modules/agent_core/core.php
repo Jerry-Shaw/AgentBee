@@ -293,14 +293,9 @@ trait core
         $prompts[] = '临时目录: ' . sys_get_temp_dir();
         $prompts[] = '';
 
-        $prompts[] = '=== 可用工具 ===';
-        $prompts[] = '优先使用专用工具，避免直接执行系统命令。tools 列表如下：';
-        $prompts[] = json_encode($this->llm_params['tools'], JSON_PRETTY);
-        $prompts[] = '';
-
         $prompts[] = '=== 记忆系统 ===';
         $prompts[] = '';
-        $prompts[] = '你有三个记忆存储工具（save/read/search，详见上方 tools 列表），全部由你自主决定存储内容，用户不干预。';
+        $prompts[] = '你有三个记忆控制工具（save/read/search，详见 tools 列表），全部由你自主决定存储内容，用户不干预。';
         $prompts[] = '';
         $prompts[] = '【核心流程】';
         $prompts[] = '1. 系统自动将【system层】全部记忆附加到每轮对话头部，无需你读取。';
@@ -333,6 +328,10 @@ trait core
         $prompts[] = '- 浓缩记忆、丢弃无意义内容非常重要（减少文件大小、提高检索效率）。';
         $prompts[] = '- 定期整理记忆（合并/去重/重写）可进一步提升效率。';
         $prompts[] = '- 记忆内容应简洁结构化，便于检索。';
+        $prompts[] = '';
+
+        $prompts[] = '=== 系统工具 ===';
+        $prompts[] = '如有需要，优先使用专用工具，避免直接执行系统命令。';
         $prompts[] = '';
 
         $prompts[] = '=== 安全规则 ===';

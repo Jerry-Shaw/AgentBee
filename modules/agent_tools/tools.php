@@ -25,319 +25,163 @@ namespace modules\agent_tools;
 class tools
 {
     public const META = [
-        // ==================== 执行系统命令 ====================
+        // 执行命令
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'exec',
-                'description' => "⚠️ 危险操作：执行系统命令，支持超时控制\n\n" .
-                    "**核心规则**：\n" .
-                    "1. `program` 只能是可执行文件的路径或文件名（如 'powershell', 'ls', 'git'），**不能带参数**。\n" .
-                    "2. 禁止使用 cmd 内置命令（如 dir, echo, type, cd, mkdir），它们不是独立可执行文件。\n" .
-                    "3. 所有参数必须放在 `argv` 数组中。\n\n" .
-                    "**正确示例**：\n" .
-                    "- Windows: `program='powershell'`, `argv=['-Command', 'Get-ChildItem']`\n" .
-                    "- Linux:   `program='ls'`, `argv=['-la', '/home']`\n" .
-                    "- Git:     `program='git'`, `argv=['status']`\n\n" .
-                    "**错误示例**（会导致执行失败）：\n" .
-                    "- `program='powershell -Command Get-ChildItem'`  ← 参数写进了 program\n" .
-                    "- `program='dir'`                              ← dir 是内置命令，不是可执行文件\n" .
-                    "- `program='echo hello'`                        ← echo 不是可执行文件\n\n" .
-                    "**超时控制**（参数 `timeout`，默认300秒）：\n" .
-                    "- 从命令启动开始计时，如果连续 `timeout` 秒**没有任何输出**（stdout 或 stderr），命令将被强制终止。\n" .
-                    "- 只要命令持续输出（例如打印进度、日志行），计时器就会不断重置，因此长时间运行的命令不会意外超时。\n" .
-                    "- 设置 `timeout = 0` 表示永不超时（无限等待）。\n\n" .
-                    "**工作目录**（参数 `work_path`，可选）：\n" .
-                    "- 指定命令执行的工作目录，默认使用工作区路径。\n\n" .
-                    "**安全规则**：\n" .
-                    "- 禁止使用危险命令：`rm -rf`, `del /f /s`, `format`, `shutdown`\n" .
-                    "- 避免使用管道符：`|`, `>`, `<`, `&&`, `||`\n" .
-                    "- 优先使用专用工具（readFile, writeFile, listDirectory 等）\n\n" .
-                    "**返回值**：\n" .
-                    "- 成功时返回 `{\"output\": \"命令输出\", \"error\": \"错误输出\"}`\n" .
-                    "- 超时或被杀死时，`output` 和 `error` 可能不完整，请根据内容判断。",
+                'description' => "执行系统命令（危险）。\n" .
+                    "规则：program 只能是可执行文件，参数放 argv 数组，禁止内置命令。超时 timeout 秒（默认300）无输出则终止。\n" .
+                    "示例：{\"program\":\"ls\", \"argv\":[\"-la\"], \"timeout\":10, \"work_path\":\"/home\"}",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'program'   => [
-                            'type'        => 'string',
-                            'description' => "必填：可执行文件路径或文件名，不能是 cmd 内置命令，不能带参数。\n" .
-                                "✅ 正确：'powershell', 'ls', 'git', 'python3'\n" .
-                                "❌ 错误：'dir', 'echo', 'type', 'cd', 'mkdir'"
-                        ],
-                        'argv'      => [
-                            'type'        => 'array',
-                            'description' => "必填：参数数组，没有参数时传 []。\n" .
-                                "✅ 正确：['-Command', 'Get-ChildItem'] 或 ['-la', '/home']\n" .
-                                "❌ 错误：把参数写在 program 里",
-                            'items'       => ['type' => 'string']
-                        ],
-                        'timeout'   => [
-                            'type'        => 'integer',
-                            'description' => "可选：最大空闲时长（秒），默认 300。0 表示无超时限制。\n" .
-                                "只要命令持续产生输出，计时器就会重置，不会超时。",
-                            'default'     => 300
-                        ],
-                        'work_path' => [
-                            'type'        => 'string',
-                            'description' => "可选：工作目录，默认使用工作区路径"
-                        ]
+                        'program'   => ['type' => 'string'],
+                        'argv'      => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'timeout'   => ['type' => 'integer', 'default' => 300],
+                        'work_path' => ['type' => 'string']
                     ],
                     'required'   => ['program', 'argv']
                 ]
             ]
         ],
 
-        // ==================== 读取文件 ====================
+        // 读文件
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'readFile',
-                'description' => "读取文件内容（支持分块读取或一次读完）\n\n" .
-                    "成功返回：{\"content\": \"文件内容（UTF-8编码）\"}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，文件路径\n" .
-                    "- 'offset'：可选，从第几个字节开始读，默认 0（基于原始文件字节偏移）\n" .
-                    "- 'limit'：可选，最多读多少字节，默认 8192（8KB）。\n" .
-                    "   🔥 特殊值：limit = 0 表示读取整个文件（自动获取文件大小，一次性返回全部内容）\n\n" .
-                    "📌 使用建议：\n" .
-                    "   - 小文件（< 1MB）：建议设置 limit = 0 直接读完\n" .
-                    "   - 大文件（> 1MB）：建议分块读取，每次 limit = 4096 或 8192，通过循环累加 offset\n" .
-                    "   - 获取文件总大小：可使用 getFileSize 工具\n\n" .
-                    "⚠️ 注意：offset 和 limit 基于原始文件字节数，但返回的 content 已自动转换为 UTF-8，\n" .
-                    "   转换后长度可能略有差异，但不影响按 offset/limit 分块（偏移量仍按原文件字节计算）。",
+                'description' => "读取文件内容。limit=0 读整个文件。返回 {\"content\":\"...\"}。",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'   => [
-                            'type'        => 'string',
-                            'description' => "必填：文件路径"
-                        ],
-                        'offset' => [
-                            'type'        => 'integer',
-                            'description' => "可选，从第几个字节开始读，默认 0。注意：offset 是原始文件的字节偏移量"
-                        ],
-                        'limit'  => [
-                            'type'        => 'integer',
-                            'description' => "可选，最多读多少字节，默认 8192（8KB）。设置为 0 则读取整个文件"
-                        ]
+                        'path'   => ['type' => 'string'],
+                        'offset' => ['type' => 'integer', 'default' => 0],
+                        'limit'  => ['type' => 'integer', 'default' => 8192]
                     ],
                     'required'   => ['path']
                 ]
             ]
         ],
 
-        // ==================== 写入文件 ====================
+        // 写文件
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeFile',
-                'description' => "写入内容到文件，目录不存在会自动创建\n\n" .
-                    "成功返回：{\"bytes_written\": 写入字节数}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，文件路径\n" .
-                    "- 'content'：必填，要写入的内容\n" .
-                    "- 'append'：可选，是否追加到文件末尾，默认 false（覆盖写入）",
+                'description' => "写入文件（自动创建目录）。append=true 追加。返回 {\"bytes_written\": N}。",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'    => [
-                            'type'        => 'string',
-                            'description' => "必填：文件路径"
-                        ],
-                        'content' => [
-                            'type'        => 'string',
-                            'description' => "必填：要写入的内容"
-                        ],
-                        'append'  => [
-                            'type'        => 'boolean',
-                            'description' => "可选，是否追加到文件末尾，默认 false"
-                        ]
+                        'path'    => ['type' => 'string'],
+                        'content' => ['type' => 'string'],
+                        'append'  => ['type' => 'boolean', 'default' => false]
                     ],
                     'required'   => ['path', 'content']
                 ]
             ]
         ],
 
-        // ==================== 删除文件 ====================
+        // 删文件
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'deleteFile',
-                'description' => "⚠️ 危险操作：永久删除文件，无法撤销\n\n" .
-                    "成功返回：{\"deleted\": true}\n" .
-                    "失败返回：{\"deleted\": false, \"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，文件路径\n\n" .
-                    "⚠️ 删除重要文件前必须警告用户",
+                'description' => "永久删除文件（危险）。操作前需警告用户。",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => [
-                        'path' => [
-                            'type'        => 'string',
-                            'description' => "必填：文件路径"
-                        ]
-                    ],
+                    'properties' => ['path' => ['type' => 'string']],
                     'required'   => ['path']
                 ]
             ]
         ],
 
-        // ==================== 搜索文件 ====================
+        // 搜索文件
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'searchFiles',
-                'description' => "用 glob 模式搜索文件\n\n" .
-                    "成功返回：{\"files\": [\"文件路径1\", \"文件路径2\"]}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，搜索的目录路径\n" .
-                    "- 'pattern'：必填，glob 模式，如 '*.php'、'*.{json,xml}'\n" .
-                    "- 'recursive'：可选，是否递归搜索子目录，默认 false",
+                'description' => "glob 模式搜索文件。recursive=true 递归。返回 {\"files\":[...]}。",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'      => [
-                            'type'        => 'string',
-                            'description' => "必填：搜索的目录路径"
-                        ],
-                        'pattern'   => [
-                            'type'        => 'string',
-                            'description' => "必填：glob 模式，如 '*.php'、'*.{json,xml}'"
-                        ],
-                        'recursive' => [
-                            'type'        => 'boolean',
-                            'description' => "可选，是否递归搜索子目录，默认 false"
-                        ]
+                        'path'      => ['type' => 'string'],
+                        'pattern'   => ['type' => 'string'],
+                        'recursive' => ['type' => 'boolean', 'default' => false]
                     ],
                     'required'   => ['path', 'pattern']
                 ]
             ]
         ],
 
-        // ==================== 获取文件大小 ====================
+        // 文件大小
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'getFileSize',
-                'description' => "获取文件的大小（字节数）\n\n" .
-                    "成功返回：{\"filesize\": 字节数}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，文件路径\n\n" .
-                    "📌 用途：\n" .
-                    "   - 判断文件大小，决定是否使用 limit=0 一次性读取\n" .
-                    "   - 用于分块读取时计算总块数和循环终止条件",
+                'description' => "获取文件字节数。返回 {\"filesize\": N}。",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => [
-                        'path' => [
-                            'type'        => 'string',
-                            'description' => "必填：文件路径"
-                        ]
-                    ],
+                    'properties' => ['path' => ['type' => 'string']],
                     'required'   => ['path']
                 ]
             ]
         ],
 
-        // ==================== 列出目录 ====================
+        // 列表目录
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'listDirectory',
-                'description' => "列出目录内容\n\n" .
-                    "成功返回：{\"contents\": [{\"filename\": \"文件名\", \"filepath\": \"完整路径\", \"filesize\": 大小, \"isFile\": 是否文件}]}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，目录路径",
+                'description' => "列出目录内容。返回 {\"contents\":[{\"filename\":\"...\",\"filesize\":N,\"isFile\":bool}]}。",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => [
-                        'path' => [
-                            'type'        => 'string',
-                            'description' => "必填：目录路径"
-                        ]
-                    ],
+                    'properties' => ['path' => ['type' => 'string']],
                     'required'   => ['path']
                 ]
             ]
         ],
 
-        // ==================== 创建目录 ====================
+        // 创建目录
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'createDirectory',
-                'description' => "创建目录，会自动创建父目录\n\n" .
-                    "成功返回：{\"created_path\": \"创建的完整路径\"}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，目录路径",
+                'description' => "创建目录（自动创建父目录）。返回 {\"created_path\":\"...\"}。",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => [
-                        'path' => [
-                            'type'        => 'string',
-                            'description' => "必填：目录路径"
-                        ]
-                    ],
+                    'properties' => ['path' => ['type' => 'string']],
                     'required'   => ['path']
                 ]
             ]
         ],
 
-        // ==================== 复制目录 ====================
+        // 复制目录
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'copyDirectory',
-                'description' => "递归复制整个目录，目标目录必须不存在\n\n" .
-                    "成功返回：{\"copied_files\": 复制文件数, \"destination\": \"目标路径\"}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'src'：必填，源目录路径\n" .
-                    "- 'dst'：必填，目标目录路径（必须不存在）\n\n" .
-                    "⚠️ 目标目录必须不存在，防止意外覆盖",
+                'description' => "递归复制目录，目标必须不存在。返回 {\"copied_files\":N, \"destination\":\"...\"}。",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'src' => [
-                            'type'        => 'string',
-                            'description' => "必填：源目录路径"
-                        ],
-                        'dst' => [
-                            'type'        => 'string',
-                            'description' => "必填：目标目录路径（必须不存在）"
-                        ]
+                        'src' => ['type' => 'string'],
+                        'dst' => ['type' => 'string']
                     ],
                     'required'   => ['src', 'dst']
                 ]
             ]
         ],
 
-        // ==================== 删除目录 ====================
+        // 删除目录
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'deleteDirectory',
-                'description' => "⚠️ 危险操作：递归删除整个目录及所有内容，无法撤销\n\n" .
-                    "成功返回：{\"deleted\": true, \"files_removed\": 删除文件数}\n" .
-                    "失败返回：{\"error\": \"错误信息\"}\n\n" .
-                    "参数：\n" .
-                    "- 'path'：必填，目录路径\n\n" .
-                    "⚠️ 删除有内容的目录前必须警告用户",
+                'description' => "递归删除目录（危险）。操作前警告用户。返回 {\"deleted\":true, \"files_removed\":N}。",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => [
-                        'path' => [
-                            'type'        => 'string',
-                            'description' => "必填：目录路径"
-                        ]
-                    ],
+                    'properties' => ['path' => ['type' => 'string']],
                     'required'   => ['path']
                 ]
             ]

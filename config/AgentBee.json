@@ -13,7 +13,7 @@
     "provider": "llm_openai",
     "api_url": "http://127.0.0.1:1234/v1",
     "api_key": "sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS",
-    "model": "qwen3.6-27b",
+    "model": "qwen3.6-35b-a3b-claude-apex",
     "org_id": "",
     "timeout": 600,
     "params": {
@@ -26,7 +26,7 @@
   },
   "memory": {
     "provider": "agent_memory",
-    "init_history": 20
+    "max_history": 100
   },
   "tools": {
     "enabled": true,

@@ -75,6 +75,12 @@ class go extends Factory
             return ['error' => "Invalid role: {$role}"];
         }
 
+        if ('system' === $level) {
+            $role = 'system';
+        } elseif ('important' === $level) {
+            $role = 'user';
+        }
+
         $line = json_encode(['role' => $role, 'content' => $content], JSON_FORMAT);
 
         if (false === $line) {

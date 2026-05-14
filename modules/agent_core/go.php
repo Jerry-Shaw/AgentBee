@@ -32,6 +32,9 @@ class go extends Factory
 
     public message $message;
 
+    public array $session_history       = [];
+    public int   $session_history_limit = 20;
+
     /**
      * @throws \ReflectionException
      * @throws \Exception
@@ -42,6 +45,10 @@ class go extends Factory
         $this->initCore();
         $this->initTools();
         $this->initModules();
+
+        if (isset($this->agent_config['memory']['max_history'])) {
+            $this->session_history_limit = $this->agent_config['memory']['max_history'];
+        }
 
         if (!is_dir($this->agent_config['tools']['workspace_path'])) {
             try {
@@ -131,7 +138,15 @@ class go extends Factory
         if (!empty($llm_data)) {
             $history   = [];
             $history[] = $this->getSystemPrompt($this->agent_config['tools']['in_sandbox'] ?? true);
-            $history[] = ['role' => 'user', 'content' => implode("\n", $llm_data)];
+
+            $system = $this->memory->read('system', 0, 0);
+
+            if (!empty($system['messages'])) {
+                $history = array_merge($history, $system['messages']);
+            }
+
+            $sessions = $this->addSessionHistory(['role' => 'user', 'content' => implode("\n", $llm_data)]);
+            $history  = array_merge($history, $sessions);
 
             $this->llm->chat($socket_id, $history, $last_msg, $this->getLLMParams());
         }
@@ -154,5 +169,22 @@ class go extends Factory
      */
     public function onClientClose(int $socket_id): void
     {
+    }
+
+    /**
+     * @param array $content
+     *
+     * @return array
+     */
+    private function addSessionHistory(array $content): array
+    {
+        $this->session_history[] = $content;
+
+        if (count($this->session_history) > $this->session_history_limit) {
+            array_shift($this->session_history);
+        }
+
+        unset($content);
+        return $this->session_history;
     }
 }

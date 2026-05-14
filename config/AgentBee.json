@@ -17,8 +17,8 @@
     "org_id": "",
     "timeout": 600,
     "params": {
-      "max_tokens": 4096,
-      "temperature": 0.5,
+      "max_tokens": 16384,
+      "temperature": 0.6,
       "top_p": 1.0,
       "frequency_penalty": 0,
       "presence_penalty": 0
@@ -26,11 +26,11 @@
   },
   "memory": {
     "provider": "agent_memory",
-    "max_history": 100
+    "max_history": 30
   },
   "tools": {
     "enabled": true,
-    "in_sandbox": false,
+    "in_sandbox": true,
     "workspace_path": "E:\\Projects\\Codes\\AgentBee\\workspace",
     "list": [
       {

@@ -1,0 +1,3 @@
+[submodule "Nervsys"]
+	path = Nervsys
+	url = https://github.com/Jerry-Shaw/Nervsys.git

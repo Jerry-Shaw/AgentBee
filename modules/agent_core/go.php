@@ -129,20 +129,32 @@ class go extends Factory
         }
 
         if (!empty($llm_data)) {
-            $history   = [];
-            $history[] = $this->getSystemPrompt($this->agent_config['tools']['in_sandbox'] ?? true);
+            $history = [];
 
-            $system = $this->memory->read('system', 0, 0);
+            $system_settings = $this->getSystemPrompt($this->agent_config['tools']['in_sandbox'] ?? true);
+            $system_memory   = $this->memory->read('system', 0, 0);
 
-            if (!empty($system['messages'])) {
-                $history = array_merge($history, $system['messages']);
+            if (!empty($system_memory['messages'])) {
+                $memory = ["\n", '=== 重要个性设定 ==='];
+
+                foreach ($system_memory['messages'] as $message) {
+                    $memory[] = $message['content'];
+                }
+
+                $system_settings['content'] .= implode("\n", $memory);
             }
+
+            $history[] = $system_settings;
 
             $sessions = $this->memory->addSessionHistory(['role' => 'user', 'content' => implode("\n", $llm_data)]);
             $history  = array_merge($history, $sessions);
 
             $this->llm->chat($socket_id, $history, $last_msg, $this->getLLMParams());
+
+            unset($history, $system_settings, $system_memory, $memory, $sessions);
         }
+
+        unset($socket_id, $message, $end_data, $llm_data, $messages, $data, $message_type, $message_data, $last_msg, $send_end);
     }
 
     /**

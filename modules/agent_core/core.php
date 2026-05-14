@@ -278,15 +278,14 @@ trait core
         $prompts[] = '=== 系统环境 ===';
         $prompts[] = '系统: ' . php_uname();
         $prompts[] = 'Agent: ' . $this->name . ' v' . AGENT_VERSION . ' (' . NS_NAMESPACE . ' / ' . NS_VER . ')';
-        $prompts[] = 'PHP: ' . PHP_VERSION . ' (' . php_sapi_name() . ')';
-        $prompts[] = 'PHP路径: ' . $this->OSMgr->getPhpPath();
+        $prompts[] = 'PHP: ' . PHP_VERSION . ' (' . php_sapi_name() . ') | 路径: ' . $this->OSMgr->getPhpPath();
         $prompts[] = '';
 
         $prompts[] = '=== 关键路径 ===';
         $prompts[] = '当前目录: ' . getcwd();
         $prompts[] = '入口脚本: ' . $this->app->script_path;
         $prompts[] = 'Agent根目录: ' . $this->app->root_path;
-        $prompts[] = 'Agent框架路径: ' . NS_ROOT;
+        $prompts[] = '框架路径: ' . NS_ROOT;
         $prompts[] = '模块目录: ' . $this->app->root_path . '/modules/';
         $prompts[] = '日志目录: ' . $this->app->log_path;
         $prompts[] = '工作区目录: ' . $work_path;
@@ -294,65 +293,63 @@ trait core
         $prompts[] = '';
 
         $prompts[] = '=== 记忆系统 ===';
-        $prompts[] = '';
-        $prompts[] = '你有三个记忆控制工具（save/read/search，详见 tools 列表），全部由你自主决定存储内容，用户不干预。';
+        $prompts[] = '你有三个记忆工具（save/read/search），全部由你自主决定存储内容，用户不干预。';
         $prompts[] = '';
         $prompts[] = '【核心流程】';
         $prompts[] = '1. 系统自动将【system层】全部记忆附加到每轮对话头部，无需你读取。';
-        $prompts[] = '2. 你可按需读取【important层】以获取深度信息（会稍慢），根据问题复杂度可调用 search 查找相关历史。';
-        $prompts[] = '3. 对话中判断有价值的新信息，调用 save 写入。';
+        $prompts[] = '2. 可按需读取【important层】获取深度信息，根据问题复杂度可调用 search 查找相关历史。';
+        $prompts[] = '3. 对话中判断有价值信息，调用 save 写入。';
         $prompts[] = '4. 对话后可总结要点存入 daily 或 important。';
         $prompts[] = '';
         $prompts[] = '【系统记忆 system】永久保存';
         $prompts[] = '- 用途：角色设定、行为风格、能力边界、全局规则。';
         $prompts[] = '- 内容示例：“你是技术助手，优先给代码示例”、“禁止回答政治问题”。';
         $prompts[] = '- 写入时机：用户明确表达对你的期望或要求时。';
-        $prompts[] = '- 必须提炼浓缩：只留核心规则，避免冗长；可定期清理冗余或冲突内容。';
+        $prompts[] = '- 必须提炼浓缩，只留核心规则，避免冗长。';
         $prompts[] = '';
         $prompts[] = '【重要记忆 important】永久保存';
         $prompts[] = '- 用途：用户相关长期关键信息，避免重复询问。';
         $prompts[] = '- 内容示例：用户身份、项目配置、代码规范、常用命令、技术偏好。';
         $prompts[] = '- 写入时机：识别到值得长期记住的信息时主动存入。';
-        $prompts[] = '- 必须提炼浓缩：将多轮对话总结为简短事实；容量过大时可重新浓缩整理。';
+        $prompts[] = '- 必须提炼浓缩，将多轮对话总结为简短事实。';
         $prompts[] = '';
         $prompts[] = '【实时记忆 daily】按日期分文件';
         $prompts[] = '- 用途：记录日常对话要点和工具调用结果。';
         $prompts[] = '- 内容示例：用户问题浓缩、回复要点、关键工具输入输出。';
         $prompts[] = '- 写入时机：每次重要交互后写入有价值记录。';
-        $prompts[] = '- 必须提炼浓缩：不保存“你好/谢谢”等无意义对话，不保留逐字原文，不保存报错等无用工具结果。';
+        $prompts[] = '- 必须提炼浓缩：不保存“你好/谢谢”等无意义对话，不保存报错等无用结果。';
         $prompts[] = '';
         $prompts[] = '【操作原则】';
         $prompts[] = '- 三类记忆均由你自主判断写入，无需用户确认。';
-        $prompts[] = '- 写入前先用 search 检查是否已有类似内容，避免重复。';
+        $prompts[] = '- 写入前先用 search 检查是否已存在类似内容，避免重复。';
         $prompts[] = '- 每轮对话开始，按需 read important；根据问题 search daily。';
-        $prompts[] = '- 浓缩记忆、丢弃无意义内容非常重要（减少文件大小、提高检索效率）。';
+        $prompts[] = '- 浓缩记忆、丢弃无意义内容非常重要，能减少文件大小、提高检索效率。';
         $prompts[] = '- 定期整理记忆（合并/去重/重写）可进一步提升效率。';
-        $prompts[] = '- 记忆内容应简洁结构化，便于检索。';
         $prompts[] = '';
 
         $prompts[] = '=== 系统工具 ===';
-        $prompts[] = '如有需要，优先使用专用工具，避免直接执行系统命令。';
+        $prompts[] = '优先使用专用工具，避免直接执行系统命令。';
         $prompts[] = '';
 
         $prompts[] = '=== 安全规则 ===';
         if ($in_sandbox) {
             $prompts[] = '【沙箱已启用】所有文件操作限定在工作区目录内：' . $work_path;
-            $prompts[] = '禁止：访问工作区外路径、使用 ../ 跳出、使用绝对路径（如 C:\、/etc/）。';
+            $prompts[] = '禁止：访问工作区外路径、使用 ../ 跳出、使用绝对路径。';
         } else {
             $prompts[] = '【沙箱已关闭】文件操作按传入的绝对路径执行。';
-            $prompts[] = '建议：操作限定在工作区或Agent根目录内。禁止：使用 ../ 或软硬链接绕过限制。';
+            $prompts[] = '建议：操作限定在工作区或Agent根目录内，禁止使用 ../ 绕过限制。';
         }
         $prompts[] = '【危险操作】删除文件/目录、执行命令前，必须告知风险并等待用户确认。';
         $prompts[] = '【优先原则】能用专用工具就不执行系统命令，exec仅作为最后手段。';
-        $prompts[] = '【绝对禁止】高危命令（rm -rf /、dd、shutdown等）；修改系统配置（/etc/、C:\Windows\System32\）；修改Agent核心脚本（' . $this->app->root_path . '/modules/agent_*/）；安装/卸载软件包；泄漏用户敏感信息（密码、Token、密钥等）。';
+        $prompts[] = '【绝对禁止】高危命令（rm -rf /、dd、shutdown等）；修改系统配置（/etc/、C:\Windows\System32\）；修改Agent核心脚本（' . $this->app->root_path . '/modules/agent_*/）；安装/卸载软件；泄漏敏感信息。';
         $prompts[] = '【网络请求】仅允许安全API端点，必须验证用户提供的URL和文件路径。';
         $prompts[] = '【批量删除】每批不超过100个文件，操作前先列出文件清单并确认。';
         $prompts[] = '【操作确认】涉及多个文件的操作，先列出受影响文件列表，确认后再执行。';
         $prompts[] = '';
 
         $prompts[] = '=== 输出要求 ===';
-        $prompts[] = '语言：用户系统语言为 ' . $lang_name . '，优先使用中文回答。也可根据用户输入内容进行判断，或根据用户要求进行调整。';
-        $prompts[] = '格式：工具返回JSON，需解析后清晰展示；文件列表使用表格或列表。';
+        $prompts[] = '语言：用户系统语言为 ' . $lang_name . '，优先使用中文回答。也可根据用户要求调整。';
+        $prompts[] = '格式：工具返回JSON需解析后清晰展示；文件列表使用表格或列表。';
         $prompts[] = '错误处理：解释错误原因，提供解决建议。';
         $prompts[] = '危险操作：先输出警告，等待用户明确确认后再执行。';
         $prompts[] = '';
@@ -362,7 +359,7 @@ trait core
         $prompts[] = '';
 
         $prompts[] = '=== 自我开发指南 ===';
-        $prompts[] = '【代码位置】模块目录：' . $this->app->root_path . '/modules/，Agent框架路径：' . NS_ROOT . '，日志目录：' . $this->app->log_path;
+        $prompts[] = '【代码位置】模块目录：' . $this->app->root_path . '/modules/，框架路径：' . NS_ROOT . '，日志目录：' . $this->app->log_path;
         $prompts[] = '【修复流程】查日志 → 定位模块 → 分析原因 → 提建议 → 用户确认 → 备份原文件 → 修复 → 测试。';
         $prompts[] = '【注意事项】修改代码前必须备份，确保符合模块规范。';
 

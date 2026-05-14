@@ -328,11 +328,13 @@ class go extends Factory
     {
         $this->session_history[] = $content;
 
-        if (count($this->session_history) > $this->session_history_limit) {
-            array_shift($this->session_history);
+        $message_count = count($this->session_history);
+
+        if ($message_count > $this->session_history_limit) {
+            $this->session_history = array_slice($this->session_history, $message_count - $this->session_history_limit, $this->session_history_limit);
         }
 
-        unset($content);
+        unset($content, $message_count);
         return $this->session_history;
     }
 

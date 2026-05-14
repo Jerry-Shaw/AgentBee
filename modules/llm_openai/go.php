@@ -91,9 +91,10 @@ class go extends Factory
                     return $result;
                 }
             );
+
+            $this->fiberMgr->runStack($stack_id);
         }
 
-        $this->fiberMgr->runStack($stack_id);
         $this->fiberMgr->clearStack($stack_id);
 
         $this->sendMsg($socket_id, $user_msg, 'end', null);
@@ -116,7 +117,7 @@ class go extends Factory
     {
         $content = '';
         $tools   = [];
-        $key     = 'stream_' . uniqid(time(), true);
+        $key     = 'stream_' . uniqid('', true);
 
         $tool_calls   = false;
         $full_history = $history;

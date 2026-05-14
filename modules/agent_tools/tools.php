@@ -30,45 +30,55 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'exec',
-                'description' => "⚠️ 危险操作：执行系统命令\n\n" .
-                    "🔴 核心规则：\n" .
-                    "1. 'program' 只能是可执行文件的路径或文件名，如 'powershell'、'ls'、'git'\n" .
-                    "2. 禁止在 'program' 中写参数，也禁止使用 cmd 内置命令（如 dir、echo、type、cd）\n" .
-                    "3. 所有参数必须放在 'argv' 数组中\n\n" .
-                    "✅ 正确示例：\n" .
-                    "   - program='powershell', argv=['-Command', 'Get-ChildItem']\n" .
-                    "   - program='ls', argv=['-la', '/home']\n" .
-                    "   - program='git', argv=['status']\n\n" .
-                    "❌ 错误示例（会导致执行失败）：\n" .
-                    "   - program='powershell -Command Get-ChildItem'  ← 参数写进了 program\n" .
-                    "   - program='dir'                               ← dir 是 cmd 内置命令，不是可执行文件\n" .
-                    "   - program='echo hello'                         ← echo 不是可执行文件\n\n" .
-                    "📌 Windows 请始终使用 'powershell' 作为 program\n" .
-                    "📌 Linux/Mac 请使用标准命令如 'ls', 'cat', 'git', 'python3' 等\n\n" .
-                    "其他参数：\n" .
-                    "- 'path'：可选，工作目录，默认使用工作区路径\n\n" .
-                    "安全规则：\n" .
-                    "- 禁止使用危险命令：rm -rf, del /f /s, format, shutdown\n" .
-                    "- 避免使用管道符：|, >, <, &&, ||\n" .
-                    "- 优先使用专用工具（readFile、writeFile、listDirectory 等）",
+                'description' => "⚠️ 危险操作：执行系统命令，支持超时控制\n\n" .
+                    "**核心规则**：\n" .
+                    "1. `program` 只能是可执行文件的路径或文件名（如 'powershell', 'ls', 'git'），**不能带参数**。\n" .
+                    "2. 禁止使用 cmd 内置命令（如 dir, echo, type, cd, mkdir），它们不是独立可执行文件。\n" .
+                    "3. 所有参数必须放在 `argv` 数组中。\n\n" .
+                    "**正确示例**：\n" .
+                    "- Windows: `program='powershell'`, `argv=['-Command', 'Get-ChildItem']`\n" .
+                    "- Linux:   `program='ls'`, `argv=['-la', '/home']`\n" .
+                    "- Git:     `program='git'`, `argv=['status']`\n\n" .
+                    "**错误示例**（会导致执行失败）：\n" .
+                    "- `program='powershell -Command Get-ChildItem'`  ← 参数写进了 program\n" .
+                    "- `program='dir'`                              ← dir 是内置命令，不是可执行文件\n" .
+                    "- `program='echo hello'`                        ← echo 不是可执行文件\n\n" .
+                    "**超时控制**（参数 `timeout`，默认300秒）：\n" .
+                    "- 从命令启动开始计时，如果连续 `timeout` 秒**没有任何输出**（stdout 或 stderr），命令将被强制终止。\n" .
+                    "- 只要命令持续输出（例如打印进度、日志行），计时器就会不断重置，因此长时间运行的命令不会意外超时。\n" .
+                    "- 设置 `timeout = 0` 表示永不超时（无限等待）。\n\n" .
+                    "**工作目录**（参数 `work_path`，可选）：\n" .
+                    "- 指定命令执行的工作目录，默认使用工作区路径。\n\n" .
+                    "**安全规则**：\n" .
+                    "- 禁止使用危险命令：`rm -rf`, `del /f /s`, `format`, `shutdown`\n" .
+                    "- 避免使用管道符：`|`, `>`, `<`, `&&`, `||`\n" .
+                    "- 优先使用专用工具（readFile, writeFile, listDirectory 等）\n\n" .
+                    "**返回值**：\n" .
+                    "- 成功时返回 `{\"output\": \"命令输出\", \"error\": \"错误输出\"}`\n" .
+                    "- 超时或被杀死时，`output` 和 `error` 可能不完整，请根据内容判断。",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'program' => [
+                        'program'   => [
                             'type'        => 'string',
-                            'description' => "必填：可执行文件路径或文件名，不能是 cmd 内置命令，不能带参数\n" .
+                            'description' => "必填：可执行文件路径或文件名，不能是 cmd 内置命令，不能带参数。\n" .
                                 "✅ 正确：'powershell', 'ls', 'git', 'python3'\n" .
                                 "❌ 错误：'dir', 'echo', 'type', 'cd', 'mkdir'"
                         ],
-                        'argv'    => [
+                        'argv'      => [
                             'type'        => 'array',
-                            'description' => "必填：参数数组，没有参数时传 []\n" .
-                                "✅ 正确：['-Command', 'Get-ChildItem']\n" .
-                                "✅ 正确：['-la', '/home']\n" .
+                            'description' => "必填：参数数组，没有参数时传 []。\n" .
+                                "✅ 正确：['-Command', 'Get-ChildItem'] 或 ['-la', '/home']\n" .
                                 "❌ 错误：把参数写在 program 里",
                             'items'       => ['type' => 'string']
                         ],
-                        'path'    => [
+                        'timeout'   => [
+                            'type'        => 'integer',
+                            'description' => "可选：最大空闲时长（秒），默认 300。0 表示无超时限制。\n" .
+                                "只要命令持续产生输出，计时器就会重置，不会超时。",
+                            'default'     => 300
+                        ],
+                        'work_path' => [
                             'type'        => 'string',
                             'description' => "可选：工作目录，默认使用工作区路径"
                         ]

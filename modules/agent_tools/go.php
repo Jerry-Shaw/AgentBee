@@ -45,22 +45,23 @@ class go extends Factory
     /**
      * @param string       $program
      * @param array|string $argv
-     * @param string       $path
+     * @param int          $timeout
+     * @param string       $work_path
      *
      * @return array|string[]
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function exec(string $program, array|string $argv = [], string $path = ''): array
+    public function exec(string $program, array|string $argv = [], int $timeout = 300, string $work_path = ''): array
     {
         $result = [
             'output' => '',
             'error'  => ''
         ];
 
-        $path = '' === $path
+        $work_path = '' === $work_path
             ? $this->agent_config['tools']['workspace_path']
-            : $this->securePath($path);
+            : $this->securePath($work_path);
 
         if (empty($argv) && str_contains($program, ' ')) {
             [$program, $args] = explode(' ', $program, 2);
@@ -79,24 +80,45 @@ class go extends Factory
             unset($parsed);
         }
 
-        $this->procMgr
-            ->command([$program, ...$argv])
-            ->setWorkDir($path)
-            ->run()
-            ->awaitProc(
-                function (string $output) use (&$result): void
-                {
-                    $result['output'] .= $output;
-                    unset($output);
-                },
-                function (string $output) use (&$result): void
-                {
-                    $result['error'] .= $output;
-                    unset($output);
-                }
-            );
+        $active  = time();
+        $procMgr = $this->procMgr;
 
-        unset($program, $argv, $path);
+        $procMgr
+            ->command([$program, ...$argv])
+            ->setWorkDir($work_path)
+            ->run();
+
+        $proc_pid = $procMgr->getPid();
+
+        $procMgr->awaitProc(
+            function (string $output) use (&$active, &$result): void
+            {
+                $active           = time();
+                $result['output'] .= $output;
+                unset($output);
+            },
+            function (string $output) use (&$active, &$result): void
+            {
+                $active          = time();
+                $result['error'] .= $output;
+                unset($output);
+            },
+            function () use ($active, $timeout, $proc_pid, $procMgr, &$result): void
+            {
+                if (0 === $timeout) {
+                    return;
+                }
+
+                if (time() - $active > $timeout) {
+                    $this->OSMgr->killProc($proc_pid);
+                    $result['error'] .= 'Process has been killed due to timeout reached.';
+                }
+            }
+        );
+
+        $procMgr->exit();
+
+        unset($program, $argv, $timeout, $work_path, $active, $procMgr, $proc_pid);
         return $result;
     }
 

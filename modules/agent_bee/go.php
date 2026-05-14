@@ -24,11 +24,11 @@ const AGENT_VERSION = '2026.5.13';
 
 use Nervsys\Core\Lib\App;
 
-require __DIR__ . '/../../../Nervsys/NS.php';
+require __DIR__ . '/../../Nervsys/NS.php';
 
 $root = dirname(__DIR__, 2);
 
 $ns = new Nervsys\NS($root, 'modules', App::MODE_MODULE);
 
-$ns->setDebugMode(true);
+$ns->setDebugMode(false);
 $ns->go();

@@ -26,8 +26,7 @@
   },
   "memory": {
     "provider": "agent_memory",
-    "enabled": true,
-    "max_history": 0
+    "init_history": 20
   },
   "tools": {
     "enabled": true,

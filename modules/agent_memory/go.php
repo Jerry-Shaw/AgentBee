@@ -30,9 +30,10 @@ class go extends Factory
     use core;
 
     private string $memory_path;
+
+    private string $daily_dir;
     private string $system_file;
     private string $important_file;
-    private string $daily_dir;
 
     /**
      * @throws \ReflectionException
@@ -41,14 +42,17 @@ class go extends Factory
     {
         $this->initCore();
 
-        $base                 = dirname(__FILE__);
-        $this->memory_path    = $base . DIRECTORY_SEPARATOR;
+        $this->memory_path = $this->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
+
+        $this->daily_dir      = $this->memory_path . 'daily' . DIRECTORY_SEPARATOR;
         $this->system_file    = $this->memory_path . 'system.txt';
         $this->important_file = $this->memory_path . 'important.txt';
-        $this->daily_dir      = $this->memory_path . 'daily' . DIRECTORY_SEPARATOR;
 
         if (!is_dir($this->daily_dir)) {
-            mkdir($this->daily_dir, 0777, true);
+            try {
+                mkdir($this->daily_dir, 0777, true);
+            } catch (\Throwable) {
+            }
         }
     }
 
@@ -66,30 +70,39 @@ class go extends Factory
         if (!in_array($level, ['system', 'important', 'daily'], true)) {
             return ['error' => "Invalid level: {$level}"];
         }
+
         if (!in_array($role, ['user', 'assistant', 'system'], true)) {
             return ['error' => "Invalid role: {$role}"];
         }
 
         $line = json_encode(['role' => $role, 'content' => $content], JSON_FORMAT);
+
         if (false === $line) {
             return ['error' => 'JSON encode failed'];
         }
 
         $target_file = $this->getTargetFile($level);
-        $dir         = dirname($target_file);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
+        $target_dir  = dirname($target_file);
+
+        if (!is_dir($target_dir)) {
+            try {
+                mkdir($target_dir, 0777, true);
+            } catch (\Throwable) {
+            }
         }
 
         $handle = fopen($target_file, 'ab');
+
         if (false === $handle) {
             return ['error' => "Cannot open file: {$target_file}"];
         }
+
         fwrite($handle, $line . "\n");
         fclose($handle);
 
         $result = ['saved' => true, 'path' => $target_file];
-        unset($level, $role, $content, $line, $target_file, $dir, $handle);
+        unset($level, $role, $content, $line, $target_file, $target_dir, $handle);
+
         return $result;
     }
 
@@ -110,35 +123,44 @@ class go extends Factory
         }
 
         $target_file = $this->getTargetFile($level, $date);
+
         if (!is_file($target_file)) {
             return ['messages' => [], 'total' => 0];
         }
 
         $handle = fopen($target_file, 'rb');
+
         if (false === $handle) {
             return ['error' => "Cannot open file: {$target_file}"];
         }
 
         $all_messages = [];
+
         while (false !== ($line = fgets($handle))) {
             $line = rtrim($line, "\r\n");
+
             if ('' === $line) {
                 continue;
             }
+
             $msg = json_decode($line, true);
+
             if (is_array($msg) && isset($msg['role'], $msg['content'])) {
                 $all_messages[] = ['role' => $msg['role'], 'content' => $msg['content']];
             }
         }
+
         fclose($handle);
 
         $total = count($all_messages);
+
         if (0 === $length) {
             $length = $total;
         }
-        $selected = array_slice($all_messages, $offset, $length);
 
-        $result = ['messages' => $selected, 'total' => $total];
+        $selected = array_slice($all_messages, $offset, $length);
+        $result   = ['messages' => $selected, 'total' => $total];
+
         unset($all_messages, $selected);
         return $result;
     }
@@ -170,57 +192,69 @@ class go extends Factory
         if (!in_array($level, ['system', 'important', 'daily', 'all'], true)) {
             return ['error' => "Invalid level: {$level}"];
         }
+
         if (!in_array($mode, ['or', 'and'], true)) {
             return ['error' => "Invalid mode: {$mode}"];
         }
+
         if (empty($keywords)) {
             return ['error' => 'Keywords cannot be empty'];
         }
 
+        $results          = [];
         $keywords_lower   = array_map('strtolower', $keywords);
         $levels_to_search = ('all' === $level) ? ['system', 'important', 'daily'] : [$level];
-        $results          = [];
 
         // Build list of daily files within date range
         $daily_files = [];
         if (in_array('daily', $levels_to_search, true)) {
             $start = ('' === $start_date) ? '00000000' : $this->validateDate($start_date);
             $end   = ('' === $end_date) ? '99999999' : $this->validateDate($end_date);
+
             if ($start > $end) {
                 [$start, $end] = [$end, $start];
             }
+
             $all_daily = glob($this->daily_dir . '*.txt');
+
             if (false !== $all_daily) {
                 foreach ($all_daily as $file) {
                     $filename = basename($file, '.txt');
+
                     if (ctype_digit($filename) && 8 === strlen($filename) && $filename >= $start && $filename <= $end) {
                         $daily_files[] = $file;
                     }
                 }
-                sort($daily_files);
+
+                sort($daily_files, SORT_NATURAL);
             }
         }
 
-        foreach ($levels_to_search as $lvl) {
-            if ('daily' === $lvl) {
+        foreach ($levels_to_search as $search_lv) {
+            if ('daily' === $search_lv) {
                 $files = $daily_files;
             } else {
-                $files = $this->getTargetFiles($lvl);
+                $files = $this->getTargetFiles($search_lv);
             }
 
             foreach ($files as $file) {
                 if (!is_file($file)) {
                     continue;
                 }
+
                 $handle = fopen($file, 'rb');
+
                 if (false === $handle) {
                     continue;
                 }
+
                 while (false !== ($line = fgets($handle))) {
                     $line = rtrim($line, "\r\n");
+
                     if ('' === $line) {
                         continue;
                     }
+
                     $lower_line = strtolower($line);
                     $matched    = false;
 
@@ -246,29 +280,38 @@ class go extends Factory
                     }
 
                     $msg = json_decode($line, true);
+
                     if (is_array($msg) && isset($msg['role'], $msg['content'])) {
                         $results[] = ['role' => $msg['role'], 'content' => $msg['content']];
                     }
                 }
+
                 fclose($handle);
                 unset($handle);
             }
+
             unset($files);
         }
 
         $total = count($results);
+
         if (0 === $length) {
             $length = $total;
         }
-        $selected = array_slice($results, $offset, $length);
 
-        $result = ['messages' => $selected, 'total' => $total];
+        $selected = array_slice($results, $offset, $length);
+        $result   = ['messages' => $selected, 'total' => $total];
+
         unset($results, $selected, $daily_files);
         return $result;
     }
 
-    // ---------- Private helper methods ----------
-
+    /**
+     * @param string $level
+     * @param string $date
+     *
+     * @return string
+     */
     private function getTargetFile(string $level, string $date = ''): string
     {
         switch ($level) {
@@ -277,17 +320,18 @@ class go extends Factory
             case 'important':
                 return $this->important_file;
             case 'daily':
-                if ('' === $date) {
-                    $date = date('Ymd');
-                } else {
-                    $date = $this->validateDate($date);
-                }
+                $date = '' === $date ? date('Ymd') : $this->validateDate($date);
                 return $this->daily_dir . $date . '.txt';
             default:
                 return '';
         }
     }
 
+    /**
+     * @param string $level
+     *
+     * @return array|string[]
+     */
     private function getTargetFiles(string $level): array
     {
         switch ($level) {
@@ -297,23 +341,31 @@ class go extends Factory
                 return [$this->important_file];
             case 'daily':
                 $files = glob($this->daily_dir . '*.txt');
-                return false === $files ? [] : $files;
+                return $files ?: [];
             default:
                 return [];
         }
     }
 
+    /**
+     * @param string $date
+     *
+     * @return string
+     */
     private function validateDate(string $date): string
     {
         if (!ctype_digit($date) || 8 !== strlen($date)) {
             return date('Ymd');
         }
+
         $year  = (int)substr($date, 0, 4);
         $month = (int)substr($date, 4, 2);
         $day   = (int)substr($date, 6, 2);
+
         if (!checkdate($month, $day, $year)) {
             return date('Ymd');
         }
+
         return $date;
     }
 }

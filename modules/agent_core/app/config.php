@@ -94,9 +94,8 @@ class config extends Factory
                 ]
             ],
             'memory'       => [
-                'provider'    => 'agent_memory',
-                'enabled'     => true,
-                'max_history' => 0
+                'provider'     => 'agent_memory',
+                'init_history' => 20
             ],
             'tools'        => [
                 'enabled'        => true,

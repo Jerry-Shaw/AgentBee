@@ -155,6 +155,12 @@ trait core
             $fn_argv = json_decode($tool_call['function']['arguments'], true) ?? [];
 
             if (!str_contains($fn_name, '/')) {
+                $results[] = [
+                    'tool_call_id'  => $tool_call['id'],
+                    'function_name' => $fn_name,
+                    'result'        => json_encode(['error' => 'Invalid tool name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'], JSON_FORMAT)
+                ];
+
                 continue;
             }
 
@@ -169,16 +175,27 @@ trait core
                 unset($throwable);
             }
 
+            $encoded = json_encode($tool_result, JSON_FORMAT);
+
+            if (false === $encoded) {
+                $encoded = json_encode(
+                    [
+                        'error'   => 'Tool output encoding failed',
+                        'message' => json_last_error_msg()
+                    ], JSON_FORMAT
+                );
+            }
+
             $llm_result = [
                 'tool_call_id'  => $tool_call['id'],
                 'function_name' => $fn_name,
-                'result'        => json_encode($tool_result, JSON_FORMAT)
+                'result'        => $encoded
             ];
 
             $results[] = $llm_result;
         }
 
-        unset($tool_calls, $tool_call, $fn_name, $fn_argv, $module, $method, $tool_result, $llm_result);
+        unset($tool_calls, $tool_call, $fn_name, $fn_argv, $module, $method, $tool_result, $encoded, $llm_result);
         return $results;
     }
 

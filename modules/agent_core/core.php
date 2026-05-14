@@ -21,11 +21,13 @@
 namespace modules\agent_core;
 
 use modules\agent_core\app\config;
+use Nervsys\Core\Factory;
 use Nervsys\Core\Lib\App;
 use Nervsys\Core\Lib\Error;
 use Nervsys\Core\Mgr\OSMgr;
 use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
+use Nervsys\Core\Reflect;
 
 trait core
 {
@@ -159,7 +161,8 @@ trait core
             [$module, $method] = explode('/', $fn_name);
 
             try {
-                $tool_result = $this->agent_tools[$module]->$method(...$fn_argv);
+                $arguments   = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), $fn_argv);
+                $tool_result = $this->agent_tools[$module]->$method(...$arguments);
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, true, false);
                 $tool_result = $throwable->getMessage();

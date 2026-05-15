@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Memory module for AgentBee - Three-layer memory management system
+ * Memory module for AgentBee - Four-layer memory management system
  *
  * Provides system/important/daily memory storage using JSONL format.
  *
@@ -35,6 +35,8 @@ class go extends Factory
     private string $system_file;
     private string $important_file;
 
+    public array $ram_memory = [];
+
     /**
      * @throws \ReflectionException
      */
@@ -61,22 +63,30 @@ class go extends Factory
     /**
      * Save a memory entry (append mode, JSONL format)
      *
-     * @param string $level   'system', 'important', or 'daily'
-     * @param string $role    'user', 'assistant', or 'system'
+     * @param string $level   'system', 'important', 'daily', or 'ram'
+     * @param string $role    'user', 'assistant', 'system', or 'tool'
      * @param string $content Memory content
      *
-     * @return array ['saved' => true, 'path' => ...] or ['error' => ...]
+     * @return array ['saved' => true, 'path' => ..., 'role' => ...] or ['error' => ...]
      */
     public function save(string $level, string $role, string $content): array
     {
-        if (!in_array($level, ['system', 'important', 'daily'], true)) {
+        if (!in_array($level, ['system', 'important', 'daily', 'ram'], true)) {
             return ['error' => "Invalid level: {$level}"];
         }
 
-        if (!in_array($role, ['user', 'assistant', 'system'], true)) {
+        if (!in_array($role, ['user', 'assistant', 'system', 'tool'], true)) {
             return ['error' => "Invalid role: {$role}"];
         }
 
+        // RAM layer: store in memory array
+        if ('ram' === $level) {
+            $message            = ['role' => $role, 'content' => $content];
+            $this->ram_memory[] = $message;
+            return ['saved' => true, 'path' => 'ram://memory', 'role' => $role];
+        }
+
+        // Force role for system/important layers
         if ('system' === $level) {
             $role = 'system';
         } elseif ('important' === $level) {
@@ -108,7 +118,7 @@ class go extends Factory
         fwrite($handle, $line . "\n");
         fclose($handle);
 
-        $result = ['saved' => true, 'path' => $target_file];
+        $result = ['saved' => true, 'path' => $target_file, 'role' => $role];
         unset($level, $role, $content, $line, $target_file, $target_dir, $handle);
 
         return $result;
@@ -117,7 +127,7 @@ class go extends Factory
     /**
      * Read memory entries with pagination (supports date selection for daily layer)
      *
-     * @param string $level  'system', 'important', or 'daily'
+     * @param string $level  'system', 'important', 'daily', or 'ram'
      * @param int    $offset Line offset (zero-based)
      * @param int    $length Maximum number of lines to return (0 = all)
      * @param string $date   YYYYMMDD, only for daily layer, default empty (today)
@@ -126,8 +136,24 @@ class go extends Factory
      */
     public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
     {
-        if (!in_array($level, ['system', 'important', 'daily'], true)) {
+        if (!in_array($level, ['system', 'important', 'daily', 'ram'], true)) {
             return ['error' => "Invalid level: {$level}"];
+        }
+
+        // RAM layer: read from memory array
+        if ('ram' === $level) {
+            $all_messages = $this->ram_memory;
+            $total        = count($all_messages);
+
+            if (0 === $length) {
+                $length = $total;
+            }
+
+            $selected = array_slice($all_messages, $offset, $length);
+            $result   = ['messages' => $selected, 'total' => $total];
+
+            unset($all_messages, $selected);
+            return $result;
         }
 
         $target_file = $this->getTargetFile($level, $date);
@@ -177,7 +203,7 @@ class go extends Factory
      * Search memory with keyword matching (case-insensitive, AND/OR mode)
      * Supports date range for daily layer and cross-layer search.
      *
-     * @param string $level      'system', 'important', 'daily', or 'all'
+     * @param string $level      'system', 'important', 'daily', 'ram', or 'all'
      * @param array  $keywords   List of keywords (case-insensitive)
      * @param int    $offset     Result offset for pagination
      * @param int    $length     Maximum results (0 = all)
@@ -197,7 +223,7 @@ class go extends Factory
         string $end_date = ''
     ): array
     {
-        if (!in_array($level, ['system', 'important', 'daily', 'all'], true)) {
+        if (!in_array($level, ['system', 'important', 'daily', 'ram', 'all'], true)) {
             return ['error' => "Invalid level: {$level}"];
         }
 
@@ -211,7 +237,7 @@ class go extends Factory
 
         $results          = [];
         $keywords_lower   = array_map('strtolower', $keywords);
-        $levels_to_search = ('all' === $level) ? ['system', 'important', 'daily'] : [$level];
+        $levels_to_search = ('all' === $level) ? ['system', 'important', 'daily', 'ram'] : [$level];
 
         // Build list of daily files within date range
         $daily_files = [];
@@ -239,6 +265,41 @@ class go extends Factory
         }
 
         foreach ($levels_to_search as $search_lv) {
+            // RAM layer: search in memory array
+            if ('ram' === $search_lv) {
+                foreach ($this->ram_memory as $message) {
+                    $line = json_encode($message, JSON_FORMAT);
+                    if (false === $line) {
+                        continue;
+                    }
+
+                    $lower_line = strtolower($line);
+                    $matched    = false;
+
+                    if ('or' === $mode) {
+                        foreach ($keywords_lower as $kw) {
+                            if (str_contains($lower_line, $kw)) {
+                                $matched = true;
+                                break;
+                            }
+                        }
+                    } else {
+                        $matched = true;
+                        foreach ($keywords_lower as $kw) {
+                            if (!str_contains($lower_line, $kw)) {
+                                $matched = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($matched) {
+                        $results[] = ['role' => $message['role'], 'content' => $message['content']];
+                    }
+                }
+                continue;
+            }
+
             if ('daily' === $search_lv) {
                 $files = $daily_files;
             } else {

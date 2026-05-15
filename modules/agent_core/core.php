@@ -466,6 +466,9 @@ final class core extends Factory
         $prompts[] = '  - 所有要求的文件都已创建且验证通过后，输出：“所有任务执行完毕，结果如下：”并附上成果。';
         $prompts[] = '  - 未输出此标志前，继续工作。';
         $prompts[] = '';
+        $prompts[] = '· 调用工具时，`arguments` 必须是**完整的 JSON 对象字符串**，绝不能为空字符串 `""`。';
+        $prompts[] = '  例如：`{"path":"C:/file.txt","content":"data"}`。空参数会导致工具报错并中断任务。';
+        $prompts[] = '';
 
         $prompts[] = '=== 输出要求 ===';
         $prompts[] = '语言：用户系统语言为 ' . $lang_name . '，优先使用中文回答。也可根据用户要求调整。';

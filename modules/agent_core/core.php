@@ -86,7 +86,7 @@ final class core extends Factory
             try {
                 $this->agent_modules[$name] = $module::new();
             } catch (\Throwable $throwable) {
-                Error::new()->exceptionHandler($throwable, true, false);
+                Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
                 continue;
             }
@@ -128,7 +128,7 @@ final class core extends Factory
 
                 $agent_tools = array_merge($agent_tools, $metadata);
             } catch (\Throwable $throwable) {
-                Error::new()->exceptionHandler($throwable, true, false);
+                Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
                 continue;
             }
@@ -245,7 +245,7 @@ final class core extends Factory
             [$module, $method] = explode('/', $fn_name);
 
             try {
-                $arguments   = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), $fn_argv);
+                $arguments   = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), (array)$fn_argv);
                 $tool_result = $this->agent_tools[$module]->$method(...$arguments);
                 $encoded     = json_encode($tool_result, JSON_FORMAT);
 
@@ -258,7 +258,7 @@ final class core extends Factory
                     );
                 }
             } catch (\Throwable $throwable) {
-                Error::new()->exceptionHandler($throwable, true, false);
+                Error::new()->exceptionHandler($throwable, false, false);
 
                 $encoded = json_encode(
                     [

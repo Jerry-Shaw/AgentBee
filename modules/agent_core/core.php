@@ -22,28 +22,31 @@ namespace modules\agent_core;
 
 use modules\agent_core\app\config;
 use Nervsys\Core\Factory;
-use Nervsys\Core\Lib\App;
 use Nervsys\Core\Lib\Error;
-use Nervsys\Core\Mgr\OSMgr;
 use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\Reflect;
+use Nervsys\Core\System;
 
-trait core
+final class core extends Factory
 {
-    public App       $app;
-    public OSMgr     $OSMgr;
+    use System;
+
     public config    $config;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
 
     public string $name = 'AgentBee';
 
+    public array $llm_tools  = [];
     public array $llm_params = [];
 
     public array $agent_tools   = [];
     public array $agent_config  = [];
     public array $agent_modules = [];
+
+    public array $session_history       = [];
+    public int   $session_history_limit = 20;
 
     /**
      * @return void
@@ -51,16 +54,20 @@ trait core
      */
     public function initCore(): void
     {
-        $this->app       = App::new();
-        $this->OSMgr     = OSMgr::new();
+        $this->init();
+
         $this->config    = config::new();
         $this->socketMgr = SocketMgr::new();
         $this->procMgr   = ProcMgr::new('socket');
 
         $this->agent_config = $this->config->get();
-        $this->llm_params   = $this->agent_config['llm']['params'] ?? [];
+        $this->llm_params   = $this->agent_config['agent_llm']['params'] ?? [];
 
-        $this->agent_config['tools']['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
+        if (isset($this->agent_config['agent_memory']['max_history'])) {
+            $this->session_history_limit = $this->agent_config['agent_memory']['max_history'];
+        }
+
+        $this->agent_config['agent_tools']['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
     }
 
     /**
@@ -69,30 +76,23 @@ trait core
      */
     public function initModules(): void
     {
-        $called_class  = get_class($this);
-        $pos_start     = strpos($called_class, '\\') + 1;
-        $pos_end       = strpos($called_class, '\\', $pos_start);
-        $called_module = substr($called_class, $pos_start, $pos_end - $pos_start);
-
         foreach ($this->agent_config as $name => $config) {
             if (!isset($config['provider'])) {
                 continue;
             }
 
-            if ($called_module !== $config['provider']) {
-                $module = '\\modules\\' . $config['provider'] . '\\go';
+            $module = '\\modules\\' . $config['provider'] . '\\go';
 
-                try {
-                    $this->agent_modules[$name] = $module::new();
-                } catch (\Throwable $throwable) {
-                    Error::new()->exceptionHandler($throwable, true, false);
-                    unset($throwable);
-                    continue;
-                }
+            try {
+                $this->agent_modules[$name] = $module::new();
+            } catch (\Throwable $throwable) {
+                Error::new()->exceptionHandler($throwable, true, false);
+                unset($throwable);
+                continue;
             }
         }
 
-        unset($called_class, $pos_start, $pos_end, $called_module, $name, $config, $module, $object);
+        unset($name, $config, $module);
     }
 
     /**
@@ -101,18 +101,19 @@ trait core
      */
     public function initTools(): void
     {
-        if (!isset($this->agent_config['tools']) || !isset($this->agent_config['tools']['enabled'])) {
+        if (!isset($this->agent_config['agent_tools']) || !isset($this->agent_config['agent_tools']['enabled'])) {
             return;
         }
 
-        if (true !== $this->agent_config['tools']['enabled']) {
+        if (true !== $this->agent_config['agent_tools']['enabled']) {
             return;
         }
 
-        $this->llm_params['tools']           ??= [];
-        $this->agent_config['tools']['list'] ??= [];
+        $agent_tools = [];
 
-        foreach ($this->agent_config['tools']['list'] as $tool) {
+        $this->agent_config['agent_tools']['list'] ??= [];
+
+        foreach ($this->agent_config['agent_tools']['list'] as $tool) {
             $tool_class = '\\modules\\' . $tool['name'] . '\\go';
             $tool_meta  = '\\modules\\' . $tool['name'] . '\\tools';
 
@@ -125,7 +126,7 @@ trait core
 
                 $this->agent_tools[$tool['name']] = $tool_class::new();
 
-                $this->llm_params['tools'] = array_merge($this->llm_params['tools'], $metadata);
+                $agent_tools = array_merge($agent_tools, $metadata);
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, true, false);
                 unset($throwable);
@@ -133,11 +134,88 @@ trait core
             }
         }
 
-        if (!empty($this->llm_params['tools'])) {
-            $this->llm_params['tool_choice'] = 'auto';
+        if (!empty($agent_tools)) {
+            $this->llm_tools['tools']       = $agent_tools;
+            $this->llm_tools['tool_choice'] = 'auto';
         }
 
-        unset($tool, $tool_class, $tool_meta, $metadata, $key, $meta);
+        unset($agent_tools, $tool, $tool_class, $tool_meta, $metadata, $key, $meta);
+    }
+
+    /**
+     * @param array $content
+     *
+     * @return void
+     * @throws \Exception
+     */
+    public function addSessionHistory(array $content): void
+    {
+        if (empty($this->session_history)) {
+            $this->session_history[] = $this->getSystemMemory();
+        }
+
+        $this->session_history[] = $content;
+
+        $message_count = count($this->session_history);
+
+        if ($message_count > $this->session_history_limit) {
+            $role_list = array_column($this->session_history, 'role');
+            $user_keys = array_keys($role_list, 'user');
+
+            $target_id = 0;
+            $min_diff  = INF;
+            $drop      = $message_count - $this->session_history_limit;
+
+            foreach ($user_keys as $id) {
+                $diff = abs($drop - $id);
+                if ($diff < $min_diff) {
+                    $min_diff  = $diff;
+                    $target_id = $id;
+                } elseif ($diff === $min_diff && $id < $target_id) {
+                    $target_id = $id;
+                }
+            }
+
+            if ($target_id > 1) {
+                array_unshift($this->session_history, $this->getSystemMemory());
+                array_splice($this->session_history, 1, $target_id);
+            }
+
+            unset($role_list, $user_keys, $target_id, $min_diff, $drop, $id, $diff);
+        }
+
+        unset($content, $message_count);
+    }
+
+    /**
+     * @return array
+     */
+    public function getSessionHistory(): array
+    {
+        return $this->session_history;
+    }
+
+    /**
+     * @return array
+     * @throws \Exception
+     */
+    public function getSystemMemory(): array
+    {
+        $system_default = $this->getSystemDefault($this->agent_config['agent_tools']['in_sandbox'] ?? true);
+        $system_memory  = $this->agent_modules['agent_memory']->read('system', 0, 0);
+
+        if (!empty($system_memory['messages'])) {
+            $memory = ["\n", '=== 重要个性设定 ==='];
+
+            foreach ($system_memory['messages'] as $message) {
+                $memory[] = $message['content'];
+            }
+
+            $system_default['content'] .= implode("\n", $memory);
+        }
+
+        unset($system_memory, $memory);
+        return $system_default;
     }
 
     /**
@@ -208,7 +286,7 @@ trait core
      */
     public function securePath(string $path): string
     {
-        $in_sandbox = $this->agent_config['tools']['in_sandbox'] ?? true;
+        $in_sandbox = $this->agent_config['agent_tools']['in_sandbox'] ?? true;
 
         $path  = strtr($path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
         $parts = explode(DIRECTORY_SEPARATOR, $path);
@@ -239,7 +317,7 @@ trait core
                 array_shift($parts);
             }
 
-            array_unshift($parts, rtrim($this->agent_config['tools']['workspace_path'], '\\/'));
+            array_unshift($parts, rtrim($this->agent_config['agent_tools']['workspace_path'], '\\/'));
         }
 
         $parts = array_values($parts);
@@ -264,7 +342,7 @@ trait core
      */
     public function getLLMParams(): array
     {
-        return $this->llm_params;
+        return $this->llm_params + $this->llm_tools;
     }
 
     /**
@@ -285,12 +363,12 @@ trait core
      * @return array
      * @throws \Exception
      */
-    public function getSystemPrompt(bool $in_sandbox = true): array
+    public function getSystemDefault(bool $in_sandbox = true): array
     {
         $prompts   = [];
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
-        $work_path = $this->agent_config['tools']['workspace_path'];
+        $work_path = $this->agent_config['agent_tools']['workspace_path'];
 
         $prompts[] = '=== 系统环境 ===';
         $prompts[] = '系统: ' . php_uname();

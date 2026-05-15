@@ -27,7 +27,7 @@ use Nervsys\Core\Factory;
 
 class go extends Factory
 {
-    use core;
+    public core $core;
 
     private string $memory_path;
 
@@ -35,21 +35,16 @@ class go extends Factory
     private string $system_file;
     private string $important_file;
 
-    public array $session_history       = [];
-    public int   $session_history_limit = 20;
-
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->initCore();
+        $this->core = core::new();
 
-        if (isset($this->agent_config['memory']['max_history'])) {
-            $this->session_history_limit = $this->agent_config['memory']['max_history'];
-        }
+        $this->core->initCore();
 
-        $this->memory_path = $this->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
+        $this->memory_path = $this->core->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
 
         $this->daily_dir      = $this->memory_path . 'daily' . DIRECTORY_SEPARATOR;
         $this->system_file    = $this->memory_path . 'system.txt';
@@ -317,25 +312,6 @@ class go extends Factory
 
         unset($results, $selected, $daily_files);
         return $result;
-    }
-
-    /**
-     * @param array $content
-     *
-     * @return array
-     */
-    public function addSessionHistory(array $content): array
-    {
-        $this->session_history[] = $content;
-
-        $message_count = count($this->session_history);
-
-        if ($message_count > $this->session_history_limit) {
-            $this->session_history = array_slice($this->session_history, $message_count - $this->session_history_limit, $this->session_history_limit);
-        }
-
-        unset($content, $message_count);
-        return $this->session_history;
     }
 
     /**

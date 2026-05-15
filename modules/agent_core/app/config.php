@@ -39,6 +39,7 @@ class config extends Factory
 
     /**
      * @return array
+     * @throws \ReflectionException
      */
     public function get(): array
     {
@@ -64,21 +65,18 @@ class config extends Factory
      * @param string $config_file
      *
      * @return array
+     * @throws \ReflectionException
      */
     private function init(string $config_file): array
     {
         $config = [
-            'server'       => [
+            'agent_server' => [
                 'host'          => '0.0.0.0',
                 'port'          => 8686,
                 'websocket'     => true,
                 'ping_interval' => 30,
             ],
-            'worker'       => [
-                'count'          => 4,
-                'max_executions' => 20000,
-            ],
-            'llm'          => [
+            'agent_llm'    => [
                 'provider' => 'llm_openai',
                 'api_url'  => 'http://127.0.0.1:1234/v1',
                 'api_key'  => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
@@ -93,11 +91,11 @@ class config extends Factory
                     'presence_penalty'  => 0,
                 ],
             ],
-            'memory'       => [
+            'agent_memory' => [
                 'provider'    => 'agent_memory',
-                'max_history' => 30,
+                'max_history' => 50,
             ],
-            'tools'        => [
+            'agent_tools'  => [
                 'enabled'        => true,
                 'in_sandbox'     => true,
                 'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
@@ -105,10 +103,6 @@ class config extends Factory
                     ['name' => 'agent_tools'],
                     ['name' => 'agent_memory'],
                 ],
-            ],
-            'logging'      => [
-                'level' => 'debug',
-                'file'  => 'logs/agentbee.log',
             ],
             'memory_limit' => '4G',
             'debug'        => true,

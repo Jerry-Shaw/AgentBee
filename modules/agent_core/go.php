@@ -23,13 +23,10 @@ namespace modules\agent_core;
 use modules\agent_core\app\message;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\SocketMgr;
-use Nervsys\Core\System;
 
 class go extends Factory
 {
-    use core;
-    use System;
-
+    public core    $core;
     public message $message;
 
     /**
@@ -38,20 +35,21 @@ class go extends Factory
      */
     public function __construct()
     {
-        $this->init();
-        $this->initCore();
-        $this->initTools();
-        $this->initModules();
+        $this->core = core::new();
 
-        if (!is_dir($this->agent_config['tools']['workspace_path'])) {
+        $this->core->initCore();
+        $this->core->initTools();
+        $this->core->initModules();
+
+        if (!is_dir($this->core->agent_config['agent_tools']['workspace_path'])) {
             try {
-                mkdir($this->agent_config['tools']['workspace_path'], 0777, true);
+                mkdir($this->core->agent_config['agent_tools']['workspace_path'], 0777, true);
             } catch (\Throwable) {
             }
         }
 
-        $this->message   = message::new();
-        $this->socketMgr = SocketMgr::new();
+        $this->message         = message::new();
+        $this->core->socketMgr = SocketMgr::new();
     }
 
     /**
@@ -59,17 +57,17 @@ class go extends Factory
      */
     public function start(): void
     {
-        ini_set('memory_limit', $this->agent_config['memory_limit'] ?? '4G');
+        ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
         try {
-            $this->socketMgr
-                ->setDebugMode($this->agent_config['debug'])
-                ->setAliveTimeout($this->agent_config['server']['ping_interval'] * 2)
+            $this->core->socketMgr
+                ->setDebugMode($this->core->agent_config['debug'])
+                ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'] * 2)
                 ->setEventListener('onHandshake', [$this, 'onClientHandshake'])
                 ->setEventListener('onMessage', [$this, 'onClientMessage'])
                 ->setEventListener('onSendString', [$this, 'onMessageSend'])
                 ->setEventListener('onClose', [$this, 'onClientClose'])
-                ->listenTo('tcp://' . $this->agent_config['server']['host'] . ':' . $this->agent_config['server']['port'], $this->agent_config['server']['websocket']);
+                ->listenTo('tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'], $this->core->agent_config['agent_server']['websocket']);
         } catch (\Throwable) {
         }
     }
@@ -114,7 +112,7 @@ class go extends Factory
 
             $message_data = $this->message->$message_type($socket_id, $data);
 
-            if ($message_data['llm']) {
+            if ($message_data['agent_llm']) {
                 $llm_data[] = $message_data['text'];
             }
 
@@ -125,33 +123,12 @@ class go extends Factory
         $last_msg = array_pop($end_data);
 
         foreach ($end_data as $send_end) {
-            $this->sendMessage($socket_id, json_encode(['type' => 'close'] + $send_end));
+            $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $send_end));
         }
 
         if (!empty($llm_data)) {
-            $history = [];
-
-            $system_settings = $this->getSystemPrompt($this->agent_config['tools']['in_sandbox'] ?? true);
-            $system_memory   = $this->memory->read('system', 0, 0);
-
-            if (!empty($system_memory['messages'])) {
-                $memory = ["\n", '=== 重要个性设定 ==='];
-
-                foreach ($system_memory['messages'] as $message) {
-                    $memory[] = $message['content'];
-                }
-
-                $system_settings['content'] .= implode("\n", $memory);
-            }
-
-            $history[] = $system_settings;
-
-            $sessions = $this->memory->addSessionHistory(['role' => 'user', 'content' => implode("\n", $llm_data)]);
-            $history  = array_merge($history, $sessions);
-
-            $this->llm->chat($socket_id, $history, $last_msg, $this->getLLMParams());
-
-            unset($history, $system_settings, $system_memory, $memory, $sessions);
+            $this->core->addSessionHistory(['role' => 'user', 'content' => implode("\n", $llm_data)]);
+            $this->core->agent_llm->chat($socket_id, $last_msg, $this->core->getLLMParams());
         }
 
         unset($socket_id, $message, $end_data, $llm_data, $messages, $data, $message_type, $message_data, $last_msg, $send_end);

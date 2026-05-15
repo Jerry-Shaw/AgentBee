@@ -20,7 +20,7 @@
 
 declare(strict_types = 1);
 
-const AGENT_VERSION = '2026.5.13';
+const AGENT_VERSION = '2026.5.15';
 
 use Nervsys\Core\Lib\App;
 
@@ -30,5 +30,5 @@ $root = dirname(__DIR__, 2);
 
 $ns = new Nervsys\NS($root, 'modules', App::MODE_MODULE);
 
-$ns->setDebugMode(true);
+$ns->setDebugMode(false);
 $ns->go();

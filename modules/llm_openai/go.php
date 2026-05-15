@@ -27,38 +27,40 @@ use Nervsys\Ext\libOpenAI;
 
 class go extends Factory
 {
-    use core;
+    public core $core;
 
     public libOpenAI $libOpenAI;
     public FiberMgr  $fiberMgr;
+
+    public int $call_round = 0;
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->initCore();
-        $this->initTools();
-        $this->initModules();
+        $this->core = core::new();
+
+        $this->core->initCore();
+        $this->core->initTools();
 
         $this->fiberMgr = FiberMgr::new();
 
         $this->libOpenAI = libOpenAI::new(
-            $this->agent_config['llm']['api_url'],
-            $this->agent_config['llm']['api_key'],
+            $this->core->agent_config['agent_llm']['api_url'],
+            $this->core->agent_config['agent_llm']['api_key'],
             '[DONE]'
         );
 
-        $this->libOpenAI->setOrgId($this->agent_config['llm']['org_id']);
-        $this->libOpenAI->setApiModel($this->agent_config['llm']['model']);
-        $this->libOpenAI->setModelParams($this->agent_config['llm']['params']);
+        $this->libOpenAI->setOrgId($this->core->agent_config['agent_llm']['org_id']);
+        $this->libOpenAI->setApiModel($this->core->agent_config['agent_llm']['model']);
+        $this->libOpenAI->setModelParams($this->core->agent_config['agent_llm']['params']);
     }
 
     /**
      * Start multi-turn conversation
      *
      * @param int   $socket_id
-     * @param array $history  Conversation history
      * @param array $user_msg User message (contains sessionId)
      * @param array $llm_params
      *
@@ -66,29 +68,26 @@ class go extends Factory
      * @throws \ReflectionException
      * @throws \Throwable
      */
-    public function chat(int $socket_id, array $history, array $user_msg, array $llm_params): void
+    public function chat(int $socket_id, array $user_msg, array $llm_params): void
     {
-        $stack_id = 'chat_' . ($user_msg['sessionId'] ?? 'default');
         $go_next  = true;
+        $stack_id = 'chat_' . ($user_msg['sessionId'] ?? 'default');
+
+        $this->call_round = 0;
 
         $this->fiberMgr->createStack($stack_id);
 
         while ($go_next) {
-            $snapshot = $history;
+            $history = $this->core->getSessionHistory();
 
             $this->fiberMgr->addTask(
                 $stack_id,
-                function () use ($socket_id, $snapshot, $user_msg, $llm_params, &$go_next, &$history): array
+                function () use ($socket_id, $history, $user_msg, $llm_params, &$go_next): array
                 {
-                    $talk = $this->talk($socket_id, $snapshot, $user_msg, $llm_params);
-
+                    $talk    = $this->talk($socket_id, $history, $user_msg, $llm_params);
                     $go_next = $talk['next'];
-                    $history = $talk['history'];
 
-                    $result = ['next' => $go_next, 'history' => $history];
-
-                    unset($talk);
-                    return $result;
+                    return ['next' => $go_next];
                 }
             );
 
@@ -96,21 +95,20 @@ class go extends Factory
         }
 
         $this->fiberMgr->clearStack($stack_id);
-
         $this->sendMsg($socket_id, $user_msg, 'end', null);
 
-        unset($socket_id, $history, $user_msg, $llm_params, $stack_id, $go_next, $snapshot);
+        unset($socket_id, $user_msg, $llm_params, $go_next, $stack_id, $history);
     }
 
     /**
      * Execute single conversation turn (streaming + tool calls)
      *
      * @param int   $socket_id
-     * @param array $history  Current conversation history
+     * @param array $history  Current conversation history (snapshot)
      * @param array $user_msg User message
      * @param array $llm_params
      *
-     * @return array ['next' => bool, 'history' => array]
+     * @return array ['next' => bool]
      * @throws \ReflectionException
      */
     private function talk(int $socket_id, array $history, array $user_msg, array $llm_params): array
@@ -119,80 +117,79 @@ class go extends Factory
         $tools   = [];
         $key     = 'stream_' . uniqid('', true);
 
-        $tool_calls   = false;
-        $full_history = $history;
+        $tool_calls = false;
 
         $this->libOpenAI->addStreamCallback(
             $key,
-            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $user_msg, &$content, &$tools, &$tool_calls, &$full_history): void
+            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $user_msg, &$content, &$tools, &$tool_calls): void
             {
-                if (!$is_finished) {
-                    $this->sendStream($socket_id, $msg_data, $user_msg, $tools, $content);
-                } else {
-                    if ('' !== $content) {
-                        $this->memory->addSessionHistory(['role' => 'assistant', 'content' => $content]);
-                    }
+                try {
+                    if (!$is_finished) {
+                        $this->sendStream($socket_id, $msg_data, $user_msg, $tools, $content);
+                    } else {
+                        if (!empty($tools)) {
+                            $tool_calls   = true;
+                            $tool_command = [];
 
-                    if (!empty($tools)) {
-                        $tool_calls = true;
+                            foreach ($tools as $tool) {
+                                $tool_command[] = [
+                                    'id'       => $tool['id'],
+                                    'type'     => 'function',
+                                    'function' => [
+                                        'name'      => $tool['function']['name'],
+                                        'arguments' => $tool['function']['arguments']
+                                    ]
+                                ];
+                            }
 
-                        $this->memory->addSessionHistory(['role' => 'assistant', 'content' => json_encode($tools, JSON_FORMAT)]);
+                            $this->core->addSessionHistory([
+                                'role'       => 'assistant',
+                                'content'    => trim($content),
+                                'tool_calls' => $tool_command
+                            ]);
 
-                        $tools_msg = [
-                            'role'       => 'assistant',
-                            'content'    => $content,
-                            'tool_calls' => []
-                        ];
+                            $results = $this->core->execTools($tools);
 
-                        foreach ($tools as $tool) {
-                            $tools_msg['tool_calls'][] = [
-                                'id'       => $tool['id'],
-                                'type'     => 'function',
-                                'function' => [
-                                    'name'      => $tool['function']['name'],
-                                    'arguments' => $tool['function']['arguments']
-                                ]
-                            ];
+                            foreach ($results as $result) {
+                                $this->sendMsg($socket_id, $user_msg, 'tool_result', $result);
+                                $this->core->addSessionHistory([
+                                    'role'         => 'tool',
+                                    'tool_call_id' => $result['tool_call_id'],
+                                    'content'      => $result['result']
+                                ]);
+                            }
+
+                            ++$this->call_round;
+
+                            if (0 === ($this->call_round % 5)) {
+                                $this->core->addSessionHistory([
+                                    'role'    => 'user',
+                                    'content' => '请根据以上工具执行结果，总结当前已完成步骤，然后继续执行后续操作。如需调用更多工具，请继续调用；若任务已完成，请直接给出最终答案。此外，建议将关键结果记录到 Daily 记忆或保存到临时文件中，以便后续内容截断后仍能追溯。'
+                                ]);
+                            }
+                        } elseif ('' !== $content) {
+                            $this->core->addSessionHistory(['role' => 'assistant', 'content' => $content]);
                         }
-
-                        $full_history[] = $tools_msg;
-
-                        $results = $this->execTools($tools);
-
-                        foreach ($results as $result) {
-                            $this->sendMsg($socket_id, $user_msg, 'tool_result', $result);
-
-                            $full_history[] = [
-                                'role'         => 'tool',
-                                'tool_call_id' => $result['tool_call_id'],
-                                'content'      => $result['result']
-                            ];
-                        }
-
-                        $this->memory->addSessionHistory(['role' => 'tool', 'content' => json_encode($results, JSON_FORMAT)]);
-
-                        unset($tools_msg, $tool, $results, $result);
                     }
+                } catch (\Throwable $throwable) {
+                    $this->sendMsg($socket_id, $user_msg, 'error', ['message' => 'Internal error processing stream: ' . $throwable->getMessage()]);
+                    $this->sendMsg($socket_id, $user_msg, 'end', null);
+                    unset($throwable);
                 }
 
-                unset($msg_key, $msg_data, $is_finished);
+                unset($msg_key, $msg_data, $is_finished, $tool_command, $tool, $results, $result);
             }
         );
 
-        $this->libOpenAI->chat($history, $this->agent_config['llm']['model'], $llm_params, true);
+        $this->libOpenAI->chat($history, $this->core->agent_config['agent_llm']['model'], $llm_params, true);
         $this->libOpenAI->removeStreamCallback($key);
 
-        $result = [
-            'next'    => $tool_calls,
-            'history' => $full_history
-        ];
-
-        unset($socket_id, $history, $user_msg, $llm_params, $content, $tools, $key, $tool_calls, $full_history);
-        return $result;
+        unset($socket_id, $history, $user_msg, $llm_params, $key);
+        return ['next' => $tool_calls];
     }
 
     /**
-     * Stream send formated data
+     * Stream send formatted data
      *
      * @param int    $socket_id
      * @param array  $msg_data
@@ -211,7 +208,6 @@ class go extends Factory
         if (isset($delta['content']) && '' !== $delta['content']) {
             $content .= $delta['content'];
             $this->sendMsg($socket_id, $user_msg, 'content', $delta['content']);
-
             unset($delta);
             return;
         }
@@ -219,7 +215,6 @@ class go extends Factory
         // Reasoning content
         if (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {
             $this->sendMsg($socket_id, $user_msg, 'think', $delta['reasoning_content']);
-
             unset($delta);
             return;
         }
@@ -259,7 +254,7 @@ class go extends Factory
             $this->sendMsg($socket_id, $user_msg, 'tool_calls', $tools);
         }
 
-        unset($socket_id, $user_msg, $delta);
+        unset($socket_id, $msg_data, $user_msg, $delta);
     }
 
     /**
@@ -281,7 +276,7 @@ class go extends Factory
             $payload['data'] = $data;
         }
 
-        $this->sendMessage($socket_id, json_encode($payload + $user_msg, JSON_FORMAT));
+        $this->core->sendMessage($socket_id, json_encode($payload + $user_msg, JSON_FORMAT));
 
         unset($socket_id, $user_msg, $type, $data, $payload);
     }

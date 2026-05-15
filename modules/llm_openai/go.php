@@ -156,7 +156,7 @@ class go extends Factory
                                 $this->core->addSessionHistory([
                                     'role'         => 'tool',
                                     'tool_call_id' => $result['tool_call_id'],
-                                    'content'      => $result['result']
+                                    'content'      => $result['content']
                                 ]);
                             }
 

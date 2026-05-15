@@ -236,7 +236,7 @@ final class core extends Factory
                 $results[] = [
                     'tool_call_id'  => $tool_call['id'],
                     'function_name' => $fn_name,
-                    'result'        => json_encode(['error' => 'Invalid tool name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'], JSON_FORMAT)
+                    'content'       => json_encode(['error' => 'Invalid tool name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'], JSON_FORMAT)
                 ];
 
                 continue;
@@ -247,27 +247,34 @@ final class core extends Factory
             try {
                 $arguments   = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), $fn_argv);
                 $tool_result = $this->agent_tools[$module]->$method(...$arguments);
+                $encoded     = json_encode($tool_result, JSON_FORMAT);
+
+                if (false === $encoded) {
+                    $encoded = json_encode(
+                        [
+                            'success' => false,
+                            'message' => json_last_error_msg()
+                        ], JSON_FORMAT
+                    );
+                }
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, true, false);
-                $tool_result = $throwable->getMessage();
-                unset($throwable);
-            }
 
-            $encoded = json_encode($tool_result, JSON_FORMAT);
-
-            if (false === $encoded) {
                 $encoded = json_encode(
                     [
-                        'error'   => 'Tool output encoding failed',
-                        'message' => json_last_error_msg()
+                        'success' => false,
+                        'message' => $throwable->getMessage()
                     ], JSON_FORMAT
                 );
+
+                unset($throwable);
+                continue;
             }
 
             $llm_result = [
                 'tool_call_id'  => $tool_call['id'],
                 'function_name' => $fn_name,
-                'result'        => $encoded
+                'content'       => $encoded
             ];
 
             $results[] = $llm_result;

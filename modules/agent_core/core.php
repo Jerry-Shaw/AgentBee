@@ -268,7 +268,6 @@ final class core extends Factory
                 );
 
                 unset($throwable);
-                continue;
             }
 
             $llm_result = [

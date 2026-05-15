@@ -82,7 +82,7 @@ class config extends Factory
                 'api_key'  => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
                 'model'    => 'qwen3.6-35b-a3b-claude-apex',
                 'org_id'   => '',
-                'timeout'  => 600,
+                'timeout'  => 7200,
                 'params'   => [
                     'max_tokens'        => 16384,
                     'temperature'       => 0.6,

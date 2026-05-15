@@ -53,6 +53,7 @@ class go extends Factory
         );
 
         $this->libOpenAI->setOrgId($this->core->agent_config['agent_llm']['org_id']);
+        $this->libOpenAI->setTimeout($this->core->agent_config['agent_llm']['timeout']);
         $this->libOpenAI->setApiModel($this->core->agent_config['agent_llm']['model']);
         $this->libOpenAI->setModelParams($this->core->agent_config['agent_llm']['params']);
     }

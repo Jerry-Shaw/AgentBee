@@ -164,7 +164,11 @@ class go extends Factory
                             if (0 === ($this->call_round % 10)) {
                                 $this->core->addSessionHistory([
                                     'role'    => 'user',
-                                    'content' => '（系统提示：为防止后续截断丢失信息，请将截至目前已完成的关键结果（如文件路径、重要数据）保存到 Daily 记忆（使用 save 工具，level=daily，role=assistant）。保存后，继续后续任务，**不要重复已完成的步骤**。）'
+                                    'content' => '【系统提示】已连续10轮工具调用。请按以下步骤操作：
+1. 使用 save 工具（level=daily，role=assistant）保存：当前已完成的工作内容、已获得的关键结果、以及下一步计划。
+2. 如果后续对话中感觉缺少之前的上下文，请使用 read 工具（level=daily）读取最近保存的记忆，恢复上下文。
+3. 继续执行尚未完成的任务，**不要重新执行已经成功完成的工具调用**。
+4. 所有任务完成后，告知用户最终结果。'
                                 ]);
                             }
                         } elseif ('' !== $content) {

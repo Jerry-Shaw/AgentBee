@@ -31,15 +31,28 @@ class tools
             'function' => [
                 'name'        => 'exec',
                 'description' => "执行系统命令（危险）。\n" .
-                    "规则：program 只能是可执行文件，参数放 argv 数组，禁止内置命令。超时 timeout 秒（默认300）无输出则终止。\n" .
-                    "示例：{\"program\":\"ls\", \"argv\":[\"-la\"], \"timeout\":10, \"work_path\":\"/home\"}",
+                    "⚠️ 核心规则：\n" .
+                    "1. `program` 必须是可执行文件的路径或文件名（如 'powershell', 'ls', 'git', 'python3'），**不能是 cmd 内置命令**。\n" .
+                    "2. 禁止使用 cmd 内置命令：`dir`, `echo`, `type`, `cd`, `mkdir`, `copy`, `del` 等，它们不是独立可执行文件。\n" .
+                    "3. 所有参数必须放在 `argv` 数组中。\n\n" .
+                    "✅ 正确示例：\n" .
+                    "   {\"program\":\"ls\", \"argv\":[\"-la\"], \"timeout\":10, \"work_path\":\"/home\"}\n" .
+                    "   {\"program\":\"powershell\", \"argv\":[\"-Command\", \"Get-ChildItem\"], \"timeout\":30}\n" .
+                    "   {\"program\":\"git\", \"argv\":[\"status\"]}\n\n" .
+                    "❌ 错误示例（会导致执行失败）：\n" .
+                    "   {\"program\":\"dir\", \"argv\":[]}                    ← dir 是内置命令\n" .
+                    "   {\"program\":\"echo\", \"argv\":[\"hello\"]}            ← echo 是内置命令\n" .
+                    "   {\"program\":\"cd\", \"argv\":[\"..\"]}                 ← cd 是内置命令\n\n" .
+                    "⏱️ 超时控制：参数 `timeout`（默认300秒），命令连续无输出超过此时间将被强制终止。设置为 0 表示无超时。\n" .
+                    "📁 工作目录：参数 `work_path`（可选），默认使用工作区路径。\n\n" .
+                    "⚠️ 安全警告：禁止执行危险命令（rm -rf, del /f /s, format, shutdown 等），优先使用专用工具。",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'program'   => ['type' => 'string'],
-                        'argv'      => ['type' => 'array', 'items' => ['type' => 'string']],
-                        'timeout'   => ['type' => 'integer', 'default' => 300],
-                        'work_path' => ['type' => 'string']
+                        'program'   => ['type' => 'string', 'description' => "必填：可执行文件路径或文件名，不能是 cmd 内置命令"],
+                        'argv'      => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => "必填：参数数组，没有参数时传 []"],
+                        'timeout'   => ['type' => 'integer', 'default' => 300, 'description' => "可选：空闲超时秒数，默认300，0表示无超时"],
+                        'work_path' => ['type' => 'string', 'description' => "可选：工作目录，默认使用工作区路径"]
                     ],
                     'required'   => ['program', 'argv']
                 ]

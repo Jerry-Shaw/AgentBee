@@ -26,7 +26,7 @@
   },
   "agent_tools": {
     "enabled": true,
-    "in_sandbox": false,
+    "in_sandbox": true,
     "workspace_path": "E:\\Projects\\Codes\\AgentBee\\workspace",
     "list": [
       {

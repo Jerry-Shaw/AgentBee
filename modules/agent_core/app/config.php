@@ -80,15 +80,15 @@ class config extends Factory
                 'provider' => 'llm_openai',
                 'api_url'  => 'http://127.0.0.1:1234/v1',
                 'api_key'  => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
-                'model'    => 'qwen3.6-35b-a3b-claude-apex',
+                'model'    => 'gemma-4-31b-it',
                 'org_id'   => '',
                 'timeout'  => 7200,
                 'params'   => [
                     'max_tokens'        => 16384,
                     'temperature'       => 0.6,
-                    'top_p'             => 1.0,
-                    'frequency_penalty' => 0,
-                    'presence_penalty'  => 0,
+                    'top_p'             => 0.9,
+                    'frequency_penalty' => 0.6,
+                    'presence_penalty'  => 0.5,
                 ],
             ],
             'agent_memory' => [
@@ -102,6 +102,7 @@ class config extends Factory
                 'list'           => [
                     ['name' => 'agent_tools'],
                     ['name' => 'agent_memory'],
+                    ['name' => 'agent_claw'],
                 ],
             ],
             'memory_limit' => '4G',

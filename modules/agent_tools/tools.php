@@ -111,15 +111,20 @@ class tools
                     "- `content`（必填）：要写入的字符串内容（可以是空字符串）。\n" .
                     "- `append`（可选，默认false）：true=追加，false=覆盖。\n\n" .
                     "⚠️ **极其重要**：`arguments` 必须是一个**完整的 JSON 对象字符串**，绝对不能是空字符串 `\"\"`。\n\n" .
+                    "✂️ **分段写入规则（必须遵守）**：\n" .
+                    "- 每次调用 `writeFile` 写入的 `content` 不得超过 **2000 个字符**。\n" .
+                    "- 如果文件内容超过此限制，必须**分多次调用** `writeFile`，后续调用必须使用 `append=true` 追加内容。\n" .
+                    "- 示例：第一次写入头部（`append=false`），后续每次追加中间部分（`append=true`），最后追加结尾。\n\n" .
                     "✅ **正确示例**：\n" .
                     "```json\n" .
-                    "{\"path\": \"E:/output.txt\", \"content\": \"Hello\", \"append\": false}\n" .
+                    "{\"path\": \"E:/output.txt\", \"content\": \"短内容（<2000字符）\", \"append\": false}\n" .
+                    "{\"path\": \"E:/output.txt\", \"content\": \"追加的第二段\", \"append\": true}\n" .
                     "```\n\n" .
                     "❌ **错误示例**：\n" .
                     "```json\n" .
                     "\"\"                                 // 空 arguments\n" .
                     "{\"path\": \"/tmp/x.txt\"}             // 缺少 content\n" .
-                    "{\"content\": \"data\"}                // 缺少 path\n" .
+                    "{\"content\": \"超过2000字符的长文件内容...（此处省略）\", \"append\": false}  // 单次过长，违反规则\n" .
                     "```\n\n" .
                     "📤 **成功返回**：`{\"bytes_written\": N}`  \n" .
                     "📤 **失败返回**：`{\"error\": \"错误描述\"}`",
@@ -127,7 +132,7 @@ class tools
                     'type'       => 'object',
                     'properties' => [
                         'path'    => ['type' => 'string', 'description' => "必填：文件路径，不能为空"],
-                        'content' => ['type' => 'string', 'description' => "必填：要写入的字符串内容"],
+                        'content' => ['type' => 'string', 'description' => "必填：要写入的字符串内容（单次≤2000字符）"],
                         'append'  => ['type' => 'boolean', 'default' => false, 'description' => "可选：是否追加"]
                     ],
                     'required'   => ['path', 'content']

@@ -32,6 +32,8 @@ class go extends Factory
     public libOpenAI $libOpenAI;
     public FiberMgr  $fiberMgr;
 
+    public string $message_type = 'content';
+
     /**
      * @throws \ReflectionException
      */
@@ -213,8 +215,17 @@ class go extends Factory
 
         // Normal content
         if (isset($delta['content']) && '' !== $delta['content']) {
-            $content .= $delta['content'];
-            $this->sendMsg($socket_id, $user_msg, 'content', $delta['content']);
+            if ('<|channel>' === $delta['content']) {
+                // For Gemma models enter "thought" mode
+                $this->message_type = 'think';
+            } elseif ('<channel|>' === $delta['content']) {
+                // For Gemma models exit "thought" mode
+                $this->message_type = 'content';
+            } else {
+                $content .= $delta['content'];
+                $this->sendMsg($socket_id, $user_msg, $this->message_type, $delta['content']);
+            }
+
             unset($delta);
             return;
         }

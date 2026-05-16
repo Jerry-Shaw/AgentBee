@@ -149,31 +149,12 @@ class go extends Factory
 
                             $results = $this->core->execTools($tools);
 
-                            $error_tools = [
-                                'fn'  => [],
-                                'err' => []
-                            ];
-
                             foreach ($results as $result) {
                                 $this->sendMsg($socket_id, $user_msg, 'tool_result', $result);
                                 $this->core->addSessionHistory([
                                     'role'         => 'tool',
                                     'tool_call_id' => $result['tool_call_id'],
                                     'content'      => $result['content']
-                                ]);
-
-                                $call_result = json_decode($result['content'], true);
-
-                                if (false === $call_result['success']) {
-                                    $error_tools['fn'][]  = $result['function_name'];
-                                    $error_tools['err'][] = $call_result['message'];
-                                }
-                            }
-
-                            if (!empty($error_tools['fn'])) {
-                                $this->core->addSessionHistory([
-                                    'role'    => 'user',
-                                    'content' => '【工具调用失败】' . implode(' | ', $error_tools['fn']) . ' 执行失败，错误：' . implode(' ', $error_tools['err']) . '。请对照工具定义文档，检查全部参数，确保数据及内容正确，修正后重试（最多2次）。'
                                 ]);
                             }
                         } elseif ('' !== $content) {
@@ -225,7 +206,7 @@ class go extends Factory
                 if ('content' === $this->message_type) {
                     $content .= $delta['content'];
                 }
-                
+
                 $this->sendMsg($socket_id, $user_msg, $this->message_type, $delta['content']);
             }
 

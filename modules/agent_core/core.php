@@ -236,7 +236,7 @@ final class core extends Factory
                 $results[] = [
                     'tool_call_id'  => $tool_call['id'],
                     'function_name' => $fn_name,
-                    'content'       => json_encode(['error' => 'Invalid tool name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'], JSON_FORMAT)
+                    'content'       => 'Invalid tool function name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'
                 ];
 
                 continue;
@@ -245,47 +245,29 @@ final class core extends Factory
             [$module, $method] = explode('/', $fn_name);
 
             try {
-                $arguments   = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), (array)$fn_argv);
-                $tool_result = $this->agent_tools[$module]->$method(...$arguments);
+                $arguments      = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), (array)$fn_argv);
+                $tool_result    = $this->agent_tools[$module]->$method(...$arguments);
+                $result_content = json_encode($tool_result, JSON_FORMAT);
 
-                $call_result = [
-                    'success' => true,
-                    'message' => $tool_result
-                ];
-
-                $encoded = json_encode($call_result, JSON_FORMAT);
-
-                if (false === $encoded) {
-                    $encoded = json_encode(
-                        [
-                            'success' => false,
-                            'message' => json_last_error_msg()
-                        ], JSON_FORMAT
-                    );
+                if (false === $result_content) {
+                    $result_content = json_last_error_msg();
                 }
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
-
-                $encoded = json_encode(
-                    [
-                        'success' => false,
-                        'message' => $throwable->getMessage()
-                    ], JSON_FORMAT
-                );
-
+                $result_content = $throwable->getMessage();
                 unset($throwable);
             }
 
             $llm_result = [
                 'tool_call_id'  => $tool_call['id'],
                 'function_name' => $fn_name,
-                'content'       => $encoded
+                'content'       => $result_content
             ];
 
             $results[] = $llm_result;
         }
 
-        unset($tool_calls, $tool_call, $fn_name, $fn_argv, $module, $method, $tool_result, $encoded, $llm_result);
+        unset($tool_calls, $tool_call, $fn_name, $fn_argv, $module, $method, $arguments, $tool_result, $result_content, $llm_result);
         return $results;
     }
 
@@ -437,6 +419,12 @@ final class core extends Factory
         $prompts[] = '· 每轮：先 read ram（连贯性），再按需 read important / search daily。';
         $prompts[] = '· 浓缩/丢弃无意义内容，提升效率。';
         $prompts[] = '· 定期整理（合并/去重/重写）更佳。';
+        $prompts[] = '';
+
+        $prompts[] = '=== 上下文管理 ===';
+        $prompts[] = '· 上下文窗口上限为 ' . $this->agent_config['agent_memory']['max_history'] . ' 条，且必须以 user 消息开始。';
+        $prompts[] = '· 截断机制：超出上限时，系统将从后往前保留足够数量的消息（确保数量大于或等于上限数），并进一步向前追溯至首条为 user 为止，其余更早的内容将被永久丢弃。';
+        $prompts[] = '· 记忆迁移触发：在接近窗口上限前，必须主动将当前会话的关键状态、中间结论和重要事实总结并迁移至 memory 系统（临时 -> ram, 日常 -> daily, 长期 -> important），以对抗截断导致的信息丢失。';
         $prompts[] = '';
 
         $prompts[] = '=== 系统工具 ===';

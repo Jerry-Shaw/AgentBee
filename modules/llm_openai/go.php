@@ -222,7 +222,10 @@ class go extends Factory
                 // For Gemma models exit "thought" mode
                 $this->message_type = 'content';
             } else {
-                $content .= $delta['content'];
+                if ('content' === $this->message_type) {
+                    $content .= $delta['content'];
+                }
+                
                 $this->sendMsg($socket_id, $user_msg, $this->message_type, $delta['content']);
             }
 

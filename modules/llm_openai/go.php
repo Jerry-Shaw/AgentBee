@@ -32,8 +32,6 @@ class go extends Factory
     public libOpenAI $libOpenAI;
     public FiberMgr  $fiberMgr;
 
-    public int $call_round = 0;
-
     /**
      * @throws \ReflectionException
      */
@@ -73,8 +71,6 @@ class go extends Factory
     {
         $go_next  = true;
         $stack_id = 'chat_' . ($user_msg['sessionId'] ?? 'default');
-
-        $this->call_round = 0;
 
         $this->fiberMgr->createStack($stack_id);
 
@@ -151,6 +147,11 @@ class go extends Factory
 
                             $results = $this->core->execTools($tools);
 
+                            $error_tools = [
+                                'fn'  => [],
+                                'err' => []
+                            ];
+
                             foreach ($results as $result) {
                                 $this->sendMsg($socket_id, $user_msg, 'tool_result', $result);
                                 $this->core->addSessionHistory([
@@ -158,14 +159,19 @@ class go extends Factory
                                     'tool_call_id' => $result['tool_call_id'],
                                     'content'      => $result['content']
                                 ]);
+
+                                $call_result = json_decode($result['content'], true);
+
+                                if (false === $call_result['success']) {
+                                    $error_tools['fn'][]  = $result['function_name'];
+                                    $error_tools['err'][] = $call_result['message'];
+                                }
                             }
 
-                            ++$this->call_round;
-
-                            if (0 === ($this->call_round % 10)) {
+                            if (!empty($error_tools['fn'])) {
                                 $this->core->addSessionHistory([
                                     'role'    => 'user',
-                                    'content' => '【系统提示】已连续10轮工具调用。请按以下步骤操作：' . "\n" . '1. 使用 save 工具（level=daily，role=assistant）保存：当前已完成的工作内容、已获得的关键结果、以及下一步计划。' . "\n" . '2. 如果后续对话中感觉缺少之前的上下文，请使用 read 工具（level=daily）读取最近保存的记忆，恢复上下文。' . "\n" . '3. 继续执行尚未完成的任务，**不要重新执行已经成功完成的工具调用**。' . "\n" . '4. 所有任务完成后，告知用户最终结果。'
+                                    'content' => '【工具调用失败】' . implode(' | ', $error_tools['fn']) . ' 执行失败，错误：' . implode(' ', $error_tools['err']) . '。请对照工具定义文档，检查全部参数，确保数据及内容正确，修正后重试（最多2次）。'
                                 ]);
                             }
                         } elseif ('' !== $content) {

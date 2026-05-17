@@ -1,0 +1,12 @@
+{
+  "name": "agent_claw",
+  "version": "2.0.0",
+  "description": "Web page crawler tool based on libHttp - v2.0 Enhanced",
+  "author": "AgentBee self developed",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  }
+}

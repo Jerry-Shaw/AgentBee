@@ -62,17 +62,17 @@ class go extends Factory
      * Start multi-turn conversation
      *
      * @param int   $socket_id
-     * @param array $user_msg User message (contains sessionId)
+     * @param array $msg_meta User message metadate (contains sessionId)
      * @param array $llm_params
      *
      * @return void
      * @throws \ReflectionException
      * @throws \Throwable
      */
-    public function chat(int $socket_id, array $user_msg, array $llm_params): void
+    public function chat(int $socket_id, array $msg_meta, array $llm_params): void
     {
         $go_next  = true;
-        $stack_id = 'chat_' . ($user_msg['sessionId'] ?? 'default');
+        $stack_id = 'chat_' . ($msg_meta['sessionId'] ?? 'default');
 
         $this->fiberMgr->createStack($stack_id);
 
@@ -81,9 +81,9 @@ class go extends Factory
 
             $this->fiberMgr->addTask(
                 $stack_id,
-                function () use ($socket_id, $history, $user_msg, $llm_params, &$go_next): array
+                function () use ($socket_id, $history, $msg_meta, $llm_params, &$go_next): array
                 {
-                    $talk    = $this->talk($socket_id, $history, $user_msg, $llm_params);
+                    $talk    = $this->talk($socket_id, $history, $msg_meta, $llm_params);
                     $go_next = $talk['next'];
 
                     return ['next' => $go_next];
@@ -94,9 +94,9 @@ class go extends Factory
         }
 
         $this->fiberMgr->clearStack($stack_id);
-        $this->sendMsg($socket_id, $user_msg, 'end', null);
+        $this->sendMsg($socket_id, $msg_meta, 'end', null);
 
-        unset($socket_id, $user_msg, $llm_params, $go_next, $stack_id, $history);
+        unset($socket_id, $msg_meta, $llm_params, $go_next, $stack_id, $history);
     }
 
     /**
@@ -104,13 +104,13 @@ class go extends Factory
      *
      * @param int   $socket_id
      * @param array $history  Current conversation history (snapshot)
-     * @param array $user_msg User message
+     * @param array $msg_meta User message
      * @param array $llm_params
      *
      * @return array ['next' => bool]
      * @throws \ReflectionException
      */
-    private function talk(int $socket_id, array $history, array $user_msg, array $llm_params): array
+    private function talk(int $socket_id, array $history, array $msg_meta, array $llm_params): array
     {
         $content = '';
         $tools   = [];
@@ -120,11 +120,11 @@ class go extends Factory
 
         $this->libOpenAI->addStreamCallback(
             $key,
-            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $user_msg, &$content, &$tools, &$tool_calls): void
+            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $msg_meta, &$content, &$tools, &$tool_calls): void
             {
                 try {
                     if (!$is_finished) {
-                        $this->sendStream($socket_id, $msg_data, $user_msg, $tools, $content);
+                        $this->sendStream($socket_id, $msg_data, $msg_meta, $tools, $content);
                     } else {
                         if (!empty($tools)) {
                             $tool_calls   = true;
@@ -150,7 +150,7 @@ class go extends Factory
                             $results = $this->core->execTools($tools);
 
                             foreach ($results as $result) {
-                                $this->sendMsg($socket_id, $user_msg, 'tool_result', $result);
+                                $this->sendMsg($socket_id, $msg_meta, 'tool_result', $result);
                                 $this->core->addSessionHistory([
                                     'role'         => 'tool',
                                     'tool_call_id' => $result['tool_call_id'],
@@ -162,8 +162,8 @@ class go extends Factory
                         }
                     }
                 } catch (\Throwable $throwable) {
-                    $this->sendMsg($socket_id, $user_msg, 'error', ['message' => 'Internal error processing stream: ' . $throwable->getMessage()]);
-                    $this->sendMsg($socket_id, $user_msg, 'end', null);
+                    $this->sendMsg($socket_id, $msg_meta, 'error', ['message' => 'Internal error processing stream: ' . $throwable->getMessage()]);
+                    $this->sendMsg($socket_id, $msg_meta, 'end', null);
                     unset($throwable);
                 }
 
@@ -174,7 +174,7 @@ class go extends Factory
         $this->libOpenAI->chat($history, $this->core->agent_config['agent_llm']['model'], $llm_params, true);
         $this->libOpenAI->removeStreamCallback($key);
 
-        unset($socket_id, $history, $user_msg, $llm_params, $key);
+        unset($socket_id, $history, $msg_meta, $llm_params, $key);
         return ['next' => $tool_calls];
     }
 
@@ -183,14 +183,14 @@ class go extends Factory
      *
      * @param int    $socket_id
      * @param array  $msg_data
-     * @param array  $user_msg
+     * @param array  $msg_meta
      * @param array  $tools
      * @param string $content
      *
      * @return void
      * @throws \ReflectionException
      */
-    private function sendStream(int $socket_id, array $msg_data, array $user_msg, array &$tools, string &$content): void
+    private function sendStream(int $socket_id, array $msg_data, array $msg_meta, array &$tools, string &$content): void
     {
         $delta = $msg_data['choices'][0]['delta'] ?? [];
 
@@ -207,7 +207,7 @@ class go extends Factory
                     $content .= $delta['content'];
                 }
 
-                $this->sendMsg($socket_id, $user_msg, $this->message_type, $delta['content']);
+                $this->sendMsg($socket_id, $msg_meta, $this->message_type, $delta['content']);
             }
 
             unset($delta);
@@ -216,7 +216,7 @@ class go extends Factory
 
         // Reasoning content
         if (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {
-            $this->sendMsg($socket_id, $user_msg, 'think', $delta['reasoning_content']);
+            $this->sendMsg($socket_id, $msg_meta, 'think', $delta['reasoning_content']);
             unset($delta);
             return;
         }
@@ -253,24 +253,24 @@ class go extends Factory
                 unset($chunk, $idx);
             }
 
-            $this->sendMsg($socket_id, $user_msg, 'tool_calls', $tools);
+            $this->sendMsg($socket_id, $msg_meta, 'tool_calls', $tools);
         }
 
-        unset($socket_id, $msg_data, $user_msg, $delta);
+        unset($socket_id, $msg_data, $msg_meta, $delta);
     }
 
     /**
      * Send websocket message
      *
      * @param int    $socket_id
-     * @param array  $user_msg
+     * @param array  $msg_meta
      * @param string $type
      * @param mixed  $data
      *
      * @return void
      * @throws \ReflectionException
      */
-    private function sendMsg(int $socket_id, array $user_msg, string $type, mixed $data): void
+    private function sendMsg(int $socket_id, array $msg_meta, string $type, mixed $data): void
     {
         $payload = ['type' => $type];
 
@@ -278,8 +278,8 @@ class go extends Factory
             $payload['data'] = $data;
         }
 
-        $this->core->sendMessage($socket_id, json_encode($payload + $user_msg, JSON_FORMAT));
+        $this->core->sendMessage($socket_id, json_encode($payload + $msg_meta, JSON_FORMAT));
 
-        unset($socket_id, $user_msg, $type, $data, $payload);
+        unset($socket_id, $msg_meta, $type, $data, $payload);
     }
 }

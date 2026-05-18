@@ -132,8 +132,8 @@ class go extends Factory
                     } else {
                         $message = [
                             'role'              => 'assistant',
-                            'content'           => trim($content),
-                            'reasoning_content' => trim($reasons)
+                            'content'           => $content,
+                            'reasoning_content' => $reasons
                         ];
 
                         if (!empty($tools)) {
@@ -249,8 +249,8 @@ class go extends Factory
                 } else {
                     $message = [
                         'role'              => 'assistant',
-                        'content'           => trim($content),
-                        'reasoning_content' => trim($reasons)
+                        'content'           => $content,
+                        'reasoning_content' => $reasons
                     ];
 
                     $this->core->addSessionHistory($message);

@@ -80,11 +80,12 @@ class config extends Factory
                 'provider'     => 'llm_openai',
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
-                'model'        => 'gemma-4-31b-it',
+                'model'        => 'qwen3.6-27b',
                 'org_id'       => '',
                 'timeout'      => 7200,
                 'keep_reasons' => true,
                 'params'       => [
+                    'seed'              => 42,
                     'max_tokens'        => 8192,
                     'temperature'       => 0.3,
                     'top_p'             => 0.85,
@@ -94,7 +95,14 @@ class config extends Factory
                         '<|im_end|>',
                         '<|endoftext|>',
                     ],
-                    'seed'              => 42,
+                    'extra_body'        => [
+                        'chat_template_kwargs' => [
+                            'enable_thinking' => false,
+                        ],
+                    ],
+                    'thinking'          => [
+                        'type' => 'disabled',
+                    ],
                 ],
             ],
             'agent_task'   => [

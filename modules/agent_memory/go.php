@@ -24,13 +24,16 @@ namespace modules\agent_memory;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
+use Nervsys\Ext\libFileIO;
 
 class go extends Factory
 {
-    public core $core;
+    public core      $core;
+    public libFileIO $libFileIO;
 
     private string $memory_path;
 
+    private string $task_dir;
     private string $daily_dir;
     private string $system_file;
     private string $important_file;
@@ -42,15 +45,24 @@ class go extends Factory
      */
     public function __construct()
     {
-        $this->core = core::new();
+        $this->core      = core::new();
+        $this->libFileIO = libFileIO::new();
 
         $this->core->initCore();
 
         $this->memory_path = $this->core->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
 
+        $this->task_dir       = $this->memory_path . 'task' . DIRECTORY_SEPARATOR;
         $this->daily_dir      = $this->memory_path . 'daily' . DIRECTORY_SEPARATOR;
         $this->system_file    = $this->memory_path . 'system.txt';
         $this->important_file = $this->memory_path . 'important.txt';
+
+        if (!is_dir($this->task_dir)) {
+            try {
+                mkdir($this->task_dir, 0777, true);
+            } catch (\Throwable) {
+            }
+        }
 
         if (!is_dir($this->daily_dir)) {
             try {
@@ -58,6 +70,108 @@ class go extends Factory
             } catch (\Throwable) {
             }
         }
+    }
+
+    /**
+     * @param string $task_id
+     * @param string $task_prompt
+     * @param int    $run_at
+     * @param bool   $repeat
+     * @param int    $repeat_interval
+     *
+     * @return int[]
+     */
+    public function addTask(string $task_id, string $task_prompt, int $run_at, bool $repeat = false, int $repeat_interval = 0): array
+    {
+        $task_file = $this->task_dir . 'task_' . md5($task_id) . '.json';
+
+        $task_data = [
+            'task_id'         => $task_id,
+            'task_prompt'     => $task_prompt,
+            'run_at'          => $run_at,
+            'repeat'          => $repeat,
+            'repeat_interval' => $repeat_interval,
+            'created_at'      => time()
+        ];
+
+        $bytes = file_put_contents($task_file, json_encode($task_data, JSON_FORMAT));
+
+        unset($task_id, $task_prompt, $run_at, $repeat, $repeat_interval, $task_file);
+        return ['bytes_written' => $bytes ?: 0];
+    }
+
+    /**
+     * @param string $task_id
+     *
+     * @return array
+     */
+    public function removeTask(string $task_id): array
+    {
+        $task_file = $this->task_dir . 'task_' . md5($task_id) . '.json';
+
+        if (is_file($task_file)) {
+            $delete = unlink($task_file);
+            $result = $delete
+                ? ['success' => true, 'message' => 'Task removed.']
+                : ['success' => false, 'message' => 'Task remove FAILED!'];
+        } else {
+            $result = ['success' => false, 'message' => 'Task not found.'];
+        }
+
+        unset($task_id, $task_file, $delete);
+        return $result;
+    }
+
+    /**
+     * @return array
+     */
+    public function listTasks(): array
+    {
+        $task_list  = [];
+        $task_files = $this->libFileIO->getFiles($this->task_dir);
+
+        foreach ($task_files as $task_file) {
+            $content   = file_get_contents($task_file);
+            $task_data = json_decode($content, true);
+
+            if (is_null($task_data)) {
+                unlink($task_file);
+            }
+
+            $task_list[] = $task_data;
+        }
+
+        unset($task_files, $task_file, $content, $task_data);
+        return $task_list;
+    }
+
+    /**
+     * @return array
+     */
+    public function runTask(): array
+    {
+        $task_run  = [];
+        $now_time  = time();
+        $task_list = $this->listTasks();
+
+        foreach ($task_list as $task) {
+            if ($task['run_at'] > $now_time) {
+                continue;
+            }
+
+            $task_run[] = $task;
+
+            if ($task['repeat']) {
+                $task['run_at'] += $task['repeat_interval'];
+
+                $this->addTask($task['task_id'], $task['task_prompt'], $task['run_at'], $task['repeat'], $task['repeat_interval']);
+            } else {
+                $this->removeTask($task['task_id']);
+            }
+        }
+
+        unset($now_time, $task_list, $task);
+        return $task_run;
     }
 
     /**

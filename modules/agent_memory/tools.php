@@ -25,6 +25,92 @@ namespace modules\agent_memory;
 class tools
 {
     public const META = [
+        // ==================== addTask ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'addTask',
+                'description' => "添加一个定时任务（单次或重复）。任务到期时会被触发，返回任务信息供 LLM 处理。\n\n" .
+                    "📝 **参数**：\n" .
+                    "- `task_id`（必填，string）：任务唯一标识符。\n" .
+                    "- `task_prompt`（必填，string）：任务触发时发送给 LLM 的提示词。\n" .
+                    "- `run_at`（必填，int）：Unix 时间戳，任务首次触发时间。\n" .
+                    "- `repeat`（可选，bool，默认 false）：是否重复执行。\n" .
+                    "- `repeat_interval`（可选，int，默认 0）：重复间隔秒数（仅当 repeat=true 时有效）。\n\n" .
+                    "✅ **正确示例**：\n" .
+                    "```json\n" .
+                    "{\"task_id\":\"daily_report\", \"task_prompt\":\"生成今日报告\", \"run_at\":1747584000, \"repeat\":true, \"repeat_interval\":86400}\n" .
+                    "{\"task_id\":\"reminder\", \"task_prompt\":\"提醒开会\", \"run_at\":1747652400}\n" .
+                    "```\n\n" .
+                    "❌ **错误**：\n" .
+                    "```json\n" .
+                    "{}                                 // 缺少所有参数\n" .
+                    "{\"task_id\":\"test\"}               // 缺少 task_prompt 和 run_at\n" .
+                    "```\n\n" .
+                    "📤 **返回**：成功 → `{\"bytes_written\": N}` （N > 0 表示写入成功）；失败可能返回错误信息。",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'task_id'         => ['type' => 'string', 'description' => '必填：任务唯一标识符'],
+                        'task_prompt'     => ['type' => 'string', 'description' => '必填：任务触发时的提示词'],
+                        'run_at'          => ['type' => 'integer', 'description' => '必填：Unix 时间戳'],
+                        'repeat'          => ['type' => 'boolean', 'default' => false, 'description' => '可选：是否重复'],
+                        'repeat_interval' => ['type' => 'integer', 'default' => 0, 'description' => '可选：重复间隔秒数']
+                    ],
+                    'required'   => ['task_id', 'task_prompt', 'run_at']
+                ]
+            ]
+        ],
+
+        // ==================== removeTask ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'removeTask',
+                'description' => "删除一个已存在的定时任务。\n\n" .
+                    "📝 **参数**：`task_id`（必填，string）\n\n" .
+                    "✅ **示例**：`{\"task_id\":\"daily_report\"}`\n\n" .
+                    "📤 **返回**：\n" .
+                    "- 成功 → `{\"success\": true, \"message\": \"Task removed.\"}`\n" .
+                    "- 任务不存在 → `{\"success\": false, \"message\": \"Task not found.\"}`\n" .
+                    "- 删除失败 → `{\"success\": false, \"message\": \"Task remove FAILED!\"}`",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'task_id' => ['type' => 'string', 'description' => '必填：要删除的任务 ID']
+                    ],
+                    'required'   => ['task_id']
+                ]
+            ]
+        ],
+
+        // ==================== listTasks ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'listTasks',
+                'description' => "列出所有当前已调度的任务（包括单次和重复）。\n\n" .
+                    "📤 **返回**：任务数组，每个任务包含字段：`task_id`, `task_prompt`, `run_at`, `repeat`, `repeat_interval`, `created_at`。\n" .
+                    "若无任务，返回空数组 `[]`。"
+                // 无 parameters 节点
+            ]
+        ],
+
+        // ==================== runTask ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'runTask',
+                'description' => "触发任务调度器，检查并返回所有到期的任务。\n\n" .
+                    "**使用场景**：\n" .
+                    "- 系统心跳自动调用（常规执行）\n" .
+                    "- LLM 主动调用，用于调试或手动触发任务\n\n" .
+                    "📤 **返回**：到期任务数组，每个任务包含：`task_id`, `task_prompt`, `run_at`, `repeat`, `repeat_interval`, `created_at`。\n" .
+                    "若无到期任务，返回空数组 `[]`。"
+                // 无 parameters 节点
+            ]
+        ],
+
         // ==================== save ====================
         [
             'type'     => 'function',

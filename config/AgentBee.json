@@ -13,16 +13,24 @@
     "org_id": "",
     "timeout": 7200,
     "params": {
-      "max_tokens": 16384,
-      "temperature": 0.6,
-      "top_p": 0.9,
-      "frequency_penalty": 0.6,
-      "presence_penalty": 0.5
+      "max_tokens": 8192,
+      "temperature": 0.3,
+      "top_p": 0.85,
+      "frequency_penalty": 0.3,
+      "presence_penalty": 0.2,
+      "stop": [
+        "<|im_end|>",
+        "<|endoftext|>"
+      ],
+      "seed": 42
     }
+  },
+  "agent_task": {
+    "provider": "agent_memory"
   },
   "agent_memory": {
     "provider": "agent_memory",
-    "max_history": 50
+    "max_history": 20
   },
   "agent_tools": {
     "enabled": true,
@@ -30,10 +38,10 @@
     "workspace_path": "E:\\Projects\\Codes\\AgentBee\\workspace",
     "list": [
       {
-        "name": "agent_tools"
+        "name": "agent_memory"
       },
       {
-        "name": "agent_memory"
+        "name": "agent_tools"
       },
       {
         "name": "agent_claw"

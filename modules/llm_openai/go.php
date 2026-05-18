@@ -34,6 +34,9 @@ class go extends Factory
 
     public string $message_type = 'content';
 
+    public string $last_tool_calls  = '';
+    public int    $last_error_count = 0;
+
     /**
      * @throws \ReflectionException
      */
@@ -121,7 +124,7 @@ class go extends Factory
 
         $this->libOpenAI->addStreamCallback(
             $key,
-            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $msg_meta, &$reasons, &$content, &$tools, &$tool_calls): void
+            function (string $msg_key, array $msg_data, bool $is_finished) use ($key, $socket_id, $msg_meta, &$reasons, &$content, &$tools, &$tool_calls): void
             {
                 try {
                     if (!$is_finished) {
@@ -159,9 +162,32 @@ class go extends Factory
                                     'tool_call_id' => $result['tool_call_id'],
                                     'content'      => $result['content']
                                 ]);
+
+                                $tool_result = json_decode($result['content'], true);
+
+                                if ('error' === $tool_result['status'] && $this->last_tool_calls === $result['function_name']) {
+                                    if (2 <= ++$this->last_error_count) {
+                                        $current_history = $this->core->getSessionHistory();
+
+                                        $current_history[] = [
+                                            'role'    => 'system',
+                                            'content' => '【系统中断指令】工具 `' . $result['function_name'] . '` 已连续两次执行失败。你已被禁止调用任何工具。现在必须：1. 立即停止所有工具调用；2. 直接向用户说明该工具失败了，并明确告知用户需要提供哪些缺失或正确的信息；3. 等待用户回复，不得自行尝试任何替代方案。'
+                                        ];
+
+                                        $tool_calls = false;
+
+                                        $llm_params['tool_choice'] = 'none';
+                                        $this->stop($socket_id, $current_history, $msg_meta, $llm_params);
+
+                                        break;
+                                    }
+                                } else {
+                                    $this->last_tool_calls  = $result['function_name'];
+                                    $this->last_error_count = 0;
+                                }
                             }
 
-                            unset($results, $result);
+                            unset($results, $result, $tool_result);
                         }
 
                         unset($message);
@@ -181,6 +207,64 @@ class go extends Factory
 
         unset($socket_id, $history, $msg_meta, $llm_params, $key);
         return ['next' => $tool_calls];
+    }
+
+    /**
+     * Stop chat with reply (streaming, tools disabled)
+     *
+     * @param int   $socket_id
+     * @param array $history
+     * @param array $msg_meta
+     * @param array $llm_params
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    private function stop(int $socket_id, array $history, array $msg_meta, array $llm_params): void
+    {
+        $reasons = '';
+        $content = '';
+        $key     = 'stop_' . uniqid('', true);
+
+        $this->libOpenAI->addStreamCallback(
+            $key,
+            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $msg_meta, &$reasons, &$content): void
+            {
+                if (!$is_finished) {
+                    $delta = $msg_data['choices'][0]['delta'] ?? [];
+
+                    // Normal content
+                    if (isset($delta['content']) && '' !== $delta['content']) {
+                        $content .= $delta['content'];
+                        $this->sendMsg($socket_id, $msg_meta, 'content', $delta['content']);
+                    }
+
+                    // Reasoning content
+                    if (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {
+                        if ($this->core->agent_config['agent_llm']['keep_reasons']) {
+                            $reasons .= $delta['reasoning_content'];
+                        }
+                        $this->sendMsg($socket_id, $msg_meta, 'think', $delta['reasoning_content']);
+                    }
+                } else {
+                    $message = [
+                        'role'              => 'assistant',
+                        'content'           => trim($content),
+                        'reasoning_content' => trim($reasons)
+                    ];
+
+                    $this->core->addSessionHistory($message);
+                    unset($message);
+                }
+
+                unset($msg_key, $msg_data, $is_finished, $delta);
+            }
+        );
+
+        $this->libOpenAI->chat($history, $this->core->agent_config['agent_llm']['model'], $llm_params, true);
+        $this->libOpenAI->removeStreamCallback($key);
+
+        unset($socket_id, $history, $msg_meta, $llm_params, $reasons, $content, $key);
     }
 
     /**

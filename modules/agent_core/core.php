@@ -236,7 +236,10 @@ final class core extends Factory
                 $results[] = [
                     'tool_call_id'  => $tool_call['id'],
                     'function_name' => $fn_name,
-                    'content'       => 'Invalid tool function name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'
+                    'content'       => json_encode([
+                        'status'  => 'error',
+                        'message' => 'Invalid tool function name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'
+                    ], JSON_FORMAT)
                 ];
 
                 continue;
@@ -245,16 +248,28 @@ final class core extends Factory
             [$module, $method] = explode('/', $fn_name);
 
             try {
-                $arguments      = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), (array)$fn_argv);
-                $tool_result    = $this->agent_tools[$module]->$method(...$arguments);
-                $result_content = json_encode($tool_result, JSON_FORMAT);
+                $arguments   = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), (array)$fn_argv);
+                $tool_result = $this->agent_tools[$module]->$method(...$arguments);
+
+                $result_content = json_encode([
+                    'status' => 'success',
+                    'data'   => $tool_result
+                ], JSON_FORMAT);
 
                 if (false === $result_content) {
-                    $result_content = json_last_error_msg();
+                    $result_content = json_encode([
+                        'status'  => 'error',
+                        'message' => json_last_error_msg()
+                    ], JSON_FORMAT);
                 }
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
-                $result_content = $throwable->getMessage();
+
+                $result_content = json_encode([
+                    'status'  => 'error',
+                    'message' => mb_substr($throwable->getMessage(), 0, 256, 'UTF-8')
+                ], JSON_FORMAT);
+
                 unset($throwable);
             }
 

@@ -77,13 +77,14 @@ class config extends Factory
                 'ping_interval' => 30,
             ],
             'agent_llm'    => [
-                'provider' => 'llm_openai',
-                'api_url'  => 'http://127.0.0.1:1234/v1',
-                'api_key'  => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
-                'model'    => 'gemma-4-31b-it',
-                'org_id'   => '',
-                'timeout'  => 7200,
-                'params'   => [
+                'provider'     => 'llm_openai',
+                'api_url'      => 'http://127.0.0.1:1234/v1',
+                'api_key'      => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
+                'model'        => 'gemma-4-31b-it',
+                'org_id'       => '',
+                'timeout'      => 7200,
+                'keep_reasons' => true,
+                'params'       => [
                     'max_tokens'        => 8192,
                     'temperature'       => 0.3,
                     'top_p'             => 0.85,

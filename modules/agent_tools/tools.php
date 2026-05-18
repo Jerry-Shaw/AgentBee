@@ -62,13 +62,13 @@ class tools
                 'name'        => 'writeFile',
                 'description' => "写入文件（自动创建目录）。\n" .
                     "参数：path（必填），content（必填），append（默认false）。\n" .
-                    "单次 content 不得超过2000字符，大文件必须分多次追加（append=true）。\n" .
+                    "单次 content 建议不超过4096字符，大文件必须分多次追加（append=true）。\n" .
                     "返回：{\"bytes_written\": N} 或 {\"error\":\"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'path'    => ['type' => 'string', 'description' => '文件路径'],
-                        'content' => ['type' => 'string', 'description' => '要写入的内容（≤2000字符）'],
+                        'content' => ['type' => 'string', 'description' => '要写入的内容（≤4096字符）'],
                         'append'  => ['type' => 'boolean', 'default' => false, 'description' => '是否追加'],
                     ],
                     'required'   => ['path', 'content'],

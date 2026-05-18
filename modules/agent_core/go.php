@@ -63,10 +63,11 @@ class go extends Factory
             $this->core->socketMgr
                 ->setDebugMode($this->core->agent_config['debug'])
                 ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'] * 2)
-                ->setEventListener('onHandshake', [$this, 'onClientHandshake'])
-                ->setEventListener('onMessage', [$this, 'onClientMessage'])
-                ->setEventListener('onSendString', [$this, 'onMessageSend'])
-                ->setEventListener('onClose', [$this, 'onClientClose'])
+                ->setEventListener('onHandshake', [$this, 'onHandshake'])
+                ->setEventListener('onHeartbeat', [$this, 'onHeartbeat'])
+                ->setEventListener('onMessage', [$this, 'onMessage'])
+                ->setEventListener('onSendString', [$this, 'onSendString'])
+                ->setEventListener('onClose', [$this, 'onClose'])
                 ->listenTo('tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'], $this->core->agent_config['agent_server']['websocket']);
         } catch (\Throwable) {
         }
@@ -78,16 +79,53 @@ class go extends Factory
      *
      * @return bool
      */
-    public function onClientHandshake(int $socket_id, string $ws_proto): bool
+    public function onHandshake(int $socket_id, string $ws_proto): bool
     {
         return true;
+    }
+
+    /**
+     * @param int $socket_id
+     *
+     * @return string
+     * @throws \Exception
+     */
+    public function onHeartbeat(int $socket_id): string
+    {
+        $task_list = $this->core->agent_task->runTask();
+
+        if (empty($task_list)) {
+            return '';
+        }
+
+        $task_jobs = [
+            'time' => date('Y-m-d H:i:s'),
+            'jobs' => $task_list
+        ];
+
+        $task_json = json_encode($task_jobs, JSON_FORMAT);
+
+        $task_content = '【定时任务】以下是待执行的定时任务列表（JSON 格式）：' . PHP_EOL .
+            $task_json . PHP_EOL . PHP_EOL .
+            '请按顺序处理每个任务：' . PHP_EOL .
+            '1. 根据 task_prompt 执行相应操作（发送提醒、调用工具、回答问题等）。' . PHP_EOL .
+            '2. 执行后将任务摘要和执行结果存入 daily 记忆层。' . PHP_EOL .
+            '3. 如需回复用户，直接输出内容。' . PHP_EOL .
+            '4. 全部处理完毕后，若无用户交互，回复“定时任务已处理”。' . PHP_EOL .
+            '5. 重要事件可额外存入 important 层。';
+
+        $this->core->addSessionHistory(['role' => 'user', 'content' => $task_content]);
+        $this->core->agent_llm->chat($socket_id, [], $this->core->getLLMParams());
+
+        unset($socket_id, $task_list, $task_jobs, $task_json, $task_content);
+        return '';
     }
 
     /**
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function onClientMessage(int $socket_id, string $message): void
+    public function onMessage(int $socket_id, string $message): void
     {
         if ('' === $message) {
             return;
@@ -120,7 +158,7 @@ class go extends Factory
             $end_data[] = $data;
         }
 
-        $last_msg = array_pop($end_data);
+        $msg_meta = array_pop($end_data);
 
         foreach ($end_data as $send_end) {
             $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $send_end));
@@ -128,10 +166,10 @@ class go extends Factory
 
         if (!empty($llm_data)) {
             $this->core->addSessionHistory(['role' => 'user', 'content' => implode("\n", $llm_data)]);
-            $this->core->agent_llm->chat($socket_id, $last_msg, $this->core->getLLMParams());
+            $this->core->agent_llm->chat($socket_id, $msg_meta, $this->core->getLLMParams());
         }
 
-        unset($socket_id, $message, $end_data, $llm_data, $messages, $data, $message_type, $message_data, $last_msg, $send_end);
+        unset($socket_id, $message, $end_data, $llm_data, $messages, $data, $message_type, $message_data, $msg_meta, $send_end);
     }
 
     /**
@@ -139,7 +177,7 @@ class go extends Factory
      *
      * @return array
      */
-    public function onMessageSend(int $socket_id): array
+    public function onSendString(int $socket_id): array
     {
         return [];
     }
@@ -149,7 +187,7 @@ class go extends Factory
      *
      * @return void
      */
-    public function onClientClose(int $socket_id): void
+    public function onClose(int $socket_id): void
     {
     }
 }

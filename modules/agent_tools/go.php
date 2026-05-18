@@ -28,17 +28,17 @@ class go extends Factory
 {
     public core $core;
 
-    public libFileIO $fileIO;
+    public libFileIO $libFileIO;
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->core = core::new();
+        $this->core      = core::new();
+        $this->libFileIO = libFileIO::new();
 
         $this->core->initCore();
-        $this->fileIO = libFileIO::new();
     }
 
     /**
@@ -119,6 +119,17 @@ class go extends Factory
 
         unset($program, $argv, $timeout, $work_path, $active, $procMgr, $proc_pid);
         return $result;
+    }
+
+    /**
+     * @return array
+     */
+    public function getTime(): array
+    {
+        $timestamp = time();
+        $datetime  = date('Y-m-d H:i:s', $timestamp);
+
+        return ['datetime' => $datetime, 'timestamp' => $timestamp];
     }
 
     /**
@@ -224,7 +235,7 @@ class go extends Factory
             return ['error' => "Directory not found: {$path}"];
         }
 
-        $files = $this->fileIO->findFiles($full_path, $pattern, $recursive);
+        $files = $this->libFileIO->findFiles($full_path, $pattern, $recursive);
 
         unset($path, $pattern, $recursive, $full_path);
         return ['files' => $files];
@@ -261,7 +272,7 @@ class go extends Factory
             return ['error' => "Directory not found: {$path}"];
         }
 
-        $contents = $this->fileIO->getDirContents($full_path);
+        $contents = $this->libFileIO->getDirContents($full_path);
 
         unset($path, $full_path);
         return ['contents' => $contents];
@@ -300,7 +311,7 @@ class go extends Factory
             return ['error' => "Destination directory already exists: {$dst}"];
         }
 
-        $copied = $this->fileIO->copyDir($full_src, $full_dst);
+        $copied = $this->libFileIO->copyDir($full_src, $full_dst);
 
         unset($src, $full_src, $full_dst);
 
@@ -326,7 +337,7 @@ class go extends Factory
             return ['deleted' => false, 'message' => 'Directory does not exist'];
         }
 
-        $removed = $this->fileIO->delDir($full_path);
+        $removed = $this->libFileIO->delDir($full_path);
 
         unset($path, $full_path);
 

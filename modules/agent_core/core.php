@@ -359,6 +359,8 @@ final class core extends Factory
      */
     public function getSystemDefault(bool $in_sandbox = true): array
     {
+        $php_path = $this->OSMgr->getPhpPath();
+
         $prompts   = [];
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
@@ -367,7 +369,7 @@ final class core extends Factory
         $prompts[] = '=== 系统环境 ===';
         $prompts[] = '系统: ' . php_uname();
         $prompts[] = 'Agent: ' . $this->name . ' v' . AGENT_VERSION . ' (' . NS_NAMESPACE . ' / ' . NS_VER . ')';
-        $prompts[] = 'PHP: ' . PHP_VERSION . ' (' . php_sapi_name() . ') | 路径: ' . $this->OSMgr->getPhpPath();
+        $prompts[] = 'PHP: ' . PHP_VERSION . ' (' . php_sapi_name() . ') | 路径: ' . $php_path;
         $prompts[] = '';
 
         $prompts[] = '=== 关键路径 ===';
@@ -382,43 +384,44 @@ final class core extends Factory
         $prompts[] = '';
 
         $prompts[] = '=== 记忆系统（save/read/search）===';
-        $prompts[] = '自主决定存储，用户不干预。';
+        $prompts[] = '你自主决定存储，无需用户确认。遇到有用内容主动保存。';
         $prompts[] = '';
-        $prompts[] = '【流程】';
-        $prompts[] = '1. system层自动附加到每轮对话头部，无需你读取。';
-        $prompts[] = '2. 按需 read important 或 search 历史。';
-        $prompts[] = '3. 有价值信息立即 save，尤其是频繁存取的临时信息用 ram 层。';
-        $prompts[] = '4. 对话后总结存入 daily 或 important。';
+        $prompts[] = '【重要程度（从高到低）】';
+        $prompts[] = 'system（永久） > important（永久） > daily（按日期） > ram（临时，重启丢失）';
         $prompts[] = '';
-        $prompts[] = '【system】永久';
-        $prompts[] = '· 角色/风格/规则/能力边界。';
-        $prompts[] = '· 示例：“你是技术助手，优先给代码示例”。';
-        $prompts[] = '· 写入：用户明确表达对你的期望时。';
-        $prompts[] = '· 必须浓缩为核心规则。';
+        $prompts[] = '【存取流程】';
+        $prompts[] = '1. system层自动附加到对话开头，无需你读取。';
+        $prompts[] = '2. 每轮对话先 read ram 取回最近上下文，保持连贯。';
+        $prompts[] = '3. 再按需 read daily / important，或 search 历史记忆。';
+        $prompts[] = '4. 临时信息、频繁读写的上下文 → 存 ram（大胆用，尽量填满）。';
+        $prompts[] = '5. 值得长期存储的信息 → 立即转存 daily / important / system。';
         $prompts[] = '';
-        $prompts[] = '【important】永久';
-        $prompts[] = '· 用户长期关键信息（身份/配置/偏好）。';
-        $prompts[] = '· 写入：识别到值得长期记住的事实时。';
-        $prompts[] = '· 将多轮对话总结为简短事实。';
+        $prompts[] = '【system】永久 · 最高级';
+        $prompts[] = '存放：角色设定、行为规则、能力边界。';
+        $prompts[] = '写入时机：用户明确表达对你的期望或要求时。';
+        $prompts[] = '要求：浓缩为核心规则，避免冗长。';
         $prompts[] = '';
-        $prompts[] = '【daily】按日期分文件';
-        $prompts[] = '· 日常要点 + 工具结果。';
-        $prompts[] = '· 写入：每次重要交互后。';
-        $prompts[] = '· 必须浓缩：丢弃“你好/谢谢”、报错等无用内容。';
+        $prompts[] = '【important】永久 · 高级';
+        $prompts[] = '存放：用户的长期关键信息（身份、偏好、配置、常用命令）。';
+        $prompts[] = '写入时机：识别到值得长期存储的事实，立即存入。';
+        $prompts[] = '要求：将多轮对话总结为简短事实，避免重复。';
         $prompts[] = '';
-        $prompts[] = '【ram】高速临时，不持久化（优先使用）';
-        $prompts[] = '· 用途：本轮或近期会话的上下文片段、中间结果、频繁存取的临时信息。';
-        $prompts[] = '· 特点：读写极快，进程/重启后完全丢失，仅限当前会话有效。';
-        $prompts[] = '· 写入：大胆存，不必担心性能或冗余，尽量保持对话连续。但注意重启后清空。';
-        $prompts[] = '· 读取：每轮对话先 read ram 取回最近内容，辅助保持上下文连贯。';
-        $prompts[] = '· 去重：ram 层无需 search 去重，直接用 save 追加或覆盖即可。';
+        $prompts[] = '【daily】按日期 · 中级（随时存，不限次数，主动多存）';
+        $prompts[] = '存放：日常对话要点、工具调用结果、用户问题与你的回复摘要。';
+        $prompts[] = '写入时机：任何有实质内容的交互后，简要总结后即可存储。闲聊内容不存。';
+        $prompts[] = '要求：保留完整上下文（问题+答案+关键数据），可总结浓缩，去掉“你好/谢谢”等废话。';
         $prompts[] = '';
-        $prompts[] = '【原则】';
-        $prompts[] = '· 自主写入，无需确认。';
-        $prompts[] = '· 写入前用 search 去重（ram 层除外）。';
-        $prompts[] = '· 每轮：先 read ram（连贯性），再按需 read important / search daily。';
-        $prompts[] = '· 浓缩/丢弃无意义内容，提升效率。';
-        $prompts[] = '· 定期整理（合并/去重/重写）更佳。';
+        $prompts[] = '【ram】临时 · 低级（优先使用）';
+        $prompts[] = '存放：本轮会话的连续对话片段、工具调用及结果、中间计算结果、频繁存取的信息。';
+        $prompts[] = '特点：读写极快，进程/重启后完全丢失，仅当前会话有效。';
+        $prompts[] = '策略：大胆存，尽量用满（不影响性能），每轮先 read ram 保持连贯。';
+        $prompts[] = '去重：ram 层无需 search 去重，直接 save 追加即可。';
+        $prompts[] = '';
+        $prompts[] = '【核心原则】';
+        $prompts[] = '· 主动存储：只要不是纯闲聊，就存 ram → 再按需转存 daily/important/system。';
+        $prompts[] = '· daily 高频使用：有用就存，主动保存，不限制次数，尽量保留完整对话脉络。';
+        $prompts[] = '· 内容浓缩：丢弃无意义内容（你好、谢谢、报错等），只保留有价值信息。';
+        $prompts[] = '· 每轮先读 ram 或 daily：确保上下文连续，避免遗忘。';
         $prompts[] = '';
 
         $prompts[] = '=== 上下文管理 ===';
@@ -429,6 +432,7 @@ final class core extends Factory
 
         $prompts[] = '=== 系统工具 ===';
         $prompts[] = '优先使用专用工具，避免直接执行系统命令。';
+        $prompts[] = '重要：php 可直接通过 exec 工具运行（Windows 下无需 powershell/cmd 中转），路径: ' . $php_path;
         $prompts[] = '';
 
         $prompts[] = '=== 安全规则 ===';

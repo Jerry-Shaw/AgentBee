@@ -112,6 +112,7 @@ class go extends Factory
      */
     private function talk(int $socket_id, array $history, array $msg_meta, array $llm_params): array
     {
+        $reasons = '';
         $content = '';
         $tools   = [];
         $key     = 'stream_' . uniqid('', true);
@@ -120,46 +121,50 @@ class go extends Factory
 
         $this->libOpenAI->addStreamCallback(
             $key,
-            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $msg_meta, &$content, &$tools, &$tool_calls): void
+            function (string $msg_key, array $msg_data, bool $is_finished) use ($socket_id, $msg_meta, &$reasons, &$content, &$tools, &$tool_calls): void
             {
                 try {
                     if (!$is_finished) {
-                        $this->sendStream($socket_id, $msg_data, $msg_meta, $tools, $content);
+                        $this->sendStream($socket_id, $msg_data, $msg_meta, $tools, $content, $reasons);
                     } else {
+                        $message = [
+                            'role'              => 'assistant',
+                            'content'           => trim($content),
+                            'reasoning_content' => trim($reasons)
+                        ];
+
                         if (!empty($tools)) {
-                            $tool_calls   = true;
-                            $tool_command = [];
+                            $tool_calls = true;
 
-                            foreach ($tools as $tool) {
-                                $tool_command[] = [
-                                    'id'       => $tool['id'],
-                                    'type'     => 'function',
-                                    'function' => [
-                                        'name'      => $tool['function']['name'],
-                                        'arguments' => $tool['function']['arguments']
-                                    ]
-                                ];
-                            }
+                            $message['tool_calls'] = array_map(fn(array $tool) => [
+                                'id'       => $tool['id'],
+                                'type'     => 'function',
+                                'function' => [
+                                    'name'      => $tool['function']['name'],
+                                    'arguments' => $tool['function']['arguments']
+                                ]
+                            ], $tools);
+                        }
 
-                            $this->core->addSessionHistory([
-                                'role'       => 'assistant',
-                                'content'    => trim($content),
-                                'tool_calls' => $tool_command
-                            ]);
+                        $this->core->addSessionHistory($message);
 
+                        if (!empty($tools)) {
                             $results = $this->core->execTools($tools);
 
                             foreach ($results as $result) {
                                 $this->sendMsg($socket_id, $msg_meta, 'tool_result', $result);
+
                                 $this->core->addSessionHistory([
                                     'role'         => 'tool',
                                     'tool_call_id' => $result['tool_call_id'],
                                     'content'      => $result['content']
                                 ]);
                             }
-                        } elseif ('' !== $content) {
-                            $this->core->addSessionHistory(['role' => 'assistant', 'content' => $content]);
+
+                            unset($results, $result);
                         }
+
+                        unset($message);
                     }
                 } catch (\Throwable $throwable) {
                     $this->sendMsg($socket_id, $msg_meta, 'error', ['message' => 'Internal error processing stream: ' . $throwable->getMessage()]);
@@ -167,7 +172,7 @@ class go extends Factory
                     unset($throwable);
                 }
 
-                unset($msg_key, $msg_data, $is_finished, $tool_command, $tool, $results, $result);
+                unset($msg_key, $msg_data, $is_finished);
             }
         );
 
@@ -186,11 +191,12 @@ class go extends Factory
      * @param array  $msg_meta
      * @param array  $tools
      * @param string $content
+     * @param string $reasons
      *
      * @return void
      * @throws \ReflectionException
      */
-    private function sendStream(int $socket_id, array $msg_data, array $msg_meta, array &$tools, string &$content): void
+    private function sendStream(int $socket_id, array $msg_data, array $msg_meta, array &$tools, string &$content, string &$reasons): void
     {
         $delta = $msg_data['choices'][0]['delta'] ?? [];
 
@@ -205,20 +211,21 @@ class go extends Factory
             } else {
                 if ('content' === $this->message_type) {
                     $content .= $delta['content'];
+                } elseif ('think' === $this->message_type) {
+                    $reasons .= $delta['content'];
                 }
 
                 $this->sendMsg($socket_id, $msg_meta, $this->message_type, $delta['content']);
             }
-
-            unset($delta);
-            return;
         }
 
         // Reasoning content
         if (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {
+            if ($this->core->agent_config['agent_llm']['keep_reasons']) {
+                $reasons .= $delta['reasoning_content'];
+            }
+
             $this->sendMsg($socket_id, $msg_meta, 'think', $delta['reasoning_content']);
-            unset($delta);
-            return;
         }
 
         // Tool calls

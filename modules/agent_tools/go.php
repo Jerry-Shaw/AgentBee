@@ -122,6 +122,17 @@ class go extends Factory
     }
 
     /**
+     * @return array
+     */
+    public function getTime(): array
+    {
+        $timestamp = time();
+        $datetime  = date('Y-m-d H:i:s', $timestamp);
+
+        return ['datetime' => $datetime, 'timestamp' => $timestamp];
+    }
+
+    /**
      * Read file content
      *
      * @param string $path

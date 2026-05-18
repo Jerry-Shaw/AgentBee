@@ -66,6 +66,17 @@ class tools
             ]
         ],
 
+        // ==================== getTime ====================
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'getTime',
+                'description' => "获取当前系统时间。\n\n" .
+                    "📤 **返回**：`{\"datetime\": \"YYYY-MM-DD HH:MM:SS\", \"timestamp\": 整数秒数}`\n\n" .
+                    "✅ **示例调用**：无参数，直接调用即可。",
+            ]
+        ],
+
         // ==================== readFile ====================
         [
             'type'     => 'function',

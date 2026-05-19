@@ -145,7 +145,7 @@ class go extends Factory
             mkdir($this->db_path, 0777, true);
         }
 
-        $db_file      = $this->db_path . 'mem.db';
+        $db_file      = $this->db_path . 'agent_memory.db';
         $this->libPDO = libPDO::new('sqlite', $db_file);
         $this->libPDO->connect();
 

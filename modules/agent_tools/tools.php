@@ -75,6 +75,22 @@ class tools
                 ],
             ],
         ],
+        // copyFile
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'copyFile',
+                'description' => "复制文件。\n参数：source（源文件路径），destination（目标路径）。\n目标文件存在时将被覆盖。\n返回：成功 → {\"file_copied\": \"File copied to: 目标路径\"}，失败 → {\"error\": \"...\"}",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'source'      => ['type' => 'string', 'description' => '源文件路径'],
+                        'destination' => ['type' => 'string', 'description' => '目标文件路径'],
+                    ],
+                    'required'   => ['source', 'destination'],
+                ],
+            ],
+        ],
         // deleteFile
         [
             'type'     => 'function',

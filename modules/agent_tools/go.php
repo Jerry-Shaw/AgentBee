@@ -198,6 +198,28 @@ class go extends Factory
     }
 
     /**
+     * @param string $source
+     * @param string $destination
+     *
+     * @return string[]
+     */
+    public function copyFile(string $source, string $destination): array
+    {
+        if (!is_file($source)) {
+            return ['error' => "File not found: {$source}"];
+        }
+
+        $copy = copy($source, $destination);
+
+        if (!$copy) {
+            return ['error' => "Failed to copy file: {$source}"];
+        }
+
+        unset($source, $copy);
+        return ['file_copied' => "File copied to: {$destination}"];
+    }
+
+    /**
      * Delete file
      *
      * @param string $path

@@ -401,29 +401,33 @@ class go extends Factory
             return ['error' => "Invalid level: {$level}"];
         }
 
-        // Validate role whitelist (applies to all levels including ram)
-        if (!in_array($role, self::ROLES, true)) {
-            unset($level, $content);
-            return ['error' => "Invalid role: {$role}"];
+        // Reject empty content to prevent storing meaningless entries
+        if ('' === $content) {
+            unset($level, $role);
+            return ['error' => 'Content cannot be empty'];
         }
 
-        // RAM: in-memory array
+        // RAM: in-memory array (validate role before storing)
         if ('ram' === $level) {
-            $this->ram_memory[] = ['role' => $role, 'content' => $content];
+            if (!in_array($role, self::ROLES, true)) {
+                unset($level, $content);
+                return ['error' => "Invalid role: {$role}"];
+            }
+
+            $this->ram_memory[] = ['role' => $role, 'content' => $content, 'created_at' => time()];
 
             $result = ['saved' => true, 'path' => 'ram://memory', 'role' => $role];
             unset($level, $role, $content);
             return $result;
         }
 
-        // Force role for system/important levels
+        // Force role for system/important levels (role is deterministic, no validation needed)
         if ('system' === $level) {
             $role = 'system';
         } elseif ('important' === $level) {
             $role = 'user';
-        }
-
-        if (!in_array($role, self::ROLES, true)) {
+        } elseif (!in_array($role, self::ROLES, true)) {
+            // Only validate role for daily level
             unset($level, $content);
             return ['error' => "Invalid role: {$role}"];
         }
@@ -465,12 +469,14 @@ class go extends Factory
             return ['error' => "Invalid level: {$level}"];
         }
 
-        // Auto-correct negative offset/length to 0
+        // Reject negative offset/length
         if (0 > $offset) {
-            $offset = 0;
+            unset($level, $length, $date);
+            return ['error' => 'offset must be >= 0, got: ' . $offset];
         }
         if (0 > $length) {
-            $length = 0;
+            unset($level, $offset, $date);
+            return ['error' => 'length must be >= 0, got: ' . $length];
         }
 
         // RAM: in-memory
@@ -558,12 +564,14 @@ class go extends Factory
             return ['error' => 'Keywords cannot be empty'];
         }
 
-        // Auto-correct negative offset/length to 0
+        // Reject negative offset/length
         if (0 > $offset) {
-            $offset = 0;
+            unset($level, $keywords, $length, $mode, $start_date, $end_date);
+            return ['error' => 'offset must be >= 0, got: ' . $offset];
         }
         if (0 > $length) {
-            $length = 0;
+            unset($level, $keywords, $offset, $mode, $start_date, $end_date);
+            return ['error' => 'length must be >= 0, got: ' . $length];
         }
 
         // Auto-correct reversed date range (swap start and end)
@@ -863,5 +871,248 @@ class go extends Factory
 
         unset($haystack, $keywords_lower, $mode);
         return true;
+    }
+
+    // =========================================================================
+    //  Memory Delete
+    // =========================================================================
+
+    /**
+     * Delete memory entries by keywords and/or time range
+     *
+     * Supports all four layers (system/important/daily/ram).
+     * - keywords: content-based matching (case-insensitive, AND/OR mode)
+     * - start_time/end_time: Unix timestamp range filter on created_at
+     * - At least one of keywords or time range must be provided
+     *
+     * @param string $level      system|important|daily|ram|all
+     * @param string $keywords   Comma-separated keywords (empty = no content filter)
+     * @param string $mode       or|and (default: or)
+     * @param string $start_date YYYYMMDD (only for daily layer date_key filter)
+     * @param string $end_date   YYYYMMDD (only for daily layer date_key filter)
+     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
+     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
+     *
+     * @return array ['deleted' => N] or ['error' => ...]
+     * @throws \ReflectionException
+     */
+    public function delete(
+        string $level,
+        string $keywords = '',
+        string $mode = 'or',
+        string $start_date = '',
+        string $end_date = '',
+        int    $start_time = 0,
+        int    $end_time = 0
+    ): array
+    {
+        if (!in_array($level, self::ALL_LEVELS, true)) {
+            return ['error' => "Invalid level: {$level}"];
+        }
+
+        if (!in_array($mode, self::SEARCH_MODE, true)) {
+            return ['error' => "Invalid mode: {$mode}"];
+        }
+
+        // Parse keywords
+        $kw_list = [];
+        if ('' !== $keywords) {
+            foreach (explode(',', $keywords) as $kw) {
+                $kw = trim($kw);
+                if ('' !== $kw) {
+                    $kw_list[] = strtolower($kw);
+                }
+            }
+        }
+
+        // Must have at least one filter condition
+        if (empty($kw_list) && 0 === $start_time && 0 === $end_time) {
+            return ['error' => 'At least one of keywords or time range (start_time/end_time) must be provided'];
+        }
+
+        $levels_to_process = ('all' === $level) ? self::LEVELS : [$level];
+        $total_deleted     = 0;
+
+        foreach ($levels_to_process as $lv) {
+            if ('ram' === $lv) {
+                $total_deleted += $this->deleteRAM($kw_list, $mode, $start_time, $end_time);
+            } else {
+                $total_deleted += $this->deleteFromDB($lv, $kw_list, $mode, $start_date, $end_date, $start_time, $end_time);
+            }
+        }
+
+        return ['deleted' => $total_deleted];
+    }
+
+    /**
+     * Delete matching entries from RAM memory array
+     *
+     * @param array  $kw_list    Lowercased keywords
+     * @param string $mode       or|and
+     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
+     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
+     *
+     * @return int Number of deleted entries
+     */
+    private function deleteRAM(array $kw_list, string $mode, int $start_time, int $end_time): int
+    {
+        $before_count = count($this->ram_memory);
+
+        $this->ram_memory = array_values(array_filter($this->ram_memory, function (array $entry) use ($kw_list, $mode, $start_time, $end_time): bool
+        {
+            // Time filter
+            $entry_time = $entry['created_at'] ?? 0;
+            if (0 !== $start_time && $entry_time < $start_time) {
+                return true;
+            }
+            if (0 !== $end_time && $entry_time > $end_time) {
+                return true;
+            }
+
+            // If no keywords, time match alone means delete
+            if (empty($kw_list)) {
+                return false;
+            }
+
+            // Keyword filter
+            $haystack = strtolower($entry['role'] . ' ' . $entry['content']);
+
+            if ('or' === $mode) {
+                foreach ($kw_list as $kw) {
+                    if (str_contains($haystack, $kw)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            // AND mode
+            foreach ($kw_list as $kw) {
+                if (!str_contains($haystack, $kw)) {
+                    return true;
+                }
+            }
+            return false;
+        }));
+
+        return $before_count - count($this->ram_memory);
+    }
+
+    /**
+     * Delete matching entries from database (system/important/daily)
+     * Uses SQL WHERE with parameter binding for safe deletion
+     *
+     * @param string $level      system|important|daily
+     * @param array  $kw_list    Lowercased keywords
+     * @param string $mode       or|and
+     * @param string $start_date YYYYMMDD (for daily date_key filter)
+     * @param string $end_date   YYYYMMDD (for daily date_key filter)
+     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
+     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
+     *
+     * @return int Number of deleted entries
+     * @throws \ReflectionException
+     */
+    private function deleteFromDB(string $level, array $kw_list, string $mode, string $start_date, string $end_date, int $start_time, int $end_time): int
+    {
+        $this->initDB();
+
+        // Build WHERE conditions
+        $conditions = [['level', '=', $level]];
+
+        // Date range filter for daily layer
+        if ('daily' === $level) {
+            if ('' !== $start_date && '' !== $end_date) {
+                $conditions[] = ['date_key', '>=', $start_date];
+                $conditions[] = ['date_key', '<=', $end_date];
+            } elseif ('' !== $start_date) {
+                $conditions[] = ['date_key', '>=', $start_date];
+            } elseif ('' !== $end_date) {
+                $conditions[] = ['date_key', '<=', $end_date];
+            }
+        }
+
+        // Time range filter
+        if (0 !== $start_time) {
+            $conditions[] = ['created_at', '>=', $start_time];
+        }
+        if (0 !== $end_time) {
+            $conditions[] = ['created_at', '<=', $end_time];
+        }
+
+        // If no keywords, delete by conditions directly
+        if (empty($kw_list)) {
+            // First count, then delete
+            $count = (int)($this->db->setTableOnce('messages')
+                ->select($this->db->useSql('COUNT(*) AS cnt'))
+                ->where(...$conditions)
+                ->fetch()['cnt'] ?? 0);
+
+            if (0 === $count) {
+                return 0;
+            }
+
+            $this->db->setTableOnce('messages')
+                ->where(...$conditions)
+                ->delete()
+                ->execute();
+
+            return $count;
+        }
+
+        // With keywords: build LIKE conditions with parameter binding
+        $like_clauses = [];
+        $like_binds   = [];
+
+        foreach ($kw_list as $kw) {
+            $like_clauses[] = 'LOWER(content) LIKE ?';
+            $like_binds[]   = '%' . $kw . '%';
+        }
+
+        $glue         = ('or' === $mode) ? ' OR ' : ' AND ';
+        $content_expr = '(' . implode($glue, $like_clauses) . ')';
+
+        // Build full SQL with manual PDO binding (libSQLite doesn't support raw SQL in WHERE for LIKE)
+        $sql  = "DELETE FROM messages WHERE level = ? AND {$content_expr}";
+        $bind = array_merge([$level], $like_binds);
+
+        // Add date range filter for daily
+        if ('daily' === $level) {
+            if ('' !== $start_date && '' !== $end_date) {
+                $sql    .= ' AND date_key >= ? AND date_key <= ?';
+                $bind[] = $start_date;
+                $bind[] = $end_date;
+            } elseif ('' !== $start_date) {
+                $sql    .= ' AND date_key >= ?';
+                $bind[] = $start_date;
+            } elseif ('' !== $end_date) {
+                $sql    .= ' AND date_key <= ?';
+                $bind[] = $end_date;
+            }
+        }
+
+        // Add time range filter
+        if (0 !== $start_time) {
+            $sql    .= ' AND created_at >= ?';
+            $bind[] = $start_time;
+        }
+        if (0 !== $end_time) {
+            $sql    .= ' AND created_at <= ?';
+            $bind[] = $end_time;
+        }
+
+        try {
+            $stmt = $this->libPDO->pdo->prepare($sql);
+            $stmt->execute($bind);
+            $deleted = $stmt->rowCount();
+
+            unset($like_clauses, $like_binds, $kw, $glue, $content_expr);
+            unset($sql, $bind, $stmt);
+            return (int)$deleted;
+        } catch (\Throwable) {
+            unset($like_clauses, $like_binds, $kw, $glue, $content_expr);
+            unset($sql, $bind);
+            return 0;
+        }
     }
 }

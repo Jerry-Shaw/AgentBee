@@ -169,5 +169,36 @@ class tools
                 ],
             ],
         ],
+        // delete
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'delete',
+                'description' => "删除记忆条目，支持按关键词和/或时间范围删除。\n\n" .
+                    "参数：\n" .
+                    "- level (string, 必填): system | important | daily | ram | all\n" .
+                    "- keywords (string, 可选, 默认空): 逗号分隔的关键词，匹配 content 内容\n" .
+                    "- mode (string, 可选, 默认 or): or | and，关键词匹配模式\n" .
+                    "- start_date (string, 可选): 起始日期 YYYYMMDD（仅 daily 层有效）\n" .
+                    "- end_date (string, 可选): 结束日期 YYYYMMDD（仅 daily 层有效）\n" .
+                    "- start_time (int, 可选, 默认 0): Unix 时间戳下限（0=不限）\n" .
+                    "- end_time (int, 可选, 默认 0): Unix 时间戳上限（0=不限）\n\n" .
+                    "至少需要提供 keywords、start_time/end_time、start_date/end_date 中的一组条件。\n\n" .
+                    "返回：{\"deleted\": N} 表示删除条数；失败 → {\"error\": \"...\"}",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram', 'all']],
+                        'keywords'   => ['type' => 'string', 'description' => '逗号分隔的关键词', 'default' => ''],
+                        'mode'       => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'],
+                        'start_date' => ['type' => 'string', 'pattern' => '^\\d{8}$', 'description' => '起始日期 YYYYMMDD'],
+                        'end_date'   => ['type' => 'string', 'pattern' => '^\\d{8}$', 'description' => '结束日期 YYYYMMDD'],
+                        'start_time' => ['type' => 'integer', 'description' => 'Unix时间戳下限', 'default' => 0],
+                        'end_time'   => ['type' => 'integer', 'description' => 'Unix时间戳上限', 'default' => 0],
+                    ],
+                    'required'   => ['level'],
+                ],
+            ],
+        ],
     ];
 }

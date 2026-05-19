@@ -35,10 +35,10 @@
     }
   },
   "agent_task": {
-    "provider": "agent_memory"
+    "provider": "agent_mem_file"
   },
   "agent_memory": {
-    "provider": "agent_memory",
+    "provider": "agent_mem_file",
     "max_history": 20
   },
   "agent_tools": {
@@ -47,7 +47,7 @@
     "workspace_path": "E:\\Projects\\Codes\\AgentBee\\workspace",
     "list": [
       {
-        "name": "agent_memory"
+        "name": "agent_mem_file"
       },
       {
         "name": "agent_tools"

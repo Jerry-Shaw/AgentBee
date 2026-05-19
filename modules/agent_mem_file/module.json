@@ -1,13 +1,12 @@
 {
-  "name": "agent_memory",
+  "name": "agent_mem_file",
   "version": "0.1.0",
   "description": "三层记忆管理系统 - System/Important/Daily，使用JSONL格式存储，支持模糊搜索和上下文获取",
   "author": "秋水之冰",
   "email": "27206617@qq.com",
   "entry": "go.php",
   "repo": "",
-  "dependencies": {
-  },
+  "dependencies": {},
   "requires": {
     "php": ">=8.1"
   }

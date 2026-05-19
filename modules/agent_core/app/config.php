@@ -106,10 +106,10 @@ class config extends Factory
                 ],
             ],
             'agent_task'   => [
-                'provider' => 'agent_memory',
+                'provider' => 'agent_mem_file',
             ],
             'agent_memory' => [
-                'provider'    => 'agent_memory',
+                'provider'    => 'agent_mem_file',
                 'max_history' => 20,
             ],
             'agent_tools'  => [
@@ -117,7 +117,7 @@ class config extends Factory
                 'in_sandbox'     => true,
                 'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
                 'list'           => [
-                    ['name' => 'agent_memory'],
+                    ['name' => 'agent_mem_file'],
                     ['name' => 'agent_tools'],
                     ['name' => 'agent_claw'],
                 ],

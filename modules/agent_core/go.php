@@ -125,10 +125,14 @@ class go extends Factory
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function onMessage(int $socket_id, string $message): void
+    public function onMessage(int $socket_id, string $message, bool $is_binary): void
     {
         if ('' === $message) {
             return;
+        }
+
+        if ($is_binary) {
+            $message = $this->message->process_binary($socket_id, $message);
         }
 
         $end_data = [];

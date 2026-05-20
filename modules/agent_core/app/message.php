@@ -36,7 +36,7 @@ class message extends Factory
     {
         return [
             'agent_llm' => true,
-            'text'      => $data['text']
+            'content'   => $data['text']
         ];
     }
 
@@ -78,8 +78,8 @@ class message extends Factory
 
             // 3. Handle text files (only allowed pure text content)
             if ('file' === $data['type']) {
-                if (isset($data['file']['text']) && '' !== $data['file']['text']) {
-                    $content[] = ['type' => 'text', 'text' => $data['file']['text']];
+                if (isset($data['file']['content']) && '' !== $data['file']['content']) {
+                    $content[] = ['type' => 'text', 'text' => $data['file']['content']];
                 }
             }
         }
@@ -98,6 +98,91 @@ class message extends Factory
             'agent_llm' => true,
             'content'   => $content
         ];
+    }
+
+    /**
+     * Process binary data with multimodal content
+     *
+     * @param int    $socket_id
+     * @param string $data Binary data from WebSocket
+     *
+     * @return string JSON string that can be processed by onMessage
+     * @throws \Exception
+     */
+    public function process_binary(int $socket_id, string $data): string
+    {
+        if (4 > strlen($data)) {
+            throw new \Exception('Binary packet too short', E_USER_NOTICE);
+        }
+
+        $meta_len = unpack('N', substr($data, 0, 4))[1];
+
+        if (0 >= $meta_len || $meta_len > strlen($data) - 4) {
+            throw new \Exception('Invalid metadata length', E_USER_NOTICE);
+        }
+
+        $meta = json_decode(substr($data, 4, $meta_len), true);
+
+        if (!is_array($meta) || !isset($meta['content'])) {
+            throw new \Exception('Invalid JSON metadata', E_USER_NOTICE);
+        }
+
+        // Extract binary blocks
+        $binary_offset = 0;
+        $binary_blocks = [];
+        $binary_data   = substr($data, 4 + $meta_len);
+
+        if (isset($meta['binary_sizes']) && is_array($meta['binary_sizes'])) {
+            foreach ($meta['binary_sizes'] as $size) {
+                $binary_blocks[] = substr($binary_data, $binary_offset, $size);
+                $binary_offset   += $size;
+            }
+        } elseif (!empty($binary_data)) {
+            $binary_blocks[] = $binary_data;
+        }
+
+        // Replace placeholders
+        $content   = $meta['content'];
+        $block_idx = 0;
+
+        foreach ($content as $key => $item) {
+            if (!isset($item['type'])) {
+                continue;
+            }
+
+            // Handle image_url
+            if ('image_url' === $item['type'] && isset($item['image_url']['url']) && str_starts_with($item['image_url']['url'], '__BINARY__')) {
+                $binary = $binary_blocks[$block_idx++] ?? '';
+
+                if ('' !== $binary) {
+                    $content[$key]['image_url']['url'] = 'data:' . $this->get_image_mime_type($binary) . ';base64,' . base64_encode($binary);
+                } else {
+                    unset($content[$key]);
+                }
+            }
+
+            // Handle file
+            if ('file' === $item['type'] && isset($item['file']['content']) && str_starts_with($item['file']['content'], '__BINARY__')) {
+                $binary = $binary_blocks[$block_idx++] ?? '';
+
+                if ('' !== $binary) {
+                    $content[$key]['file']['content'] = !mb_check_encoding($binary, 'UTF-8')
+                        ? mb_convert_encoding($binary, 'UTF-8', 'auto')
+                        : $binary;
+                } else {
+                    unset($content[$key]);
+                }
+            }
+        }
+
+        $meta['content'] = array_values($content);
+
+        unset($meta['binary_sizes']);
+
+        $result = json_encode($meta, JSON_UNESCAPED_UNICODE);
+
+        unset($socket_id, $data, $meta_len, $meta, $binary_data, $binary_offset, $binary_blocks, $content, $block_idx);
+        return $result;
     }
 
     /**
@@ -128,5 +213,45 @@ class message extends Factory
 
         unset($filename, $whitelist, $extension);
         return $allowed;
+    }
+
+    /**
+     * Detect image MIME type from binary data using magic bytes
+     *
+     * @param string $binary
+     *
+     * @return string
+     */
+    private function get_image_mime_type(string $binary): string
+    {
+        if (empty($binary)) {
+            return 'image/jpeg';
+        }
+
+        $magic = substr($binary, 0, 12);
+        $hex   = bin2hex($magic);
+
+        if (str_starts_with($hex, 'ffd8')) {
+            return 'image/jpeg';
+        }
+
+        if (str_starts_with($hex, '89504e47')) {
+            return 'image/png';
+        }
+
+        if (str_starts_with($hex, '47494638')) {
+            return 'image/gif';
+        }
+
+        if (str_starts_with($hex, '52494646') && str_contains($hex, '57454250')) {
+            return 'image/webp';
+        }
+
+        if (str_starts_with($hex, '424d')) {
+            return 'image/bmp';
+        }
+
+        unset($binary, $magic, $hex);
+        return 'image/jpeg';
     }
 }

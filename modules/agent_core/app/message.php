@@ -36,7 +36,7 @@ class message extends Factory
     {
         return [
             'agent_llm' => true,
-            'content'   => $data['text']
+            'content'   => $data['text'] ?? $data['message'] ?? ''
         ];
     }
 

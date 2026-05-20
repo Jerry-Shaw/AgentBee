@@ -67,6 +67,10 @@ final class core extends Factory
             $this->session_history_limit = $this->agent_config['agent_memory']['max_history'];
         }
 
+        if ('' === $this->agent_config['agent_tools']['workspace_path'] || !is_dir($this->agent_config['agent_tools']['workspace_path'])) {
+            $this->agent_config['agent_tools']['workspace_path'] = $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
+        }
+
         $this->agent_config['agent_tools']['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
     }
 

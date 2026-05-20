@@ -20,7 +20,7 @@
 
 declare(strict_types = 1);
 
-const AGENT_VERSION = '2026.5.18';
+const AGENT_VERSION = '2026.5.20';
 
 use Nervsys\Core\Lib\App;
 

@@ -47,7 +47,6 @@ class message extends Factory
      * - 'text' (string): plain text message
      * - 'images' (array): list of images, each can be:
      *      - full Data URL (e.g. "data:image/png;base64,...")
-     *      - public URL (e.g. "https://example.com/a.jpg")
      *      - associative array ['name' => ..., 'mime' => ..., 'data' => ...] (base64 data)
      * - 'files' (array): list of text files, each as:
      *      ['name' => ..., 'mime' => ..., 'content' => ...] (raw text content)

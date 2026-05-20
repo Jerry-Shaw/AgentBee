@@ -165,7 +165,7 @@ class go extends Factory
         }
 
         if (!empty($llm_data)) {
-            $this->core->addSessionHistory(['role' => 'user', 'content' => implode("\n", $llm_data)]);
+            $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
             $this->core->agent_llm->chat($socket_id, $msg_meta, $this->core->getLLMParams());
         }
 

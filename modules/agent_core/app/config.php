@@ -77,7 +77,7 @@ class config extends Factory
                 'ping_interval' => 30,
             ],
             'agent_llm'    => [
-                'provider'     => 'llm_openai',
+                'provider'     => 'agent_openai',
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
                 'model'        => 'qwen3.6-27b-neo-code',

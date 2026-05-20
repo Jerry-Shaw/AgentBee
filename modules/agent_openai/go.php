@@ -1,7 +1,7 @@
 <?php
 
 /**
- * llm_openai module for AgentBee
+ * agent_openai module for AgentBee
  *
  * Copyright 2026 秋水之冰 <27206617@qq.com>
  *
@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\llm_openai;
+namespace modules\agent_openai;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
@@ -81,6 +81,8 @@ class go extends Factory
 
         while ($go_next) {
             $history = $this->core->getSessionHistory();
+
+            var_dump(11111, $history);
 
             $this->fiberMgr->addTask(
                 $stack_id,

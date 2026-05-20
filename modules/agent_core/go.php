@@ -154,7 +154,7 @@ class go extends Factory
                 $llm_data = $message_data['content'];
             }
 
-            unset($data['message']);
+            unset($data['content']);
             $end_data[] = $data;
         }
 

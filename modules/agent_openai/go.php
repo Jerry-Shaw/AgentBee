@@ -82,8 +82,6 @@ class go extends Factory
         while ($go_next) {
             $history = $this->core->getSessionHistory();
 
-            var_dump(11111, $history);
-
             $this->fiberMgr->addTask(
                 $stack_id,
                 function () use ($socket_id, $history, $msg_meta, $llm_params, &$go_next): array

@@ -148,10 +148,10 @@ class go extends Factory
                 continue;
             }
 
-            $message_data = $this->message->$message_type($socket_id, $data);
+            $message_data = $this->message->$message_type($socket_id, $data['content']);
 
             if ($message_data['agent_llm']) {
-                $llm_data[] = $message_data['text'];
+                $llm_data = $message_data['content'];
             }
 
             unset($data['message']);

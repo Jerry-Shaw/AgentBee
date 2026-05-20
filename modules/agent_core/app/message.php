@@ -36,7 +36,7 @@ class message extends Factory
     {
         return [
             'agent_llm' => true,
-            'text'      => $data['message']
+            'text'      => $data['text']
         ];
     }
 
@@ -55,76 +55,33 @@ class message extends Factory
      *
      * @return array Associative array with 'agent_llm' (bool) and 'text' (multimodal content array).
      */
-    public function process_chat(int $socket_id, array $data): array
+    public function process_chat(int $socket_id, array $data_content): array
     {
         $content = [];
 
-        // 1. Handle plain text
-        if (isset($data['text'])) {
-            $data['text'] = trim($data['text']);
-
-            if ('' !== $data['text']) {
-                $content[] = [
-                    'type' => 'text',
-                    'text' => $data['text']
-                ];
+        foreach ($data_content as $data) {
+            if (!isset($data['type'])) {
+                continue;
             }
-        }
 
-        // 2. Handle images
-        if (isset($data['images']) && is_array($data['images'])) {
-            foreach ($data['images'] as $image) {
-                $image_url = '';
+            // 1. Handle plain text
+            if ('text' === $data['type']) {
+                $content[] = ['type' => 'text', 'text' => trim($data['text'] ?? '')];
+            }
 
-                if (is_string($image)) {
-                    $image_url = $image;
-                } elseif (is_array($image) && isset($image['data'])) {
-                    $mime      = $image['mime'] ?? 'image/jpeg';
-                    $image_url = 'data:' . $mime . ';base64,' . $image['data'];
-                }
-
-                if ('' !== $image_url) {
-                    $content[] = [
-                        'type'      => 'image_url',
-                        'image_url' => ['url' => $image_url]
-                    ];
+            // 2. Handle images
+            if ('image_url' === $data['type']) {
+                if (isset($data['image_url']['url']) && '' !== $data['image_url']['url']) {
+                    $content[] = ['type' => 'image_url', 'image_url' => ['url' => $data['image_url']['url']]];
                 }
             }
 
-            unset($image, $image_url, $mime);
-        }
-
-        // 3. Handle text files (only allowed pure text content)
-        if (isset($data['files']) && is_array($data['files'])) {
-            foreach ($data['files'] as $file) {
-                if (!isset($file['content']) || '' === $file['content']) {
-                    continue;
+            // 3. Handle text files (only allowed pure text content)
+            if ('file' === $data['type']) {
+                if (isset($data['file']['text']) && '' !== $data['file']['text']) {
+                    $content[] = ['type' => 'text', 'text' => $data['file']['text']];
                 }
-
-                $file_name    = $file['name'] ?? 'unknown';
-                $file_content = $file['content'];
-
-                if (!$this->file_is_allowed($file_name)) {
-                    $content[] = [
-                        'type' => 'text',
-                        'text' => '【File ' . $file_name . '】 type not allowed, skipped. Allowed: js, php, html, css, md, txt, json, py, sh, xml, sql, etc.'
-                    ];
-
-                    continue;
-                }
-
-                // Limit content length to avoid token overflow
-                if (40960 < mb_strlen($file_content, 'UTF-8')) {
-                    $file_content = mb_substr($file_content, 0, 40960, 'UTF-8') . "\n...[content truncated]";
-                }
-
-                $content[] = [
-                    'type' => 'text',
-                    'text' => '【Content of file ' . $file_name . '】' . "\n" . '```' . "\n" . $file_content . "\n" . '```'
-                ];
             }
-
-            unset($file, $file_name, $file_content);
         }
 
         // Ensure there is at least one content item
@@ -139,7 +96,7 @@ class message extends Factory
 
         return [
             'agent_llm' => true,
-            'text'      => $content
+            'content'   => $content
         ];
     }
 

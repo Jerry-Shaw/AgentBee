@@ -29,6 +29,8 @@ class go extends Factory
     public core    $core;
     public message $message;
 
+    public array $socket_session = [];
+
     /**
      * @throws \ReflectionException
      * @throws \Exception
@@ -41,9 +43,10 @@ class go extends Factory
         $this->core->initTools();
         $this->core->initModules();
 
-        if (!is_dir($this->core->agent_config['agent_tools']['workspace_path'])) {
+        $workspace_path = $this->core->agent_config['agent_tools']['workspace_path'] ?? '';
+        if ('' !== $workspace_path && !is_dir($workspace_path)) {
             try {
-                mkdir($this->core->agent_config['agent_tools']['workspace_path'], 0777, true);
+                mkdir($workspace_path, 0777, true);
             } catch (\Throwable) {
             }
         }
@@ -53,15 +56,31 @@ class go extends Factory
     }
 
     /**
+     * Start WebSocket server and worker process.
+     *
      * @return void
+     * @throws \Exception
      */
     public function start(): void
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
+        $this->core->agent_llm->setWorkType('procWorker');
+
+        $this->core->procMgr->command([
+            $this->core->OSMgr->getPhpPath(),
+            $this->core->app->script_path,
+            '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['work_name']
+        ])->run(core::PROC_IDX_OPENAI);
+
         try {
             $this->core->socketMgr
                 ->setDebugMode($this->core->agent_config['debug'])
+                ->addExternalProc(
+                    $this->core->procMgr->getProc(core::PROC_IDX_OPENAI),
+                    [$this, 'streamWorkerHandler'],
+                    [$this, 'streamWorkerHandler']
+                )
                 ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'] * 2)
                 ->setEventListener('onHandshake', [$this, 'onHandshake'])
                 ->setEventListener('onHeartbeat', [$this, 'onHeartbeat'])
@@ -74,27 +93,126 @@ class go extends Factory
     }
 
     /**
-     * @param int    $socket_id
-     * @param string $ws_proto
+     * Callback for external stream (stdout from worker).
+     *
+     * @param string $external_stream_id
+     * @param array  $context
+     *
+     * @return void
+     * @throws \ReflectionException
+     * @throws \Exception
+     */
+    public function streamWorkerHandler(string $external_stream_id, array $context): void
+    {
+        static $line_buffers = [];
+
+        $stdout_stream = $context['stdout'];
+        $data_chunk    = fread($stdout_stream, 8192);
+
+        if (false === $data_chunk || '' === $data_chunk) {
+            $this->core->socketMgr->cleanExternalProc($external_stream_id);
+            unset($line_buffers[$external_stream_id]);
+            return;
+        }
+
+        $buffer = &$line_buffers[$external_stream_id];
+        $buffer .= $data_chunk;
+
+        while (false !== ($line_pos = strpos($buffer, "\n"))) {
+            $line   = substr($buffer, 0, $line_pos);
+            $buffer = substr($buffer, $line_pos + 1);
+            $line   = trim($line);
+
+            if ('' === $line) {
+                continue;
+            }
+
+            $message = json_decode($line, true);
+
+            if (!is_array($message)) {
+                continue;
+            }
+
+            $action    = $message['action'] ?? '';
+            $socket_id = $message['socket_id'] ?? '';
+            $payload   = $message['payload'] ?? [];
+
+            switch ($action) {
+                case 'message':
+                    $this->core->sendMessage($socket_id, json_encode($payload));
+                    break;
+
+                case 'history':
+                    if (isset($payload['type'], $payload['data'])) {
+                        $this->core->addSessionHistory($payload['data']);
+                    }
+                    break;
+
+                case 'action':
+                    $payload_type = $payload['type'] ?? '';
+
+                    if ('complete' === $payload_type) {
+                        $tool_calls = $payload['data']['tool_calls'] ?? false;
+
+                        if ($tool_calls) {
+                            $message_metadata = array_filter(
+                                $payload,
+                                function (string $key): bool
+                                {
+                                    return !in_array($key, ['type', 'data'], true);
+                                },
+                                ARRAY_FILTER_USE_KEY
+                            );
+
+                            $current_history = $this->core->getSessionHistory();
+                            $this->core->agent_llm->chat($socket_id, $message_metadata, $current_history);
+                        }
+                    } elseif ('end' === $payload_type) {
+                        $this->core->sendMessage($socket_id, json_encode(['type' => 'end']));
+                        $this->core->socketMgr->cleanExternalProc($external_stream_id);
+
+                        unset($line_buffers[$external_stream_id]);
+                    }
+                    break;
+            }
+        }
+
+        if (feof($stdout_stream)) {
+            unset($line_buffers[$external_stream_id]);
+            $this->core->socketMgr->cleanExternalProc($external_stream_id);
+        }
+
+        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $action, $socket_id, $payload, $payload_type, $tool_calls, $message_metadata, $current_history);
+    }
+
+    /**
+     * WebSocket handshake callback.
+     *
+     * @param string $socket_id
+     * @param string $websocket_protocol
      *
      * @return bool
      */
-    public function onHandshake(int $socket_id, string $ws_proto): bool
+    public function onHandshake(string $socket_id, string $websocket_protocol): bool
     {
+        unset($socket_id, $websocket_protocol);
         return true;
     }
 
     /**
-     * @param int $socket_id
+     * Heartbeat callback.
+     *
+     * @param string $socket_id
      *
      * @return string
      * @throws \Exception
      */
-    public function onHeartbeat(int $socket_id): string
+    public function onHeartbeat(string $socket_id): string
     {
         $task_list = $this->core->agent_task->runTask();
 
         if (empty($task_list)) {
+            unset($socket_id, $task_list);
             return '';
         }
 
@@ -115,17 +233,33 @@ class go extends Factory
             '5. 重要事件可额外存入 important 层。';
 
         $this->core->addSessionHistory(['role' => 'user', 'content' => $task_content]);
-        $this->core->agent_llm->chat($socket_id, [], $this->core->getLLMParams());
 
-        unset($socket_id, $task_list, $task_jobs, $task_json, $task_content);
+        $current_history = $this->core->getSessionHistory();
+
+        $this->core->agent_llm->chat(
+            $socket_id,
+            [
+                'sessionId' => $this->socket_session[$socket_id] ?? 'sessionId undefined',
+                'messageId' => 'Task Request'
+            ],
+            $current_history);
+
+        unset($socket_id, $task_list, $task_jobs, $task_json, $task_content, $current_history);
         return '';
     }
 
     /**
+     * WebSocket message callback.
+     *
+     * @param string $socket_id
+     * @param string $message
+     * @param bool   $is_binary
+     *
+     * @return void
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function onMessage(int $socket_id, string $message, bool $is_binary): void
+    public function onMessage(string $socket_id, string $message, bool $is_binary): void
     {
         if ('' === $message) {
             return;
@@ -139,59 +273,64 @@ class go extends Factory
         $llm_data = [];
         $messages = str_contains($message, "\n") ? explode("\n", $message) : [$message];
 
-        foreach ($messages as $message) {
-            $data = json_decode($message, true);
-
+        foreach ($messages as $line) {
+            $data = json_decode($line, true);
             if (!is_array($data) || !isset($data['type'])) {
                 continue;
             }
 
-            $message_type = 'process_' . $data['type'];
+            $this->socket_session[$socket_id] = $data['sessionId'] ?? 'sessionId undefined';
 
-            if (!method_exists($this->message, $message_type)) {
+            $type_method = 'process_' . $data['type'];
+            if (!method_exists($this->message, $type_method)) {
                 continue;
             }
 
-            $message_data = $this->message->$message_type($socket_id, $data['content'] ?? $data);
-
-            if ($message_data['agent_llm']) {
-                $llm_data = $message_data['content'];
+            $result = $this->message->$type_method($socket_id, $data['content'] ?? $data);
+            if ($result['agent_llm']) {
+                $llm_data = $result['content'];
             }
 
             unset($data['content']);
             $end_data[] = $data;
         }
 
-        $msg_meta = array_pop($end_data);
-
-        foreach ($end_data as $send_end) {
-            $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $send_end));
+        $message_metadata = array_pop($end_data);
+        foreach ($end_data as $end_packet) {
+            $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $end_packet));
         }
 
         if (!empty($llm_data)) {
             $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
-            $this->core->agent_llm->chat($socket_id, $msg_meta, $this->core->getLLMParams());
+            $current_history = $this->core->getSessionHistory();
+            $this->core->agent_llm->chat($socket_id, $message_metadata, $current_history);
         }
 
-        unset($socket_id, $message, $end_data, $llm_data, $messages, $data, $message_type, $message_data, $msg_meta, $send_end);
+        unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet, $current_history);
     }
 
     /**
-     * @param int $socket_id
+     * Callback for sending string messages.
+     *
+     * @param string $socket_id
      *
      * @return array
      */
-    public function onSendString(int $socket_id): array
+    public function onSendString(string $socket_id): array
     {
+        unset($socket_id);
         return [];
     }
 
     /**
-     * @param int $socket_id
+     * WebSocket close callback.
+     *
+     * @param string $socket_id
      *
      * @return void
      */
-    public function onClose(int $socket_id): void
+    public function onClose(string $socket_id): void
     {
+        unset($socket_id);
     }
 }

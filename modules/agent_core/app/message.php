@@ -25,6 +25,22 @@ use Nervsys\Core\Factory;
 class message extends Factory
 {
     /**
+     * Process stop message from client.
+     *
+     * @param string $socket_id
+     * @param array  $data
+     *
+     * @return array
+     */
+    public function process_stop(string $socket_id, array $data): array
+    {
+        // Call LLM module to interrupt
+        \modules\agent_core\core::new()->agent_llm->interrupt($socket_id);
+        unset($socket_id, $data);
+        return ['agent_llm' => false, 'content' => ''];
+    }
+
+    /**
      * Normal text chat
      *
      * @param int   $socket_id
@@ -32,7 +48,7 @@ class message extends Factory
      *
      * @return array
      */
-    public function process_text(int $socket_id, array $data): array
+    public function process_text(string $socket_id, array $data): array
     {
         return [
             'agent_llm' => true,
@@ -55,7 +71,7 @@ class message extends Factory
      *
      * @return array Associative array with 'agent_llm' (bool) and 'text' (multimodal content array).
      */
-    public function process_chat(int $socket_id, array $data_content): array
+    public function process_chat(string $socket_id, array $data_content): array
     {
         $content = [];
 
@@ -109,7 +125,7 @@ class message extends Factory
      * @return string JSON string that can be processed by onMessage
      * @throws \Exception
      */
-    public function process_binary(int $socket_id, string $data): string
+    public function process_binary(string $socket_id, string $data): string
     {
         if (4 > strlen($data)) {
             throw new \Exception('Binary packet too short', E_USER_NOTICE);

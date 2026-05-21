@@ -32,6 +32,9 @@ final class core extends Factory
 {
     use System;
 
+    public const PROC_IDX_OPENAI = 0;
+    public const PROC_IDX_EXEC   = 1;
+
     public config    $config;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
@@ -49,6 +52,8 @@ final class core extends Factory
     public int   $session_history_limit = 20;
 
     /**
+     * Initialize core components.
+     *
      * @return void
      * @throws \ReflectionException
      */
@@ -75,6 +80,8 @@ final class core extends Factory
     }
 
     /**
+     * Initialize all modules.
+     *
      * @return void
      * @throws \ReflectionException
      */
@@ -92,7 +99,6 @@ final class core extends Factory
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
-                continue;
             }
         }
 
@@ -100,32 +106,29 @@ final class core extends Factory
     }
 
     /**
+     * Initialize tools.
+     *
      * @return void
      * @throws \ReflectionException
      */
     public function initTools(): void
     {
-        if (!isset($this->agent_config['agent_tools']) || !isset($this->agent_config['agent_tools']['enabled'])) {
-            return;
-        }
-
-        if (true !== $this->agent_config['agent_tools']['enabled']) {
+        if (!isset($this->agent_config['agent_tools']['enabled']) || true !== $this->agent_config['agent_tools']['enabled']) {
             return;
         }
 
         $agent_tools = [];
+        $tool_list   = $this->agent_config['agent_tools']['list'] ?? [];
 
-        $this->agent_config['agent_tools']['list'] ??= [];
-
-        foreach ($this->agent_config['agent_tools']['list'] as $tool) {
+        foreach ($tool_list as $tool) {
             $tool_class = '\\modules\\' . $tool['name'] . '\\go';
             $tool_meta  = '\\modules\\' . $tool['name'] . '\\tools';
 
             try {
                 $metadata = $tool_meta::META;
 
-                foreach ($metadata as $key => $meta) {
-                    $metadata[$key]['function']['name'] = $tool['name'] . '/' . $meta['function']['name'];
+                foreach ($metadata as $index => $meta_item) {
+                    $metadata[$index]['function']['name'] = $tool['name'] . '/' . $meta_item['function']['name'];
                 }
 
                 $this->agent_tools[$tool['name']] = $tool_class::new();
@@ -134,7 +137,6 @@ final class core extends Factory
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
-                continue;
             }
         }
 
@@ -143,10 +145,12 @@ final class core extends Factory
             $this->llm_tools['tool_choice'] = 'auto';
         }
 
-        unset($agent_tools, $tool, $tool_class, $tool_meta, $metadata, $key, $meta);
+        unset($agent_tools, $tool_list, $tool, $tool_class, $tool_meta, $metadata, $index, $meta_item);
     }
 
     /**
+     * Add a message to session history.
+     *
      * @param array $content
      *
      * @return void
@@ -168,10 +172,10 @@ final class core extends Factory
 
             $target_id = 0;
             $min_diff  = INF;
-            $drop      = $message_count - $this->session_history_limit;
+            $drop_num  = $message_count - $this->session_history_limit;
 
             foreach ($user_keys as $id) {
-                $diff = abs($drop - $id);
+                $diff = abs($drop_num - $id);
                 if ($diff < $min_diff) {
                     $min_diff  = $diff;
                     $target_id = $id;
@@ -185,13 +189,15 @@ final class core extends Factory
                 array_splice($this->session_history, 1, $target_id);
             }
 
-            unset($role_list, $user_keys, $target_id, $min_diff, $drop, $id, $diff);
+            unset($role_list, $user_keys, $target_id, $min_diff, $drop_num, $id, $diff);
         }
 
         unset($content, $message_count);
     }
 
     /**
+     * Get current session history.
+     *
      * @return array
      */
     public function getSessionHistory(): array
@@ -200,6 +206,8 @@ final class core extends Factory
     }
 
     /**
+     * Get system memory prompt.
+     *
      * @return array
      * @throws \Exception
      */
@@ -218,11 +226,13 @@ final class core extends Factory
             $system_default['content'] .= implode("\n", $memory);
         }
 
-        unset($system_memory, $memory);
+        unset($system_memory, $memory, $message);
         return $system_default;
     }
 
     /**
+     * Execute tool calls.
+     *
      * @param array $tool_calls
      *
      * @return array
@@ -234,59 +244,41 @@ final class core extends Factory
 
         foreach ($tool_calls as $tool_call) {
             $fn_name = $tool_call['function']['name'];
-            $fn_argv = json_decode($tool_call['function']['arguments'], true) ?? [];
+            $fn_args = json_decode($tool_call['function']['arguments'], true) ?? [];
 
             if (!str_contains($fn_name, '/')) {
                 $results[] = [
                     'tool_call_id'  => $tool_call['id'],
                     'function_name' => $fn_name,
-                    'content'       => json_encode([
-                        'status'  => 'error',
-                        'message' => 'Invalid tool function name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'
-                    ], JSON_FORMAT)
+                    'content'       => json_encode(['status' => 'error', 'message' => 'Invalid tool format: ' . $fn_name], JSON_FORMAT)
                 ];
-
                 continue;
             }
 
-            [$module, $method] = explode('/', $fn_name);
-
+            [$module_name, $method_name] = explode('/', $fn_name);
             try {
-                $arguments   = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), (array)$fn_argv);
-                $tool_result = $this->agent_tools[$module]->$method(...$arguments);
-
-                $result_content = json_encode([
-                    'status' => 'success',
-                    'data'   => $tool_result
-                ], JSON_FORMAT);
+                $params         = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();
+                $args           = Factory::buildArgs($params, (array)$fn_args);
+                $tool_result    = $this->agent_tools[$module_name]->$method_name(...$args);
+                $result_content = json_encode(['status' => 'success', 'data' => $tool_result], JSON_FORMAT);
 
                 if (false === $result_content) {
-                    $result_content = json_encode([
-                        'status'  => 'error',
-                        'message' => json_last_error_msg()
-                    ], JSON_FORMAT);
+                    $result_content = json_encode(['status' => 'error', 'message' => json_last_error_msg()], JSON_FORMAT);
                 }
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
-
-                $result_content = json_encode([
-                    'status'  => 'error',
-                    'message' => mb_substr($throwable->getMessage(), 0, 256, 'UTF-8')
-                ], JSON_FORMAT);
-
+                $result_content = json_encode(['status' => 'error', 'message' => mb_substr($throwable->getMessage(), 0, 256, 'UTF-8')], JSON_FORMAT);
                 unset($throwable);
             }
 
-            $llm_result = [
+            $results[] = [
                 'tool_call_id'  => $tool_call['id'],
                 'function_name' => $fn_name,
                 'content'       => $result_content
             ];
-
-            $results[] = $llm_result;
         }
 
-        unset($tool_calls, $tool_call, $fn_name, $fn_argv, $module, $method, $arguments, $tool_result, $result_content, $llm_result);
+        unset($tool_calls, $tool_call, $fn_name, $fn_args, $module_name, $method_name, $params, $args, $tool_result, $result_content);
         return $results;
     }
 
@@ -341,16 +333,20 @@ final class core extends Factory
     }
 
     /**
+     * Get a module instance.
+     *
      * @param string $name
      *
      * @return object|null
      */
-    public function getModule(string $name): object|null
+    public function getModule(string $name): ?object
     {
         return $this->agent_modules[$name] ?? null;
     }
 
     /**
+     * Get LLM parameters (including tools).
+     *
      * @return array
      */
     public function getLLMParams(): array
@@ -359,6 +355,8 @@ final class core extends Factory
     }
 
     /**
+     * Send WebSocket message.
+     *
      * @param string $socket_id
      * @param string $message
      *
@@ -368,9 +366,12 @@ final class core extends Factory
     public function sendMessage(string $socket_id, string $message): void
     {
         $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
+        unset($socket_id, $message);
     }
 
     /**
+     * Get system default prompt.
+     *
      * @param bool $in_sandbox
      *
      * @return array
@@ -378,9 +379,8 @@ final class core extends Factory
      */
     public function getSystemDefault(bool $in_sandbox = true): array
     {
-        $php_path = $this->OSMgr->getPhpPath();
-
         $prompts   = [];
+        $php_path  = $this->OSMgr->getPhpPath();
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
         $work_path = $this->agent_config['agent_tools']['workspace_path'];
@@ -410,7 +410,7 @@ final class core extends Factory
         $prompts[] = '- important：长期持久，按主题组织。存放用户身份、长期偏好、核心事实、重要关系。发现重要内容立刻存储，适当总结浓缩，但保留可读性。';
         $prompts[] = '- system：长期持久，固定字段。存放人设、行为规则、边界、指令偏好。只有用户明确要求修改时才写入。';
         $prompts[] = '';
-        $prompts[] = '【读取规则】只有上下文缺少答案时才读记忆。启动或上下文很短时：先读 daily（近期日期）→ important → system。ram 只适合在对话中临时存取，启动时不要读。';
+        $prompts[] = '【读取规则】只有上下文缺少答案时才读记忆。上下文很短时：先读 daily（近期日期）→ important → system。ram 只适合在对话中临时存取，启动时不要读。';
         $prompts[] = '';
         $prompts[] = '【写入规则】';
         $prompts[] = '- ram：主动写入临时数据。如果其中有需要长期保留的内容，及时转存到 daily 或 important。';
@@ -437,9 +437,9 @@ final class core extends Factory
 
         $prompts[] = '=== 安全规则 ===';
         if ($in_sandbox) {
-            $prompts[] = '- 沙箱开启：文件操作限定 ' . $work_path . '，禁止外部/../跳出/绝对路径。';
+            $prompts[] = '- 沙箱开启：所有文件操作以 "' . $work_path . '" 为根目录；输入路径将映射为该工作区下的相对路径（替换或拼接），禁止通过 ../、符号链接等跳出。';
         } else {
-            $prompts[] = '- 沙箱关闭：按绝对路径执行，建议限定工作区，禁止../绕过。';
+            $prompts[] = '- 沙箱关闭：按绝对路径执行，优先使用项目相关目录；禁止通过 ../ 绕过访问系统关键目录（如 C:\Windows\System32）。';
         }
         $prompts[] = '- 危险操作(删除/执行命令)：先告知风险，等用户确认。';
         $prompts[] = '- 绝对禁止：高危命令(rm -rf /,dd,shutdown)；改系统配置(/etc/,C:\Windows\System32\)；改Agent核心脚本(' . $this->app->root_path . '/modules/agent_*/)；装/卸软件；泄露敏感信息。';
@@ -474,11 +474,13 @@ final class core extends Factory
             'content' => implode("\n", $prompts)
         ];
 
-        unset($in_sandbox, $prompts, $lang_code, $lang_name, $work_path);
+        unset($in_sandbox, $php_path, $lang_code, $lang_name, $work_path, $prompts);
         return $system_prompt;
     }
 
     /**
+     * Magic getter for modules.
+     *
      * @param string $name
      *
      * @return object

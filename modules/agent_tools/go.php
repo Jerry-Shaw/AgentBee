@@ -85,9 +85,9 @@ class go extends Factory
         $procMgr
             ->command([$program, ...$argv])
             ->setWorkDir($work_path)
-            ->run();
+            ->run(core::PROC_IDX_EXEC);
 
-        $proc_pid = $procMgr->getPid();
+        $proc_pid = $procMgr->getPid(core::PROC_IDX_EXEC);
 
         $procMgr->awaitProc(
             function (string $output) use (&$active, &$result): void

@@ -200,68 +200,75 @@ class go extends Factory
      */
     public function cleanContext(string $summary, string $level = 'daily', int $keep_recent = 5): array
     {
-        $keep_recent = max(0, $keep_recent);
         $this->save($level, 'assistant', '工具调用摘要: ' . $summary);
 
-        $history = $this->core->getSessionHistory();
+        $keep_recent  = max(0, $keep_recent);
+        $curr_history = $this->core->getSessionHistory();
 
-        if (empty($history)) {
+        if (empty($curr_history)) {
             return ['status' => 'error', 'message' => 'No session history to clean'];
         }
 
-        $total = count($history);
-        $pairs = [];
-        $i     = 0;
+        $tool_pairs = [];
+        $total      = count($curr_history);
+        $i          = 0;
 
         while ($i < $total) {
-            $role = $history[$i]['role'] ?? '';
+            $msg  = $curr_history[$i];
+            $role = $msg['role'] ?? '';
 
-            if ('assistant' === $role && !empty($history[$i]['tool_calls'])) {
-                $start = $i;
-                $pair  = [$history[$i]];
+            if ('assistant' === $role && !empty($msg['tool_calls'])) {
+                $start     = $i;
+                $pair_data = [$msg];
                 ++$i;
 
-                while ($i < $total && 'tool' === ($history[$i]['role'] ?? '')) {
-                    $pair[] = $history[$i];
+                while ($i < $total && 'tool' === ($curr_history[$i]['role'] ?? '')) {
+                    $pair_data[] = $curr_history[$i];
                     ++$i;
                 }
 
-                $pairs[] = ['start' => $start, 'end' => $i - 1, 'msgs' => $pair];
+                $tool_pairs[] = [
+                    'start' => $start,
+                    'end'   => $i - 1,
+                    'data'  => $pair_data,
+                ];
             } else {
                 ++$i;
             }
         }
 
-        $total_pairs = count($pairs);
+        $total_pairs = count($tool_pairs);
         $keep_from   = max(0, $total_pairs - $keep_recent);
 
-        $new = [];
-        $idx = 0;
-        $pos = 0;
+        $final = [];
+        $idx   = 0;
+        $i     = 0;
 
-        while ($pos < $total) {
-            if ($idx < $total_pairs && $pos === $pairs[$idx]['start']) {
+        while ($i < $total) {
+            if ($idx < $total_pairs && $i === $tool_pairs[$idx]['start']) {
                 if ($idx >= $keep_from) {
-                    array_push($new, ...$pairs[$idx]['msgs']);
+                    array_push($final, ...$tool_pairs[$idx]['data']);
                 }
 
-                $pos = $pairs[$idx]['end'] + 1;
+                $i = $tool_pairs[$idx]['end'] + 1;
                 ++$idx;
             } else {
-                $new[] = $history[$pos];
-                ++$pos;
+                $final[] = $curr_history[$i];
+                ++$i;
             }
         }
 
-        $this->core->session_history = $new;
+        $new_count = count($final);
+
+        $this->core->session_history = $final;
 
         $result = [
             'status'     => 'success',
-            'message'    => 'Cleaned ' . ($total - count($new)) . ' old tool call messages. Summary stored to ' . $level . '. Total remained messages: ' . count($new),
+            'message'    => 'Cleaned ' . ($total - $new_count) . ' old tool call messages. Summary stored to ' . $level . '. Total remained messages:  ' . $new_count . '.',
             'tool_pairs' => min($total_pairs, $keep_recent)
         ];
 
-        unset($summary, $level, $keep_recent, $history, $total, $pairs, $i, $total_pairs, $keep_from, $new, $idx, $pos, $role);
+        unset($summary, $level, $keep_recent, $curr_history, $total, $tool_pairs, $i, $msg, $role, $pair_data, $total_pairs, $keep_from, $final, $idx, $new_count);
         return $result;
     }
 

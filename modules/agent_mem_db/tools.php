@@ -90,6 +90,35 @@ class tools
                     "返回：到期任务数组（格式同 listTasks），若无到期任务返回空数组 []。",
             ],
         ],
+        // cleanContext
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'cleanContext',
+                'description' => '清理旧工具调用对，保留最近N组（可指定）。调用前必须总结已完成的关键结果，工具会将总结存入指定记忆层（daily/important/system），删除旧工具调用记录。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'summary'     => [
+                            'type'        => 'string',
+                            'description' => '对已完成关键结果的总结',
+                        ],
+                        'level'       => [
+                            'type'        => 'string',
+                            'enum'        => ['daily', 'important'],
+                            'description' => '存储层级，默认daily',
+                            'default'     => 'daily',
+                        ],
+                        'keep_recent' => [
+                            'type'        => 'integer',
+                            'description' => '保留最近几组工具调用对，默认2',
+                            'default'     => 2,
+                        ],
+                    ],
+                    'required'   => ['summary'],
+                ],
+            ],
+        ],
         // save
         [
             'type'     => 'function',

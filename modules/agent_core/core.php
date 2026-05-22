@@ -425,9 +425,12 @@ final class core extends Factory
         $prompts[] = '【优先级】system > important > daily > ram';
 
         $prompts[] = '=== 上下文管理 ===';
-        $prompts[] = '- 窗口上限：' . $this->agent_config['agent_memory']['max_history'] . '条，首条必须user。';
-        $prompts[] = '- 超出时从后向前保留≥上限条，首条改为user，丢弃更早内容。';
-        $prompts[] = '- 接近或超过上限时，将关键内容总结迁移到记忆系统(ram/daily/important)。';
+        $prompts[] = '- 窗口上限' . $this->agent_config['agent_memory']['max_history'] . '条。超出后系统会强制裁剪（保留最后' . $this->agent_config['agent_memory']['max_history'] . '条至user）。';
+        $prompts[] = '- 【必须执行】';
+        $prompts[] = '  1. 发现重要信息，随时主动保存到持久记忆(daily/important/system)；';
+        $prompts[] = '  2. 接近上限时，将关键内容（用户消息、助手回复、工具结果）总结存入持久记忆，临时上下文可存入ram记忆；';
+        $prompts[] = '  3. 连续工具调用>20次或历史过长时，调用清理工具：调用前总结所有关键结果，工具会删除历史工具调用对，并将总结存入daily。';
+        $prompts[] = '- 自动裁剪按消息条数（不可控制），清理工具按工具调用对（需主动调用）。';
         $prompts[] = '';
 
         $prompts[] = '=== 系统工具 ===';

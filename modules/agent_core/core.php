@@ -39,7 +39,7 @@ final class core extends Factory
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
 
-    public string $name = 'AgentBee';
+    public string $agent_name = 'AgentBee/蜂小秘';
 
     public array $llm_tools  = [];
     public array $llm_params = [];
@@ -387,7 +387,7 @@ final class core extends Factory
 
         $prompts[] = '=== 系统环境 ===';
         $prompts[] = '系统: ' . php_uname();
-        $prompts[] = 'Agent: ' . $this->name . ' v' . AGENT_VERSION . ' (' . NS_NAMESPACE . ' / ' . NS_VER . ')';
+        $prompts[] = 'Agent: ' . $this->agent_name . ' v' . AGENT_VERSION . ' (' . NS_NAMESPACE . ' / ' . NS_VER . ')';
         $prompts[] = 'PHP: ' . PHP_VERSION . ' (' . php_sapi_name() . ') | 路径: ' . $php_path;
         $prompts[] = '';
 

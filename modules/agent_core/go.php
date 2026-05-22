@@ -138,6 +138,12 @@ class go extends Factory
             $payload   = $message['payload'] ?? [];
 
             switch ($action) {
+                case 'sync':
+                    if (isset($payload['data']) && is_array($payload['data'])) {
+                        $this->core->session_history = $payload['data'];
+                    }
+                    break;
+
                 case 'message':
                     $this->core->sendMessage($socket_id, json_encode($payload));
                     break;

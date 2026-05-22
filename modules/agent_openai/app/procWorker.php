@@ -96,6 +96,9 @@ class procWorker extends Factory
         $tool_calls        = [];
         $run_tools         = false;
 
+        // Sync session history from main process
+        $this->core->session_history = $session_history;
+
         $check_stop = function () use (&$stop_requested, &$check_counter): void
         {
             if (++$check_counter % 5 !== 0) {
@@ -148,10 +151,17 @@ class procWorker extends Factory
                         );
                     }
 
+                    $this->core->session_history[] = $assistant_message;
                     $this->sendMsg('history', $socket_id, $message_metadata, 'assistant', $assistant_message);
 
                     if (!empty($tool_calls)) {
+                        $session_history   = $this->core->session_history;
                         $execution_results = $this->core->execTools($tool_calls);
+                        $current_history   = $this->core->session_history;
+
+                        if (count($session_history) !== count($current_history)) {
+                            $this->sendMsg('sync', $socket_id, $message_metadata, 'assistant', $current_history);
+                        }
 
                         foreach ($execution_results as $result) {
                             $this->sendMsg('message', $socket_id, $message_metadata, 'tool_result', $result);
@@ -162,6 +172,7 @@ class procWorker extends Factory
                                 'content'      => $result['content']
                             ];
 
+                            $this->core->session_history[] = $tool_history;
                             $this->sendMsg('history', $socket_id, $message_metadata, 'tool', $tool_history);
                         }
                     }

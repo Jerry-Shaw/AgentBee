@@ -78,6 +78,7 @@ class config extends Factory
             ],
             'agent_llm'    => [
                 'provider'     => 'agent_openai',
+                'work_name'    => 'procWorker',
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
                 'model'        => 'qwen3.6-27b-neo-code',

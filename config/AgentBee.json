@@ -36,10 +36,10 @@
     }
   },
   "agent_task": {
-    "provider": "agent_mem_file"
+    "provider": "agent_mem_db"
   },
   "agent_memory": {
-    "provider": "agent_mem_file",
+    "provider": "agent_mem_db",
     "max_history": 20
   },
   "agent_tools": {
@@ -48,7 +48,7 @@
     "workspace_path": "",
     "list": [
       {
-        "name": "agent_mem_file"
+        "name": "agent_mem_db"
       },
       {
         "name": "agent_tools"

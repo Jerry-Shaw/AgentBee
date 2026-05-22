@@ -139,19 +139,19 @@ class go extends Factory
 
             switch ($action) {
                 case 'sync':
-                    if (isset($payload['data']) && is_array($payload['data'])) {
+                    if (isset($payload['data']) && !empty($payload['data'])) {
                         $this->core->session_history = $payload['data'];
                     }
-                    break;
-
-                case 'message':
-                    $this->core->sendMessage($socket_id, json_encode($payload));
                     break;
 
                 case 'history':
                     if (isset($payload['type'], $payload['data'])) {
                         $this->core->addSessionHistory($payload['data']);
                     }
+                    break;
+
+                case 'message':
+                    $this->core->sendMessage($socket_id, json_encode($payload));
                     break;
 
                 case 'action':

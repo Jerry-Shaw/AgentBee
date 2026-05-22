@@ -111,8 +111,8 @@ class tools
                         ],
                         'keep_recent' => [
                             'type'        => 'integer',
-                            'description' => '保留最近几组工具调用对，默认2',
-                            'default'     => 2,
+                            'description' => '保留最近几组工具调用对，默认5',
+                            'default'     => 5,
                         ],
                     ],
                     'required'   => ['summary'],

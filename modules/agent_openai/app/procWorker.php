@@ -159,7 +159,7 @@ class procWorker extends Factory
                         $execution_results = $this->core->execTools($tool_calls);
                         $current_history   = $this->core->session_history;
 
-                        if (count($session_history) !== count($current_history)) {
+                        if (count($current_history) < count($session_history)) {
                             $this->sendMsg('sync', $socket_id, $message_metadata, 'assistant', $current_history);
                         }
 

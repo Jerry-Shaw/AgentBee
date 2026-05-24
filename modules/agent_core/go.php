@@ -67,8 +67,6 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
-        $this->core->agent_llm->setWorkType('procWorker');
-
         $this->core->procMgr->command([
             $this->core->OSMgr->getPhpPath(),
             $this->core->app->script_path,

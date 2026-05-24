@@ -21,7 +21,6 @@
 namespace modules\agent_openai;
 
 use modules\agent_core\core;
-use modules\agent_openai\app\fiberStack;
 use modules\agent_openai\app\procWorker;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libOpenAI;
@@ -32,15 +31,15 @@ class go extends Factory
 
     public libOpenAI $libOpenAI;
 
-    /** @var procWorker|fiberStack */
-    public fiberStack|procWorker $handler;
+    public procWorker $procWorker;
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->core = core::new();
+        $this->core       = core::new();
+        $this->procWorker = procWorker::new();
 
         $this->core->initCore();
         $this->core->initTools();
@@ -58,20 +57,6 @@ class go extends Factory
     }
 
     /**
-     * Set work type (procWorker or fiberStack).
-     *
-     * @param string $work_type
-     *
-     * @return void
-     * @throws \ReflectionException
-     */
-    public function setWorkType(string $work_type): void
-    {
-        $this->handler = ('procWorker' === $work_type) ? procWorker::new() : fiberStack::new();
-        unset($work_type);
-    }
-
-    /**
      * Start a chat session.
      *
      * @param string $socket_id
@@ -84,20 +69,21 @@ class go extends Factory
      */
     public function chat(string $socket_id, array $message_metadata, array $session_history): void
     {
-        $this->handler->chat($socket_id, $message_metadata, $session_history, $this->libOpenAI);
+        $this->procWorker->chat($socket_id, $message_metadata, $session_history, $this->libOpenAI);
         unset($socket_id, $message_metadata, $session_history);
     }
 
     /**
-     * Interrupt current LLM request (for procWorker or fiberStack).
+     * Interrupt current LLM request (for procWorker).
      *
      * @param string $socket_id
      *
      * @return void
+     * @throws \Exception
      */
     public function interrupt(string $socket_id): void
     {
-        $this->handler->interrupt($socket_id);
+        $this->procWorker->interrupt($socket_id);
         unset($socket_id);
     }
 
@@ -109,7 +95,7 @@ class go extends Factory
      */
     public function procWorker(): void
     {
-        $this->handler = procWorker::new();
+        $this->procWorker = procWorker::new();
 
         while (true) {
             $job_line = fgets(STDIN);
@@ -125,7 +111,7 @@ class go extends Factory
                 continue;
             }
 
-            $this->handler->talk(
+            $this->procWorker->talk(
                 $job_data['socket_id'],
                 $job_data['msg_meta'],
                 $job_data['history'],

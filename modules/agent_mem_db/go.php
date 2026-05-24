@@ -38,7 +38,6 @@ class go extends Factory
     public array $ram_memory = [];
 
     private string $db_path;
-    private bool   $db_ready    = false;
     private bool   $fts_enabled = false;
 
     private const LEVELS      = ['system', 'important', 'daily', 'ram'];
@@ -122,24 +121,16 @@ class go extends Factory
         $this->core->initCore();
 
         $this->db_path = $this->core->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
+
+        $this->initDatabase();
     }
 
     // =========================================================================
-    //  Database Initialization
+    //  Database Initialization (one-time)
     // =========================================================================
 
-    /**
-     * Initialize database connection, create tables and indexes
-     *
-     * @return void
-     * @throws \ReflectionException
-     */
-    private function initDB(): void
+    private function initDatabase(): void
     {
-        if (true === $this->db_ready) {
-            return;
-        }
-
         if (!is_dir($this->db_path)) {
             mkdir($this->db_path, 0777, true);
         }
@@ -152,17 +143,15 @@ class go extends Factory
         $this->db->bindLibPdo($this->libPDO);
         $this->db->autoCleanup();
 
+        // Enable WAL mode and set busy timeout to reduce lock contention
+        $this->db->exec('PRAGMA journal_mode=WAL');
+        $this->db->exec('PRAGMA busy_timeout = 3000');
+        $this->db->exec('PRAGMA cache_size = -2000'); // 2MB cache
+
         $this->createSchema();
         $this->initFTS();
-
-        $this->db_ready = true;
     }
 
-    /**
-     * Create main tables and indexes
-     *
-     * @return void
-     */
     private function createSchema(): void
     {
         $this->db->exec(self::DDL_MESSAGES);
@@ -171,15 +160,9 @@ class go extends Factory
         foreach (self::DDL_INDEXES as $index_sql) {
             $this->db->exec($index_sql);
         }
-
         unset($index_sql);
     }
 
-    /**
-     * Initialize FTS5 virtual table with triggers and backfill
-     *
-     * @return void
-     */
     private function initFTS(): void
     {
         try {
@@ -188,7 +171,6 @@ class go extends Factory
             $this->db->exec(self::DDL_FTS_TRIGGER_DELETE);
             $this->db->exec(self::DDL_FTS_TRIGGER_UPDATE);
             $this->db->exec(self::DDL_FTS_BACKFILL);
-
             $this->fts_enabled = true;
         } catch (\Throwable) {
             $this->fts_enabled = false;
@@ -199,36 +181,20 @@ class go extends Factory
     //  Task Management
     // =========================================================================
 
-    /**
-     * Add or update a scheduled task
-     *
-     * @param string $task_id
-     * @param string $task_prompt
-     * @param int    $run_at
-     * @param bool   $repeat
-     * @param int    $repeat_interval
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     public function addTask(string $task_id, string $task_prompt, int $run_at, bool $repeat = false, int $repeat_interval = 0): array
     {
-        // Auto-correct past run_at to current time
         $now = time();
         if ($run_at < $now) {
             $run_at = $now;
         }
         unset($now);
 
-        // Validate repeat_interval when repeat is enabled
         if ($repeat && 0 >= $repeat_interval) {
             unset($task_id, $task_prompt, $run_at, $repeat, $repeat_interval);
             return ['error' => 'repeat_interval must be a positive integer when repeat is enabled'];
         }
 
         try {
-            $this->initDB();
-
             $this->db->setTableOnce('tasks')
                 ->replace([
                     'task_id'         => $task_id,
@@ -238,7 +204,6 @@ class go extends Factory
                     'repeat_interval' => $repeat_interval,
                 ])
                 ->execute();
-
             $result = ['bytes_written' => 1];
         } catch (\Throwable $e) {
             $result = ['error' => $e->getMessage()];
@@ -248,19 +213,9 @@ class go extends Factory
         return $result;
     }
 
-    /**
-     * Remove a scheduled task
-     *
-     * @param string $task_id
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     public function removeTask(string $task_id): array
     {
         try {
-            $this->initDB();
-
             $exists = $this->db->setTableOnce('tasks')
                 ->select('task_id')
                 ->where(['task_id', '=', $task_id])
@@ -275,7 +230,6 @@ class go extends Factory
                 ->where(['task_id', '=', $task_id])
                 ->delete()
                 ->execute();
-
             $result = ['success' => true, 'message' => 'Task removed.'];
         } catch (\Throwable $e) {
             $result = ['success' => false, 'message' => $e->getMessage()];
@@ -285,16 +239,8 @@ class go extends Factory
         return $result;
     }
 
-    /**
-     * List all scheduled tasks
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     public function listTasks(): array
     {
-        $this->initDB();
-
         $tasks = $this->db->setTableOnce('tasks')
             ->select('task_id', 'task_prompt', 'run_at', 'repeat', 'repeat_interval', 'created_at')
             ->fetchAll();
@@ -302,26 +248,14 @@ class go extends Factory
         foreach ($tasks as &$task) {
             $task['repeat'] = (bool)$task['repeat'];
         }
-
         unset($task);
         return $tasks;
     }
 
-    /**
-     * Run due tasks with transaction protection
-     * Uses SQL WHERE to filter directly instead of loading all tasks into PHP
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     public function runTask(): array
     {
-        $this->initDB();
+        $now = time();
 
-        $now       = time();
-        $task_runs = [];
-
-        // Fetch only due tasks directly via SQL
         $due_tasks = $this->db->setTableOnce('tasks')
             ->select('task_id', 'task_prompt', 'run_at', 'repeat', 'repeat_interval', 'created_at')
             ->where(['run_at', '<=', $now])
@@ -332,47 +266,45 @@ class go extends Factory
             return [];
         }
 
-        $this->db->begin();
+        $task_runs = [];
 
-        try {
-            foreach ($due_tasks as $task) {
-                $is_repeat = (bool)$task['repeat'];
+        foreach ($due_tasks as $task) {
+            $is_repeat = (bool)$task['repeat'];
 
-                $task_runs[] = [
-                    'task_id'         => $task['task_id'],
-                    'task_prompt'     => $task['task_prompt'],
-                    'run_at'          => (int)$task['run_at'],
-                    'repeat'          => $is_repeat,
-                    'repeat_interval' => (int)$task['repeat_interval'],
-                ];
+            $task_runs[] = [
+                'task_id'         => $task['task_id'],
+                'task_prompt'     => $task['task_prompt'],
+                'run_at'          => (int)$task['run_at'],
+                'repeat'          => $is_repeat,
+                'repeat_interval' => (int)$task['repeat_interval'],
+            ];
 
-                if (true === $is_repeat) {
-                    // Catch up: ensure next run is always in the future
-                    $new_run_at = (int)$task['run_at'] + (int)$task['repeat_interval'];
-                    while ($now >= $new_run_at) {
-                        $new_run_at += (int)$task['repeat_interval'];
-                    }
-
-                    $this->db->setTableOnce('tasks')
-                        ->where(['task_id', '=', $task['task_id']])
-                        ->update(['run_at' => $new_run_at])
-                        ->execute();
-
-                    unset($new_run_at);
-                } else {
+            if ($is_repeat) {
+                $interval = (int)$task['repeat_interval'];
+                if ($interval <= 0) {
+                    // Invalid interval, delete task
                     $this->db->setTableOnce('tasks')
                         ->where(['task_id', '=', $task['task_id']])
                         ->delete()
                         ->execute();
+                    continue;
                 }
-
-                unset($is_repeat);
+                $new_run_at = (int)$task['run_at'] + $interval;
+                while ($now >= $new_run_at) {
+                    $new_run_at += $interval;
+                }
+                $this->db->setTableOnce('tasks')
+                    ->where(['task_id', '=', $task['task_id']])
+                    ->update(['run_at' => $new_run_at])
+                    ->execute();
+                unset($interval, $new_run_at);
+            } else {
+                $this->db->setTableOnce('tasks')
+                    ->where(['task_id', '=', $task['task_id']])
+                    ->delete()
+                    ->execute();
             }
-
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            $this->db->rollback();
-            throw $e;
+            unset($is_repeat);
         }
 
         unset($now, $due_tasks, $task);
@@ -383,101 +315,6 @@ class go extends Factory
     //  Memory CRUD
     // =========================================================================
 
-    /**
-     * Clean old tool call pairs after summarizing them into memory.
-     * This tool should be called by LLM when context becomes too long.
-     *
-     * @param string $summary     Summary of the old tool calls (generated by LLM)
-     * @param string $level       Memory level: 'daily' or 'important' (default 'daily')
-     * @param int    $keep_recent Number of most recent tool call pairs to retain (default 5)
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
-    public function cleanContext(string $summary, string $level = 'daily', int $keep_recent = 5): array
-    {
-        $this->save($level, 'assistant', '工具调用摘要: ' . $summary);
-
-        $keep_recent  = max(0, $keep_recent);
-        $curr_history = $this->core->getSessionHistory();
-
-        if (empty($curr_history)) {
-            return ['status' => 'error', 'message' => 'No session history to clean'];
-        }
-
-        $tool_pairs = [];
-        $total      = count($curr_history);
-        $i          = 0;
-
-        while ($i < $total) {
-            $msg  = $curr_history[$i];
-            $role = $msg['role'] ?? '';
-
-            if ('assistant' === $role && !empty($msg['tool_calls'])) {
-                $start     = $i;
-                $pair_data = [$msg];
-                ++$i;
-
-                while ($i < $total && 'tool' === ($curr_history[$i]['role'] ?? '')) {
-                    $pair_data[] = $curr_history[$i];
-                    ++$i;
-                }
-
-                $tool_pairs[] = [
-                    'start' => $start,
-                    'end'   => $i - 1,
-                    'data'  => $pair_data,
-                ];
-            } else {
-                ++$i;
-            }
-        }
-
-        $total_pairs = count($tool_pairs);
-        $keep_from   = max(0, $total_pairs - $keep_recent);
-
-        $final = [];
-        $idx   = 0;
-        $i     = 0;
-
-        while ($i < $total) {
-            if ($idx < $total_pairs && $i === $tool_pairs[$idx]['start']) {
-                if ($idx >= $keep_from) {
-                    array_push($final, ...$tool_pairs[$idx]['data']);
-                }
-
-                $i = $tool_pairs[$idx]['end'] + 1;
-                ++$idx;
-            } else {
-                $final[] = $curr_history[$i];
-                ++$i;
-            }
-        }
-
-        $new_count = count($final);
-
-        $this->core->session_history = $final;
-
-        $result = [
-            'status'     => 'success',
-            'message'    => 'Cleaned ' . ($total - $new_count) . ' old tool call messages. Summary stored to ' . $level . '. Total remained messages:  ' . $new_count . '.',
-            'tool_pairs' => min($total_pairs, $keep_recent)
-        ];
-
-        unset($summary, $level, $keep_recent, $curr_history, $total, $tool_pairs, $i, $msg, $role, $pair_data, $total_pairs, $keep_from, $final, $idx, $new_count);
-        return $result;
-    }
-
-    /**
-     * Save a memory entry
-     *
-     * @param string $level system|important|daily|ram
-     * @param string $role  user|assistant|system|tool
-     * @param string $content
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     public function save(string $level, string $role, string $content): array
     {
         if (!in_array($level, self::LEVELS, true)) {
@@ -485,38 +322,31 @@ class go extends Factory
             return ['error' => "Invalid level: {$level}"];
         }
 
-        // Reject empty content to prevent storing meaningless entries
         if ('' === $content) {
             unset($level, $role);
             return ['error' => 'Content cannot be empty'];
         }
 
-        // RAM: in-memory array (validate role before storing)
         if ('ram' === $level) {
             if (!in_array($role, self::ROLES, true)) {
                 unset($level, $content);
                 return ['error' => "Invalid role: {$role}"];
             }
-
             $this->ram_memory[] = ['role' => $role, 'content' => $content, 'created_at' => time()];
-
-            $result = ['saved' => true, 'path' => 'ram://memory', 'role' => $role];
+            $result             = ['saved' => true, 'path' => 'ram://memory', 'role' => $role];
             unset($level, $role, $content);
             return $result;
         }
 
-        // Force role for system/important levels (role is deterministic, no validation needed)
+        // Force role for system/important levels
         if ('system' === $level) {
             $role = 'system';
         } elseif ('important' === $level) {
             $role = 'user';
         } elseif (!in_array($role, self::ROLES, true)) {
-            // Only validate role for daily level
             unset($level, $content);
             return ['error' => "Invalid role: {$role}"];
         }
-
-        $this->initDB();
 
         $date_key = ('daily' === $level) ? date('Ymd') : '';
 
@@ -535,17 +365,6 @@ class go extends Factory
         return $result;
     }
 
-    /**
-     * Read memory entries with pagination
-     *
-     * @param string $level  system|important|daily|ram
-     * @param int    $offset Zero-based offset
-     * @param int    $length Max entries (0 = all)
-     * @param string $date   YYYYMMDD, only for daily layer
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
     {
         if (!in_array($level, self::LEVELS, true)) {
@@ -553,7 +372,6 @@ class go extends Factory
             return ['error' => "Invalid level: {$level}"];
         }
 
-        // Reject negative offset/length
         if (0 > $offset) {
             unset($level, $length, $date);
             return ['error' => 'offset must be >= 0, got: ' . $offset];
@@ -563,35 +381,26 @@ class go extends Factory
             return ['error' => 'length must be >= 0, got: ' . $length];
         }
 
-        // RAM: in-memory
         if ('ram' === $level) {
             $total    = count($this->ram_memory);
             $messages = array_slice($this->ram_memory, $offset, (0 === $length) ? $total : $length);
-
             unset($level, $offset, $length, $date);
             return ['messages' => $messages, 'total' => $total];
         }
 
-        $this->initDB();
-
-        // Build WHERE conditions (use index array format for libSQLite parseCond)
         $conditions = [['level', '=', $level]];
-
         if ('daily' === $level) {
             $date_val     = ('' !== $date) ? $date : date('Ymd');
             $conditions[] = ['date_key', '=', $date_val];
             unset($date_val);
         }
 
-        // Get total count
         $total = (int)($this->db->setTableOnce('messages')
             ->select($this->db->useSql('COUNT(*) AS cnt'))
             ->where(...$conditions)
             ->fetch()['cnt'] ?? 0);
 
-        // Fetch data
         $messages = [];
-
         if (0 < $total) {
             $limit    = (0 === $length) ? $total : $length;
             $messages = $this->db->setTableOnce('messages')
@@ -600,7 +409,6 @@ class go extends Factory
                 ->order(['id' => 'ASC'])
                 ->limit($offset, $limit)
                 ->fetchAll();
-
             unset($limit);
         }
 
@@ -608,21 +416,6 @@ class go extends Factory
         return ['messages' => $messages, 'total' => $total];
     }
 
-    /**
-     * Search memory with keyword matching
-     * Uses FTS5 when available, falls back to LIKE with parameter binding
-     *
-     * @param string $level      system|important|daily|ram|all
-     * @param array  $keywords   Keywords to search
-     * @param int    $offset     Pagination offset
-     * @param int    $length     Max results (0 = all)
-     * @param string $mode       or|and
-     * @param string $start_date YYYYMMDD
-     * @param string $end_date   YYYYMMDD
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     public function search(
         string $level,
         array  $keywords,
@@ -648,7 +441,6 @@ class go extends Factory
             return ['error' => 'Keywords cannot be empty'];
         }
 
-        // Reject negative offset/length
         if (0 > $offset) {
             unset($level, $keywords, $length, $mode, $start_date, $end_date);
             return ['error' => 'offset must be >= 0, got: ' . $offset];
@@ -658,18 +450,14 @@ class go extends Factory
             return ['error' => 'length must be >= 0, got: ' . $length];
         }
 
-        // Auto-correct reversed date range (swap start and end)
+        // Auto-correct date range
         if ('' !== $start_date && '' !== $end_date && $start_date > $end_date) {
             [$start_date, $end_date] = [$end_date, $start_date];
         }
 
-        $this->initDB();
-
         $levels_to_search = ('all' === $level) ? self::LEVELS : [$level];
-
-        // Separate RAM from DB layers
-        $ram_results = [];
-        $db_levels   = [];
+        $ram_results      = [];
+        $db_levels        = [];
 
         foreach ($levels_to_search as $lv) {
             if ('ram' === $lv) {
@@ -679,24 +467,20 @@ class go extends Factory
             }
         }
 
-        // Search DB layers
         $db_results = [];
-
         if (!empty($db_levels)) {
             $db_results = $this->fts_enabled
                 ? $this->searchFTS($db_levels, $keywords, $mode, $start_date, $end_date)
                 : $this->searchLike($db_levels, $keywords, $mode, $start_date, $end_date);
         }
 
-        // Merge: RAM first, then DB (newest first from DB)
         $all_results = array_merge($ram_results, $db_results);
         $total       = count($all_results);
         $limit       = (0 === $length) ? $total : $length;
         $messages    = array_slice($all_results, $offset, $limit);
 
         unset($level, $keywords, $offset, $length, $mode, $start_date, $end_date);
-        unset($levels_to_search, $lv, $ram_results, $db_levels, $db_results);
-        unset($all_results, $limit);
+        unset($levels_to_search, $lv, $ram_results, $db_levels, $db_results, $all_results, $limit);
         return ['messages' => $messages, 'total' => $total];
     }
 
@@ -704,43 +488,16 @@ class go extends Factory
     //  Search Internals
     // =========================================================================
 
-    /**
-     * Sanitize keyword for FTS5 query safety
-     *
-     * Wraps keyword in double quotes to force exact phrase matching in FTS5.
-     * This prevents FTS5 from interpreting the keyword as a query operator
-     * (AND, OR, NOT, NEAR, *, etc.) without destroying the keyword content.
-     * Only strips embedded double quotes to avoid breaking the FTS5 syntax.
-     *
-     * @param string $keyword
-     *
-     * @return string Quoted FTS5 term, or empty string if keyword is empty after trim
-     */
     private function sanitizeFTSKeyword(string $keyword): string
     {
         $keyword = trim($keyword);
-
         if ('' === $keyword) {
             return '';
         }
-
-        // Strip embedded double quotes to avoid breaking FTS5 phrase syntax
         $keyword = str_replace('"', '', $keyword);
-
-        // Wrap in double quotes for exact phrase matching (prevents operator interpretation)
-        $keyword = '"' . $keyword . '"';
-
-        return $keyword;
+        return '"' . $keyword . '"';
     }
 
-    /**
-     * Search RAM memory (in-memory array)
-     *
-     * @param array  $keywords
-     * @param string $mode
-     *
-     * @return array
-     */
     private function searchRAM(array $keywords, string $mode): array
     {
         $results        = [];
@@ -748,7 +505,6 @@ class go extends Factory
 
         foreach ($this->ram_memory as $message) {
             $haystack = strtolower($message['role'] . ' ' . $message['content']);
-
             if ($this->matchKeywords($haystack, $keywords_lower, $mode)) {
                 $results[] = ['role' => $message['role'], 'content' => $message['content']];
             }
@@ -758,34 +514,18 @@ class go extends Factory
         return $results;
     }
 
-    /**
-     * Build date range filter for mixed-level queries
-     * Non-daily levels bypass date filter; daily level applies date_key range
-     *
-     * @param array  $levels      Levels being searched
-     * @param string $start_date  YYYYMMDD
-     * @param string $end_date    YYYYMMDD
-     * @param array  $bind        Bind values array (passed by reference)
-     * @param string $table_alias Table alias prefix (e.g. 'm.' for JOIN queries, '' for single-table)
-     *
-     * @return string SQL fragment (empty if no date filter needed)
-     */
     private function buildDateFilter(array $levels, string $start_date, string $end_date, array &$bind, string $table_alias = ''): string
     {
-        $sql = '';
-
         if (!in_array('daily', $levels, true)) {
             unset($levels, $start_date, $end_date, $table_alias);
-            return $sql;
+            return '';
         }
-
         if ('' === $start_date && '' === $end_date) {
             unset($levels, $start_date, $end_date, $table_alias);
-            return $sql;
+            return '';
         }
 
         $col = $table_alias . 'date_key';
-
         if ('' !== $start_date && '' !== $end_date) {
             $sql    = " AND ({$table_alias}level != 'daily' OR ({$col} >= ? AND {$col} <= ?))";
             $bind[] = $start_date;
@@ -802,24 +542,9 @@ class go extends Factory
         return $sql;
     }
 
-    /**
-     * Search via FTS5 (fast path)
-     *
-     * @param array  $levels
-     * @param array  $keywords
-     * @param string $mode
-     * @param string $start_date
-     * @param string $end_date
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     private function searchFTS(array $levels, array $keywords, string $mode, string $start_date, string $end_date): array
     {
-        // Build FTS5 query: sanitized keywords joined by OR or AND
         $fts_terms = array_map([$this, 'sanitizeFTSKeyword'], $keywords);
-
-        // Filter out empty terms after sanitization
         $fts_terms = array_filter($fts_terms, fn(string $term): bool => '' !== $term);
 
         if (empty($fts_terms)) {
@@ -831,57 +556,35 @@ class go extends Factory
             ? implode(' OR ', $fts_terms)
             : implode(' AND ', $fts_terms);
 
-        // Build SQL with FTS5 match + level/date filters
         $level_placeholders = implode(',', array_fill(0, count($levels), '?'));
 
         $sql = "SELECT m.role, m.content
-                 FROM messages_fts fts
-                 JOIN messages m ON m.id = fts.rowid
-                 WHERE messages_fts MATCH ?
-                   AND m.level IN ({$level_placeholders})";
+                FROM messages_fts fts
+                JOIN messages m ON m.id = fts.rowid
+                WHERE messages_fts MATCH ?
+                  AND m.level IN ({$level_placeholders})";
 
         $bind = array_merge([$fts_query], $levels);
-
-        // Date range filter for daily layer
-        $sql .= $this->buildDateFilter($levels, $start_date, $end_date, $bind, 'm.');
-        $sql .= ' ORDER BY m.created_at DESC';
+        $sql  .= $this->buildDateFilter($levels, $start_date, $end_date, $bind, 'm.');
+        $sql  .= ' ORDER BY m.created_at DESC';
 
         try {
             $stmt = $this->libPDO->pdo->prepare($sql);
             $stmt->execute($bind);
             $result = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-
             unset($fts_terms, $fts_query, $level_placeholders, $sql, $bind, $stmt);
-
             if (!empty($result)) {
                 return $result;
             }
-
-            // FTS5 returned empty (e.g. CJK tokenization issue), fallback to LIKE
         } catch (\Throwable) {
-            // FTS query failed, fallback to LIKE
             unset($fts_terms, $fts_query, $level_placeholders, $sql, $bind);
         }
 
-        // Fallback: use LIKE when FTS5 returns empty or throws
         return $this->searchLike($levels, $keywords, $mode, $start_date, $end_date);
     }
 
-    /**
-     * Search via LIKE with parameter binding (safe fallback)
-     *
-     * @param array  $levels
-     * @param array  $keywords
-     * @param string $mode
-     * @param string $start_date
-     * @param string $end_date
-     *
-     * @return array
-     * @throws \ReflectionException
-     */
     private function searchLike(array $levels, array $keywords, string $mode, string $start_date, string $end_date): array
     {
-        // Build LIKE conditions with parameter binding
         $like_clauses = [];
         $like_binds   = [];
 
@@ -893,44 +596,29 @@ class go extends Factory
         $glue         = ('or' === $mode) ? ' OR ' : ' AND ';
         $content_expr = '(' . implode($glue, $like_clauses) . ')';
 
-        // Level filter
         $level_placeholders = implode(',', array_fill(0, count($levels), '?'));
 
         $sql = "SELECT role, content
-                 FROM messages
-                 WHERE {$content_expr}
-                   AND level IN ({$level_placeholders})";
+                FROM messages
+                WHERE {$content_expr}
+                  AND level IN ({$level_placeholders})";
 
         $bind = array_merge($like_binds, $levels);
-
-        // Date range filter for daily layer
-        $sql .= $this->buildDateFilter($levels, $start_date, $end_date, $bind, '');
-        $sql .= ' ORDER BY created_at DESC';
+        $sql  .= $this->buildDateFilter($levels, $start_date, $end_date, $bind, '');
+        $sql  .= ' ORDER BY created_at DESC';
 
         try {
             $stmt = $this->libPDO->pdo->prepare($sql);
             $stmt->execute($bind);
             $result = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-
-            unset($like_clauses, $like_binds, $kw, $glue, $content_expr);
-            unset($level_placeholders, $sql, $bind, $stmt);
+            unset($like_clauses, $like_binds, $kw, $glue, $content_expr, $level_placeholders, $sql, $bind, $stmt);
             return $result;
         } catch (\Throwable) {
-            unset($like_clauses, $like_binds, $kw, $glue, $content_expr);
-            unset($level_placeholders, $sql, $bind);
+            unset($like_clauses, $like_binds, $kw, $glue, $content_expr, $level_placeholders, $sql, $bind);
             return [];
         }
     }
 
-    /**
-     * Check if haystack matches keywords under given mode
-     *
-     * @param string $haystack       Lowercased text
-     * @param array  $keywords_lower Lowercased keywords
-     * @param string $mode           or|and
-     *
-     * @return bool
-     */
     private function matchKeywords(string $haystack, array $keywords_lower, string $mode): bool
     {
         if ('or' === $mode) {
@@ -940,19 +628,16 @@ class go extends Factory
                     return true;
                 }
             }
-
             unset($haystack, $keywords_lower, $mode);
             return false;
         }
 
-        // AND mode
         foreach ($keywords_lower as $kw) {
             if (!str_contains($haystack, $kw)) {
                 unset($haystack, $keywords_lower, $mode, $kw);
                 return false;
             }
         }
-
         unset($haystack, $keywords_lower, $mode);
         return true;
     }
@@ -961,25 +646,6 @@ class go extends Factory
     //  Memory Delete
     // =========================================================================
 
-    /**
-     * Delete memory entries by keywords and/or time range
-     *
-     * Supports all four layers (system/important/daily/ram).
-     * - keywords: content-based matching (case-insensitive, AND/OR mode)
-     * - start_time/end_time: Unix timestamp range filter on created_at
-     * - At least one of keywords or time range must be provided
-     *
-     * @param string $level      system|important|daily|ram|all
-     * @param string $keywords   Comma-separated keywords (empty = no content filter)
-     * @param string $mode       or|and (default: or)
-     * @param string $start_date YYYYMMDD (only for daily layer date_key filter)
-     * @param string $end_date   YYYYMMDD (only for daily layer date_key filter)
-     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
-     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
-     *
-     * @return array ['deleted' => N] or ['error' => ...]
-     * @throws \ReflectionException
-     */
     public function delete(
         string $level,
         string $keywords = '',
@@ -998,7 +664,6 @@ class go extends Factory
             return ['error' => "Invalid mode: {$mode}"];
         }
 
-        // Parse keywords
         $kw_list = [];
         if ('' !== $keywords) {
             foreach (explode(',', $keywords) as $kw) {
@@ -1009,7 +674,6 @@ class go extends Factory
             }
         }
 
-        // Must have at least one filter condition
         if (empty($kw_list) && 0 === $start_time && 0 === $end_time) {
             return ['error' => 'At least one of keywords or time range (start_time/end_time) must be provided'];
         }
@@ -1028,23 +692,12 @@ class go extends Factory
         return ['deleted' => $total_deleted];
     }
 
-    /**
-     * Delete matching entries from RAM memory array
-     *
-     * @param array  $kw_list    Lowercased keywords
-     * @param string $mode       or|and
-     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
-     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
-     *
-     * @return int Number of deleted entries
-     */
     private function deleteRAM(array $kw_list, string $mode, int $start_time, int $end_time): int
     {
         $before_count = count($this->ram_memory);
 
         $this->ram_memory = array_values(array_filter($this->ram_memory, function (array $entry) use ($kw_list, $mode, $start_time, $end_time): bool
         {
-            // Time filter
             $entry_time = $entry['created_at'] ?? 0;
             if (0 !== $start_time && $entry_time < $start_time) {
                 return true;
@@ -1052,15 +705,10 @@ class go extends Factory
             if (0 !== $end_time && $entry_time > $end_time) {
                 return true;
             }
-
-            // If no keywords, time match alone means delete
             if (empty($kw_list)) {
                 return false;
             }
-
-            // Keyword filter
             $haystack = strtolower($entry['role'] . ' ' . $entry['content']);
-
             if ('or' === $mode) {
                 foreach ($kw_list as $kw) {
                     if (str_contains($haystack, $kw)) {
@@ -1069,8 +717,6 @@ class go extends Factory
                 }
                 return true;
             }
-
-            // AND mode
             foreach ($kw_list as $kw) {
                 if (!str_contains($haystack, $kw)) {
                     return true;
@@ -1082,29 +728,10 @@ class go extends Factory
         return $before_count - count($this->ram_memory);
     }
 
-    /**
-     * Delete matching entries from database (system/important/daily)
-     * Uses SQL WHERE with parameter binding for safe deletion
-     *
-     * @param string $level      system|important|daily
-     * @param array  $kw_list    Lowercased keywords
-     * @param string $mode       or|and
-     * @param string $start_date YYYYMMDD (for daily date_key filter)
-     * @param string $end_date   YYYYMMDD (for daily date_key filter)
-     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
-     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
-     *
-     * @return int Number of deleted entries
-     * @throws \ReflectionException
-     */
     private function deleteFromDB(string $level, array $kw_list, string $mode, string $start_date, string $end_date, int $start_time, int $end_time): int
     {
-        $this->initDB();
-
-        // Build WHERE conditions
         $conditions = [['level', '=', $level]];
 
-        // Date range filter for daily layer
         if ('daily' === $level) {
             if ('' !== $start_date && '' !== $end_date) {
                 $conditions[] = ['date_key', '>=', $start_date];
@@ -1116,7 +743,6 @@ class go extends Factory
             }
         }
 
-        // Time range filter
         if (0 !== $start_time) {
             $conditions[] = ['created_at', '>=', $start_time];
         }
@@ -1124,27 +750,23 @@ class go extends Factory
             $conditions[] = ['created_at', '<=', $end_time];
         }
 
-        // If no keywords, delete by conditions directly
+        // If no keywords, delete using QueryBuilder
         if (empty($kw_list)) {
-            // First count, then delete
             $count = (int)($this->db->setTableOnce('messages')
                 ->select($this->db->useSql('COUNT(*) AS cnt'))
                 ->where(...$conditions)
                 ->fetch()['cnt'] ?? 0);
-
             if (0 === $count) {
                 return 0;
             }
-
             $this->db->setTableOnce('messages')
                 ->where(...$conditions)
                 ->delete()
                 ->execute();
-
             return $count;
         }
 
-        // With keywords: build LIKE conditions with parameter binding
+        // With keywords: build manual SQL with LIKE conditions
         $like_clauses = [];
         $like_binds   = [];
 
@@ -1156,11 +778,9 @@ class go extends Factory
         $glue         = ('or' === $mode) ? ' OR ' : ' AND ';
         $content_expr = '(' . implode($glue, $like_clauses) . ')';
 
-        // Build full SQL with manual PDO binding (libSQLite doesn't support raw SQL in WHERE for LIKE)
         $sql  = "DELETE FROM messages WHERE level = ? AND {$content_expr}";
         $bind = array_merge([$level], $like_binds);
 
-        // Add date range filter for daily
         if ('daily' === $level) {
             if ('' !== $start_date && '' !== $end_date) {
                 $sql    .= ' AND date_key >= ? AND date_key <= ?';
@@ -1175,7 +795,6 @@ class go extends Factory
             }
         }
 
-        // Add time range filter
         if (0 !== $start_time) {
             $sql    .= ' AND created_at >= ?';
             $bind[] = $start_time;
@@ -1188,14 +807,11 @@ class go extends Factory
         try {
             $stmt = $this->libPDO->pdo->prepare($sql);
             $stmt->execute($bind);
-            $deleted = $stmt->rowCount();
-
-            unset($like_clauses, $like_binds, $kw, $glue, $content_expr);
-            unset($sql, $bind, $stmt);
-            return (int)$deleted;
+            $deleted = (int)$stmt->rowCount();
+            unset($like_clauses, $like_binds, $kw, $glue, $content_expr, $sql, $bind, $stmt);
+            return $deleted;
         } catch (\Throwable) {
-            unset($like_clauses, $like_binds, $kw, $glue, $content_expr);
-            unset($sql, $bind);
+            unset($like_clauses, $like_binds, $kw, $glue, $content_expr, $sql, $bind);
             return 0;
         }
     }

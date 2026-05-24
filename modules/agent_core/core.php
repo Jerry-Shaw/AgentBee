@@ -469,7 +469,13 @@ final class core extends Factory
         $prompts[] = '- important：长期持久，按主题组织。存放用户身份、长期偏好、核心事实、重要关系。发现重要内容立刻存储，适当总结浓缩，但保留可读性。';
         $prompts[] = '- system：长期持久，固定字段。存放人设、行为规则、边界、指令偏好。只有用户明确要求修改时才写入。';
         $prompts[] = '';
-        $prompts[] = '【读取规则】只有上下文缺少答案时才读记忆。上下文很短时：先读 daily（近期日期）→ important → system。ram 只适合在对话中临时存取，启动时不要读。';
+        $prompts[] = '【读取规则】';
+        $prompts[] = '- 缺信息时：先 ram → daily → important（system已自动加载）；';
+        $prompts[] = '- 用户消息 ≤1 条 → 只读 daily（ram 为空）；';
+        $prompts[] = '- 用户提时间 → 读对应 daily，也可读 ram；';
+        $prompts[] = '- 提人/事/偏好且无上下文 → 先 important 再 daily，也可先查 ram；';
+        $prompts[] = '- ram 可随时读写，鼓励使用；';
+        $prompts[] = '- 禁止编造、禁止重复读。';
         $prompts[] = '';
         $prompts[] = '【写入规则】';
         $prompts[] = '- ram：主动写入临时数据。如果其中有需要长期保留的内容，及时转存到 daily 或 important。';

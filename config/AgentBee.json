@@ -10,7 +10,7 @@
     "work_name": "procWorker",
     "api_url": "http://127.0.0.1:1234/v1",
     "api_key": "sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS",
-    "model": "qwen3.6-27b-neo-code",
+    "model": "qwen3.6-27b-mtp",
     "org_id": "",
     "timeout": 7200,
     "keep_reasons": false,

@@ -29,7 +29,7 @@ class go extends Factory
     public core    $core;
     public message $message;
 
-    public bool $clean_notice = false;
+    public bool $clean_command = false;
 
     public array $socket_session = [];
 
@@ -110,7 +110,6 @@ class go extends Factory
         $data_chunk    = fread($stdout_stream, 8192);
 
         if (false === $data_chunk || '' === $data_chunk) {
-            $this->core->socketMgr->cleanExternalProc($external_stream_id);
             unset($line_buffers[$external_stream_id]);
             return;
         }
@@ -133,65 +132,55 @@ class go extends Factory
                 continue;
             }
 
-            $action    = $message['action'] ?? '';
-            $socket_id = $message['socket_id'] ?? '';
-            $payload   = $message['payload'] ?? [];
+            $payload      = $message['payload'];
+            $payload_type = $payload['type'];
 
-            switch ($action) {
-                case 'sync':
-                    if (isset($payload['data']) && !empty($payload['data'])) {
-                        $this->core->session_history = $payload['data'];
+            switch ($message['type']) {
+                case 'stream':
+                    $this->core->sendMessage($message['socket_id'], json_encode($payload, JSON_FORMAT));
+
+                    if ('error' === $payload_type) {
+                        unset($line_buffers[$external_stream_id]);
                     }
                     break;
 
                 case 'history':
-                    if (isset($payload['type'], $payload['data'])) {
-                        $this->core->addSessionHistory($payload['data']);
-                    }
-                    break;
+                    if (isset($payload['data'])) {
+                        switch ($payload_type) {
+                            case 'add':
+                                $this->core->addSessionHistory($payload['data']);
+                                break;
 
-                case 'message':
-                    $this->core->sendMessage($socket_id, json_encode($payload));
-                    break;
-
-                case 'action':
-                    $payload_type = $payload['type'] ?? '';
-
-                    if ('complete' === $payload_type) {
-                        $tool_calls = $payload['data']['tool_calls'] ?? false;
-
-                        if ($tool_calls) {
-                            $message_metadata = array_filter(
-                                $payload,
-                                function (string $key): bool
-                                {
-                                    return !in_array($key, ['type', 'data'], true);
-                                },
-                                ARRAY_FILTER_USE_KEY
-                            );
-
-                            $current_history = $this->core->getSessionHistory();
-                            $this->core->agent_llm->chat($socket_id, $message_metadata, $current_history);
+                            case 'sync':
+                                $this->core->session_history = $payload['data'];
+                                break;
                         }
-                    } elseif ('end' === $payload_type) {
-                        $this->core->sendMessage($socket_id, json_encode(['type' => 'end']));
-                        $this->core->socketMgr->cleanExternalProc($external_stream_id);
+                    }
+                    break;
 
-                        unset($line_buffers[$external_stream_id]);
+                case 'end':
+                    $current_history = $this->core->getSessionHistory();
+                    $tool_calls      = $payload['data']['tool_calls'] ?? false;
+
+                    if ($tool_calls) {
+                        $this->core->agent_llm->chat(
+                            $message['socket_id'],
+                            array_intersect_key($payload, $this->socket_session[$message['socket_id']]),
+                            $current_history
+                        );
                     }
 
-                    $current_history = $this->core->getSessionHistory();
-                    $current_count   = count($current_history);
-                    $max_history     = $this->core->agent_config['agent_memory']['max_history'] ?? 20;
-                    $double_history  = $max_history * 2;
+                    $this->core->sendMessage($message['socket_id'], json_encode(['type' => 'end']));
+
+                    $current_count  = count($current_history);
+                    $max_history    = $this->core->agent_config['agent_memory']['max_history'] ?? 20;
+                    $double_history = $max_history * 2;
 
                     if ($current_count < $max_history) {
-                        $this->clean_notice = false;
+                        $this->clean_command = false;
                         break;
-                    }
-
-                    if (!$this->clean_notice && $current_count > $max_history) {
-                        $this->clean_notice = true;
+                    } elseif (!$this->clean_command) {
+                        $this->clean_command = true;
 
                         $system_prompt = '【系统提醒】当前对话历史较长（已有 ' . $current_count . ' 条，上限 ' . $max_history . ' 条）。请自动完成以下操作，并以自然语气告知用户：' . "\n\n" .
                             '1. 总结关键信息（用户需求、助手回复、重要工具结果等），保存到对应记忆（daily/important/system，临时内容可存 ram）。' . "\n" .
@@ -204,9 +193,9 @@ class go extends Factory
                         $current_history = $this->core->getSessionHistory();
 
                         $this->core->agent_llm->chat(
-                            $socket_id,
+                            $message['socket_id'],
                             [
-                                'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
+                                'sessionId' => $this->socket_session[$message['socket_id']]['sessionId'] ?? 'default',
                                 'messageId' => 'system-' . microtime(true),
                             ],
                             $current_history
@@ -216,17 +205,15 @@ class go extends Factory
                     if ($current_count > $double_history) {
                         $this->core->cleanSessionHistory();
                     }
-
                     break;
             }
         }
 
         if (feof($stdout_stream)) {
             unset($line_buffers[$external_stream_id]);
-            $this->core->socketMgr->cleanExternalProc($external_stream_id);
         }
 
-        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $action, $socket_id, $payload, $payload_type, $tool_calls, $message_metadata, $current_history);
+        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $tool_calls, $current_history);
     }
 
     /**

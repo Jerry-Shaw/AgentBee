@@ -152,7 +152,7 @@ class procWorker extends Factory
                     }
 
                     $this->core->session_history[] = $assistant_message;
-                    $this->sendMsg('history', $socket_id, $message_metadata, 'assistant', $assistant_message);
+                    $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
 
                     if (!empty($tool_calls)) {
                         $session_history   = $this->core->session_history;
@@ -160,11 +160,11 @@ class procWorker extends Factory
                         $current_history   = $this->core->session_history;
 
                         if (count($current_history) < count($session_history)) {
-                            $this->sendMsg('sync', $socket_id, $message_metadata, 'assistant', $current_history);
+                            $this->sendMsg($socket_id, 'history', 'sync', $message_metadata, $current_history);
                         }
 
                         foreach ($execution_results as $result) {
-                            $this->sendMsg('message', $socket_id, $message_metadata, 'tool_result', $result);
+                            $this->sendMsg($socket_id, 'stream', 'tool_result', $message_metadata, $result);
 
                             $tool_history = [
                                 'role'         => 'tool',
@@ -173,27 +173,27 @@ class procWorker extends Factory
                             ];
 
                             $this->core->session_history[] = $tool_history;
-                            $this->sendMsg('history', $socket_id, $message_metadata, 'tool', $tool_history);
+                            $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $tool_history);
                         }
                     }
                 }
             } catch (\Throwable $exception) {
-                $this->sendMsg('message', $socket_id, $message_metadata, 'error', ['message' => $exception->getMessage()]);
-                $this->sendMsg('action', $socket_id, $message_metadata, 'end', null);
+                $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, ['message' => $exception->getMessage()]);
+                $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
                 unset($exception);
             }
         };
 
         try {
             $libOpenAI->completions($session_history, $this->core->agent_config['agent_llm']['model'], [], $stream_callback);
+            $this->sendMsg($socket_id, 'end', 'end', $message_metadata, ['tool_calls' => $run_tools]);
         } catch (\Throwable $exception) {
             if ($exception->getMessage() !== 'Interrupted by user') {
-                $this->sendMsg('message', $socket_id, $message_metadata, 'error', ['message' => $exception->getMessage()]);
+                $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, ['message' => $exception->getMessage()]);
             }
         }
 
-        $this->sendMsg('action', $socket_id, $message_metadata, 'complete', ['tool_calls' => $run_tools]);
-        $this->sendMsg('message', $socket_id, $message_metadata, 'end', null);
+        $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
 
         unset($socket_id, $message_metadata, $session_history, $libOpenAI, $reasons_content, $assistant_content, $tool_calls, $run_tools, $stop_requested, $check_counter);
     }
@@ -226,7 +226,7 @@ class procWorker extends Factory
                 } elseif ('think' === $this->message_type) {
                     $reasons_content .= $delta['content'];
                 }
-                $this->sendMsg('message', $socket_id, $message_metadata, $this->message_type, $delta['content']);
+                $this->sendMsg($socket_id, 'stream', $this->message_type, $message_metadata, $delta['content']);
             }
         }
 
@@ -235,7 +235,7 @@ class procWorker extends Factory
             if ($this->core->agent_config['agent_llm']['keep_reasons']) {
                 $reasons_content .= $delta['reasoning_content'];
             }
-            $this->sendMsg('message', $socket_id, $message_metadata, 'think', $delta['reasoning_content']);
+            $this->sendMsg($socket_id, 'stream', 'think', $message_metadata, $delta['reasoning_content']);
         }
 
         // Tool calls
@@ -268,7 +268,7 @@ class procWorker extends Factory
                 }
             }
 
-            $this->sendMsg('message', $socket_id, $message_metadata, 'tool_calls', $tool_calls_buffer);
+            $this->sendMsg($socket_id, 'stream', 'tool_calls', $message_metadata, $tool_calls_buffer);
         }
 
         unset($socket_id, $data, $message_metadata, $delta, $tool_call_chunk, $tool_index);
@@ -277,33 +277,34 @@ class procWorker extends Factory
     /**
      * Send a message to main process (via stdout).
      *
-     * @param string $action
+     * @param string $message_type
      * @param string $socket_id
-     * @param array  $metadata
+     * @param array  $payload_meta
      * @param string $payload_type
      * @param mixed  $payload_data
      *
      * @return void
      */
-    private function sendMsg(string $action, string $socket_id, array $metadata, string $payload_type, mixed $payload_data): void
+    private function sendMsg(string $socket_id, string $message_type, string $payload_type, array $payload_meta, string|array $payload_data = ''): void
     {
         $payload = ['type' => $payload_type];
 
-        if (null !== $payload_data) {
+        if (!empty($payload_data)) {
             $payload['data'] = $payload_data;
         }
 
         $stream_data = json_encode([
-            'action'    => $action,
+            'type'      => $message_type,
+            'payload'   => $payload + $payload_meta,
             'socket_id' => $socket_id,
-            'payload'   => $payload + $metadata,
-        ], JSON_FORMAT);
+        ], JSON_FORMAT
+        );
 
         echo $stream_data . "\n";
 
         flush();
         fflush(STDOUT);
 
-        unset($action, $socket_id, $metadata, $payload_type, $payload_data, $payload, $stream_data);
+        unset($socket_id, $message_type, $payload_type, $payload_meta, $payload_data, $payload, $stream_data);
     }
 }

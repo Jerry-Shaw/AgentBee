@@ -206,6 +206,64 @@ final class core extends Factory
     }
 
     /**
+     * @return void
+     * @throws \Exception
+     */
+    public function cleanSessionHistory(): void
+    {
+        $keep_user_assistant = 8;
+        $keep_tool_calls     = 2;
+        $keep_tool_results   = 2;
+
+        $new_history = [];
+        $last_role   = '';
+        $last_key    = count($this->session_history) - 1;
+
+        for ($i = $last_key; $i > 0; --$i) {
+            $message_role  = $this->session_history[$i]['role'];
+            $is_tool_calls = $this->session_history[$i]['tool_calls'] ?? false;
+
+            if (0 < $keep_user_assistant) {
+                if ('user' === $message_role) {
+                    $new_history[$i] = $this->session_history[$i];
+                    --$keep_user_assistant;
+                    $last_role = 'user';
+                } elseif ('assistant' === $message_role && !$is_tool_calls) {
+                    $new_history[$i] = $this->session_history[$i];
+                    --$keep_user_assistant;
+                    $last_role = 'assistant';
+                }
+
+                if ('user' !== $last_role && !$is_tool_calls && in_array($message_role, ['user', 'assistant'], true)) {
+                    ++$keep_user_assistant;
+                }
+            }
+
+            if (0 < $keep_tool_results) {
+                if ('tool' === $message_role) {
+                    $new_history[$i] = $this->session_history[$i];
+                    --$keep_tool_results;
+                }
+            }
+
+            if (0 < $keep_tool_calls) {
+                if ('assistant' === $message_role && $is_tool_calls) {
+                    $new_history[$i] = $this->session_history[$i];
+                    --$keep_tool_calls;
+                }
+            }
+
+            if (0 >= $keep_user_assistant && 0 >= $keep_tool_results && 0 >= $keep_tool_calls) {
+                break;
+            }
+        }
+
+        ksort($new_history, SORT_NUMERIC);
+        array_unshift($new_history, $this->getSystemMemory());
+        $this->session_history = array_values($new_history);
+    }
+
+    /**
      * Get system memory prompt.
      *
      * @return array
@@ -384,6 +442,7 @@ final class core extends Factory
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
         $work_path = $this->agent_config['agent_tools']['workspace_path'];
+        $max_limit = $this->agent_config['agent_memory']['max_history'] * 2;
 
         $prompts[] = '=== 系统环境 ===';
         $prompts[] = '系统: ' . php_uname();
@@ -425,12 +484,11 @@ final class core extends Factory
         $prompts[] = '【优先级】system > important > daily > ram';
 
         $prompts[] = '=== 上下文管理 ===';
-        $prompts[] = '- 窗口上限' . $this->agent_config['agent_memory']['max_history'] . '条。超出后系统会强制裁剪（保留最后' . $this->agent_config['agent_memory']['max_history'] . '条至user）。';
+        $prompts[] = '- 历史消息超过' . $max_limit . '条后，系统会自动裁剪消息。你必须主动管理上下文长度，避免丢失信息。';
         $prompts[] = '- 【必须执行】';
-        $prompts[] = '  1. 发现重要信息，随时主动保存到持久记忆(daily/important/system)；';
-        $prompts[] = '  2. 接近上限时，将关键内容（用户消息、助手回复、工具结果）总结存入持久记忆，临时上下文可存入ram记忆；';
-        $prompts[] = '  3. 连续工具调用>20次或历史过长时，调用清理工具：调用前总结所有关键结果，工具会删除历史工具调用对，并将总结存入daily。';
-        $prompts[] = '- 自动裁剪按消息条数（不可控制），清理工具按工具调用对（需主动调用）。';
+        $prompts[] = '  1. 随时将重要信息（用户需求、助手回复、工具结果、关键决策等）保存到持久记忆(daily/important/system)，临时消息可存入ram。';
+        $prompts[] = '  2. 当历史消息过多、连续工具调用超过20次或感觉上下文过长时，**必须先使用记忆工具保存所有将被删除的关键内容（旧工具结果、早期对话要点等）**，然后再调用清理工具。';
+        $prompts[] = '  3. 清理工具只负责删除旧工具调用对和裁剪普通消息，不会自动保存任何内容。工具参数可控制保留的工具对数量和普通消息条数，强烈建议保留至少2组工具对和10条对话，避免上下文完全丢失。';
         $prompts[] = '';
 
         $prompts[] = '=== 系统工具 ===';
@@ -439,11 +497,13 @@ final class core extends Factory
         $prompts[] = '';
 
         $prompts[] = '=== 安全规则 ===';
+
         if ($in_sandbox) {
             $prompts[] = '- 沙箱开启：所有文件操作以 "' . $work_path . '" 为根目录；输入路径将映射为该工作区下的相对路径（替换或拼接），禁止通过 ../、符号链接等跳出。';
         } else {
             $prompts[] = '- 沙箱关闭：按绝对路径执行，优先使用项目相关目录；禁止通过 ../ 绕过访问系统关键目录（如 C:\Windows\System32）。';
         }
+
         $prompts[] = '- 危险操作(删除/执行命令)：先告知风险，等用户确认。';
         $prompts[] = '- 绝对禁止：高危命令(rm -rf /,dd,shutdown)；改系统配置(/etc/,C:\Windows\System32\)；改Agent核心脚本(' . $this->app->root_path . '/modules/agent_*/)；装/卸软件；泄露敏感信息。';
         $prompts[] = '- 批量删除：每批≤100个，操作前列清单确认。';

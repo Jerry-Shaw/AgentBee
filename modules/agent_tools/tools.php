@@ -36,6 +36,35 @@ class tools
                 'description' => "获取当前系统时间。返回：{\"datetime\":\"YYYY-MM-DD HH:MM:SS\", \"timestamp\":秒数}",
             ],
         ],
+        // cleanContext
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'cleanContext',
+                'description' => '清理上下文：保留最近 max_dialog_messages 条普通消息和最近 keep_tool_pairs 组工具调用对。非强制模式（默认）强制至少保留2组工具对和10条对话，避免上下文丢失。强制模式(force_clean=true)允许设为0，需谨慎。重要：调用前必须先用记忆工具保存即将被删除的重要内容。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'max_dialog_messages' => [
+                            'type'        => 'integer',
+                            'description' => '保留普通消息条数上限，默认10（非强制时最小2）',
+                            'default'     => 10,
+                        ],
+                        'keep_tool_pairs'     => [
+                            'type'        => 'integer',
+                            'description' => '保留最近工具调用对组数，默认2（非强制时最小1）',
+                            'default'     => 2,
+                        ],
+                        'force_clean'         => [
+                            'type'        => 'boolean',
+                            'description' => '是否强制清理（允许0值），默认false',
+                            'default'     => false,
+                        ],
+                    ],
+                    'required'   => [],
+                ],
+            ],
+        ],
         // readFile
         [
             'type'     => 'function',

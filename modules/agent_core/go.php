@@ -29,7 +29,7 @@ class go extends Factory
     public core    $core;
     public message $message;
 
-    public bool $clean_command = false;
+    public bool $clean_warning = false;
 
     public array $socket_session = [];
 
@@ -172,21 +172,22 @@ class go extends Factory
 
                     $this->core->sendMessage($message['socket_id'], json_encode(['type' => 'end']));
 
-                    $current_count  = count($current_history);
-                    $max_history    = $this->core->agent_config['agent_memory']['max_history'] ?? 20;
-                    $double_history = $max_history * 2;
+                    $current_count = count($current_history);
+                    $max_history   = $this->core->agent_config['agent_memory']['max_history'] ?? 20;
+                    $warning_count = $max_history * 2;
+                    $limit_count   = $max_history * 3;
 
-                    if ($current_count < $max_history) {
-                        $this->clean_command = false;
+                    if ($current_count < $warning_count) {
+                        $this->clean_warning = false;
                         break;
-                    } elseif (!$this->clean_command) {
-                        $this->clean_command = true;
+                    } elseif (!$this->clean_warning) {
+                        $this->clean_warning = true;
 
                         $system_prompt = '【系统提醒】当前对话历史较长（已有 ' . $current_count . ' 条，上限 ' . $max_history . ' 条）。请自动完成以下操作，并以自然语气告知用户：' . "\n\n" .
                             '1. 总结关键信息（用户需求、助手回复、重要工具结果等），保存到对应记忆（daily/important/system，临时内容可存 ram）。' . "\n" .
                             '2. 调用清理工具删除旧工具调用对，精简历史。' . "\n" .
                             '3. 完成后，向用户说明保存的内容概要、存储层级及剩余消息数，语气自然。' . "\n\n" .
-                            '【特别提醒】对话历史超过 ' . $double_history . ' 条时，系统将强制清理上下文，重要信息可能丢失，请及时保存。';
+                            '【特别提醒】对话历史超过 ' . $limit_count . ' 条时，系统将强制清理上下文，重要信息可能丢失，请及时保存。';
 
                         $this->core->addSessionHistory(['role' => 'user', 'content' => $system_prompt]);
 
@@ -202,7 +203,7 @@ class go extends Factory
                         );
                     }
 
-                    if ($current_count > $double_history) {
+                    if ($current_count > $limit_count) {
                         $this->core->cleanSessionHistory();
                     }
                     break;

@@ -193,6 +193,7 @@ class procWorker extends Factory
         }
 
         $this->sendMsg('action', $socket_id, $message_metadata, 'complete', ['tool_calls' => $run_tools]);
+        $this->sendMsg('message', $socket_id, $message_metadata, 'end', null);
 
         unset($socket_id, $message_metadata, $session_history, $libOpenAI, $reasons_content, $assistant_content, $tool_calls, $run_tools, $stop_requested, $check_counter);
     }

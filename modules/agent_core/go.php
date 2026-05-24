@@ -208,10 +208,11 @@ class go extends Factory
                         $this->core->agent_llm->chat(
                             $socket_id,
                             [
-                                'sessionId' => $this->socket_session[$socket_id] ?? 'sessionId undefined',
-                                'messageId' => 'System Request'
+                                'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
+                                'messageId' => $this->socket_session[$socket_id]['messageId'] ?? 'default'
                             ],
-                            $current_history);
+                            $current_history
+                        );
                     }
 
                     if ($current_count > $double_history) {
@@ -282,10 +283,11 @@ class go extends Factory
         $this->core->agent_llm->chat(
             $socket_id,
             [
-                'sessionId' => $this->socket_session[$socket_id] ?? 'sessionId undefined',
-                'messageId' => 'Task Request'
+                'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
+                'messageId' => $this->socket_session[$socket_id]['messageId'] ?? 'default'
             ],
-            $current_history);
+            $current_history
+        );
 
         unset($socket_id, $task_list, $task_jobs, $task_json, $task_content, $current_history);
         return '';
@@ -318,18 +320,24 @@ class go extends Factory
 
         foreach ($messages as $line) {
             $data = json_decode($line, true);
+
             if (!is_array($data) || !isset($data['type'])) {
                 continue;
             }
 
-            $this->socket_session[$socket_id] = $data['sessionId'] ?? 'sessionId undefined';
+            $this->socket_session[$socket_id] = [
+                'sessionId' => $data['sessionId'],
+                'messageId' => $data['messageId']
+            ];
 
             $type_method = 'process_' . $data['type'];
+
             if (!method_exists($this->message, $type_method)) {
                 continue;
             }
 
             $result = $this->message->$type_method($socket_id, $data['content'] ?? $data);
+
             if ($result['agent_llm']) {
                 $llm_data = $result['content'];
             }
@@ -339,6 +347,7 @@ class go extends Factory
         }
 
         $message_metadata = array_pop($end_data);
+
         foreach ($end_data as $end_packet) {
             $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $end_packet));
         }

@@ -209,7 +209,7 @@ class go extends Factory
                             $socket_id,
                             [
                                 'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
-                                'messageId' => $this->socket_session[$socket_id]['messageId'] ?? 'default'
+                                'messageId' => 'system-' . microtime(true),
                             ],
                             $current_history
                         );
@@ -284,7 +284,7 @@ class go extends Factory
             $socket_id,
             [
                 'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
-                'messageId' => $this->socket_session[$socket_id]['messageId'] ?? 'default'
+                'messageId' => 'task-' . microtime(true),
             ],
             $current_history
         );

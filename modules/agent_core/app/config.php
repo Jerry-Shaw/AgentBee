@@ -92,10 +92,7 @@ class config extends Factory
                     'top_p'             => 0.85,
                     'frequency_penalty' => 0.3,
                     'presence_penalty'  => 0.2,
-                    'stop'              => [
-                        '<|im_end|>',
-                        '<|endoftext|>',
-                    ],
+                    'stop'              => [],
                     'extra_body'        => [
                         'chat_template_kwargs' => [
                             'enable_thinking' => false,

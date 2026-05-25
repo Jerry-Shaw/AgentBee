@@ -139,7 +139,7 @@ class go extends Factory
                     $this->core->sendMessage($message['socket_id'], json_encode($payload, JSON_FORMAT));
 
                     if ('error' === $payload_type) {
-                        unset($line_buffers[$external_stream_id]);
+                        unset($this->stream_buffers[$external_stream_id]);
                     }
                     break;
 
@@ -210,7 +210,7 @@ class go extends Factory
         }
 
         if (feof($stdout_stream)) {
-            unset($line_buffers[$external_stream_id]);
+            unset($this->stream_buffers[$external_stream_id]);
         }
 
         unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $tool_calls, $current_history);

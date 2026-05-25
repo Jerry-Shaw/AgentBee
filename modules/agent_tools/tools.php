@@ -109,14 +109,14 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'copyFile',
-                'description' => "复制文件。\n参数：source（源文件路径），destination（目标路径）。\n目标文件存在时将被覆盖。\n返回：成功 → {\"file_copied\": \"File copied to: 目标路径\"}，失败 → {\"error\": \"...\"}",
+                'description' => "复制文件。\n参数：src（源文件路径），dst（目标路径）。\n目标文件存在时将被覆盖。\n返回：成功 → {\"file_copied\": \"File copied to: 目标路径\"}，失败 → {\"error\": \"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'source'      => ['type' => 'string', 'description' => '源文件路径'],
-                        'destination' => ['type' => 'string', 'description' => '目标文件路径'],
+                        'src' => ['type' => 'string', 'description' => '源文件路径'],
+                        'dst' => ['type' => 'string', 'description' => '目标文件路径'],
                     ],
-                    'required'   => ['source', 'destination'],
+                    'required'   => ['src', 'dst'],
                 ],
             ],
         ],
@@ -155,11 +155,11 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'getFileSize',
-                'description' => "获取文件字节数。参数：path。返回：{\"filesize\": N} 或 {\"error\":\"...\"}",
+                'description' => "获取文件字节数。参数：file_path。返回：{\"filesize\": N} 或 {\"error\":\"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string', 'description' => '文件路径']],
-                    'required'   => ['path'],
+                    'properties' => ['file_path' => ['type' => 'string', 'description' => '文件路径']],
+                    'required'   => ['file_path'],
                 ],
             ],
         ],

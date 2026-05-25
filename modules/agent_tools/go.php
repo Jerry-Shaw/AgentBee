@@ -367,25 +367,28 @@ class go extends Factory
     }
 
     /**
-     * @param string $source
-     * @param string $destination
+     * @param string $src
+     * @param string $dst
      *
      * @return string[]
      */
-    public function copyFile(string $source, string $destination): array
+    public function copyFile(string $src, string $dst): array
     {
-        if (!is_file($source)) {
-            return ['error' => "File not found: {$source}"];
+        $src_path = $this->core->securePath($src);
+        $dst_path = $this->core->securePath($dst);
+
+        if (!is_file($src_path)) {
+            return ['error' => "File not found: {$src_path}"];
         }
 
-        $copy = copy($source, $destination);
+        $copy = copy($src_path, $dst_path);
 
         if (!$copy) {
-            return ['error' => "Failed to copy file: {$source}"];
+            return ['error' => "Failed to copy file: {$src_path}"];
         }
 
-        unset($source, $copy);
-        return ['file_copied' => "File copied to: {$destination}"];
+        unset($src, $dst, $src_path, $copy);
+        return ['file_copied' => "File copied to: {$dst_path}"];
     }
 
     /**
@@ -433,19 +436,19 @@ class go extends Factory
     }
 
     /**
-     * @param string $path
+     * @param string $file_path
      *
      * @return array
      */
-    public function getFileSize(string $path): array
+    public function getFileSize(string $file_path): array
     {
-        $path = $this->core->securePath($path);
+        $file_path = $this->core->securePath($file_path);
 
-        if (!is_file($path)) {
-            return ['error' => 'File not found: ' . $path];
+        if (!is_file($file_path)) {
+            return ['error' => 'File not found: ' . $file_path];
         }
 
-        return ['filesize' => filesize($path)];
+        return ['filesize' => filesize($file_path)];
     }
 
     /**
@@ -504,13 +507,13 @@ class go extends Factory
 
         $copied = $this->libFileIO->copyDir($full_src, $full_dst);
 
-        unset($src, $full_src, $full_dst);
+        unset($src, $dst, $full_src);
 
         if ($copied < 0) {
             return ['error' => 'Failed to copy directory'];
         }
 
-        return ['copied_files' => $copied, 'destination' => $dst];
+        return ['copied_files' => $copied, 'destination' => $full_dst];
     }
 
     /**

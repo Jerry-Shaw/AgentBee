@@ -101,17 +101,27 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'downloadFile',
-                'description' => "下载文件到本地绝对路径。参数：url，save_to（本地路径含文件名），timeout（默认30）。返回：{\"saved\":true,\"path\":\"...\",\"size\":int} 或 {\"saved\":false,\"error\":\"...\"}",
+                'description' => '下载文件到本地（自动建目录，流式写入）。沙箱下任何路径均会被映射，最终保存路径以返回的 path 为准。返回：{"status":"success","path":"...","size":12345} 或 {"status":"error","error":"..."}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'url'     => ['type' => 'string'],
-                        'save_to' => ['type' => 'string'],
-                        'timeout' => ['type' => 'integer', 'default' => 30],
+                        'url'     => [
+                            'type'        => 'string',
+                            'description' => '要下载的文件 URL'
+                        ],
+                        'save_to' => [
+                            'type'        => 'string',
+                            'description' => '期望的保存路径（含文件名），可以是绝对路径或相对路径。沙箱开启时可能会映射到安全目录，请以返回的 path 为准。'
+                        ],
+                        'timeout' => [
+                            'type'        => 'integer',
+                            'description' => '超时秒数，默认 30',
+                            'default'     => 30
+                        ]
                     ],
-                    'required'   => ['url', 'save_to'],
-                ],
-            ],
-        ],
+                    'required'   => ['url', 'save_to']
+                ]
+            ]
+        ]
     ];
 }

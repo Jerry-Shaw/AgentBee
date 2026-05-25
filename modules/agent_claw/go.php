@@ -23,15 +23,18 @@
 
 namespace modules\agent_claw;
 
+use modules\agent_core\core;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libHttp;
 
 class go extends Factory
 {
+    public core    $core;
     public libHttp $http;
 
     public function __construct()
     {
+        $this->core = core::new();
         $this->http = libHttp::new();
     }
 
@@ -193,21 +196,36 @@ class go extends Factory
 
     public function downloadFile(string $url, string $save_to, int $timeout = 30): array
     {
-        $res = $this->request($url, 'GET', [], $timeout);
-        if (!empty($res['error'])) return ['saved' => false, 'error' => $res['error']];
+        // Ensure target directory exists before fetching
+        $save_to  = $this->core->securePath($save_to);
+        $dir_path = dirname($save_to);
 
-        $dir = dirname($save_to);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        if (!is_dir($dir_path)) {
+            mkdir($dir_path, 755, true);
         }
 
-        $bytes = file_put_contents($save_to, $res['body'], LOCK_EX);
+        // Clean slate + timeout + browser-like headers to avoid bot detection
+        $this->http->resetOptions();
+        $this->http->setTimeout($timeout);
+        $this->http->addHeader([
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language: zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Cache-Control: max-age=0',
+            'Connection: keep-alive',
+            'Upgrade-Insecure-Requests: 1'
+        ]);
+
+        // Stream directly to file + auto-reset options after request (clean slate for next call)
+        $this->http->fetch($url, $save_to, true);
+
+        $code = $this->http->getHttpCode();
 
         return [
-            'saved' => (false !== $bytes), // Yoda Condition
-            'path'  => $save_to,
-            'size'  => $bytes ?: 0,
-            'url'   => $url
+            'status' => 200 === $code && is_file($save_to) ? 'success' : 'error',
+            'path'   => $save_to,
+            'size'   => filesize($save_to) ?: 0,
+            'error'  => $this->http->getHttpError(),
         ];
     }
 }

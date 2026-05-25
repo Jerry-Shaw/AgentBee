@@ -74,6 +74,10 @@ class go extends Factory
             '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['work_name']
         ])->run(core::PROC_IDX_OPENAI);
 
+        $worker_pid = $this->core->procMgr->getPid(core::PROC_IDX_OPENAI);
+
+        $this->core->agent_llm->buildShmop($worker_pid);
+
         try {
             $this->core->socketMgr
                 ->setDebugMode($this->core->agent_config['debug'])
@@ -315,6 +319,12 @@ class go extends Factory
                 'sessionId' => $data['sessionId'],
                 'messageId' => $data['messageId']
             ];
+
+            if ('stop' === $data['type']) {
+                $this->core->agent_llm->abort($socket_id);
+                $this->core->sendMessage($socket_id, json_encode(['type' => 'end'] + $this->socket_session[$socket_id]));
+                return;
+            }
 
             $type_method = 'process_' . $data['type'];
 

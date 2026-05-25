@@ -27,7 +27,8 @@ use Nervsys\Ext\libOpenAI;
 
 class go extends Factory
 {
-    public core $core;
+    public core   $core;
+    public \Shmop $shmop;
 
     public libOpenAI $libOpenAI;
 
@@ -57,6 +58,28 @@ class go extends Factory
     }
 
     /**
+     * @param int $worker_pid
+     *
+     * @return $this
+     */
+    public function buildShmop(int $worker_pid): static
+    {
+        $shm_key = crc32($worker_pid) & 0x7FFFFFFF;
+        $shmop   = shmop_open($shm_key, "c", 0644, 1);
+
+        if (false === $shmop) {
+            throw new \RuntimeException('Failed to create shared memory');
+        } else {
+            $this->shmop = $shmop;
+        }
+
+        $this->libOpenAI->setShmop($shmop);
+
+        unset($worker_pid, $shm_key, $shmop);
+        return $this;
+    }
+
+    /**
      * Start a chat session.
      *
      * @param string $socket_id
@@ -69,21 +92,28 @@ class go extends Factory
      */
     public function chat(string $socket_id, array $message_metadata, array $session_history): void
     {
-        $this->procWorker->chat($socket_id, $message_metadata, $session_history, $this->libOpenAI);
+        $task = [
+            'socket_id' => $socket_id,
+            'msg_meta'  => $message_metadata,
+            'history'   => $session_history,
+        ];
+
+        $this->core->procMgr->writeProc(core::PROC_IDX_OPENAI, json_encode($task));
+
         unset($socket_id, $message_metadata, $session_history);
     }
 
     /**
-     * Interrupt current LLM request (for procWorker).
+     * Abort current LLM request (for procWorker).
      *
      * @param string $socket_id
      *
      * @return void
      * @throws \Exception
      */
-    public function interrupt(string $socket_id): void
+    public function abort(string $socket_id): void
     {
-        $this->procWorker->interrupt($socket_id);
+        shmop_write($this->shmop, "\x01", 0);
         unset($socket_id);
     }
 
@@ -95,6 +125,7 @@ class go extends Factory
      */
     public function procWorker(): void
     {
+        $this->buildShmop(getmypid());
         $this->procWorker = procWorker::new();
 
         while (true) {

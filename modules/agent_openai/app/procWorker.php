@@ -40,44 +40,6 @@ class procWorker extends Factory
     }
 
     /**
-     * Send a chat task to the worker process (via pipe).
-     *
-     * @param string    $socket_id
-     * @param array     $message_metadata
-     * @param array     $session_history
-     * @param libOpenAI $libOpenAI
-     *
-     * @return void
-     * @throws \Exception
-     */
-    public function chat(string $socket_id, array $message_metadata, array $session_history, libOpenAI $libOpenAI): void
-    {
-        $task = [
-            'socket_id' => $socket_id,
-            'msg_meta'  => $message_metadata,
-            'history'   => $session_history,
-        ];
-
-        $this->core->procMgr->writeProc(core::PROC_IDX_OPENAI, json_encode($task));
-
-        unset($socket_id, $message_metadata, $session_history, $libOpenAI, $task);
-    }
-
-    /**
-     * Interrupt current task (send STOP to stdin).
-     *
-     * @param string $socket_id
-     *
-     * @return void
-     * @throws \Exception
-     */
-    public function interrupt(string $socket_id): void
-    {
-        $this->core->procMgr->writeProc(core::PROC_IDX_OPENAI, '__STOP__');
-        unset($socket_id);
-    }
-
-    /**
      * Execute a single LLM request (called by worker).
      *
      * @param string    $socket_id
@@ -91,41 +53,26 @@ class procWorker extends Factory
     {
         $assistant_content = '';
         $reasons_content   = '';
-        $stop_requested    = false;
-        $check_counter     = 0;
         $tool_calls        = [];
         $run_tools         = false;
 
         // Sync session history from main process
         $this->core->session_history = $session_history;
 
-        $check_stop = function () use (&$stop_requested, &$check_counter): void
+        $stream_callback = function (
+            string $key,
+            array  $data,
+            bool   $finished
+        ) use (
+            $libOpenAI,
+            $socket_id,
+            $message_metadata,
+            &$reasons_content,
+            &$assistant_content,
+            &$tool_calls,
+            &$run_tools,
+        ): void
         {
-            if (++$check_counter % 5 !== 0) {
-                return;
-            }
-
-            $read_streams   = [STDIN];
-            $write_streams  = null;
-            $except_streams = null;
-
-            if (1 === stream_select($read_streams, $write_streams, $except_streams, 0, 0)) {
-                $line = fgets(STDIN);
-
-                if (false !== $line && trim($line) === '__STOP__') {
-                    $stop_requested = true;
-                }
-            }
-        };
-
-        $stream_callback = function (string $key, array $data, bool $finished) use ($socket_id, $message_metadata, &$reasons_content, &$assistant_content, &$tool_calls, &$run_tools, $libOpenAI, &$stop_requested, $check_stop): void
-        {
-            $check_stop();
-
-            if ($stop_requested) {
-                throw new \Exception('Interrupted by user');
-            }
-
             try {
                 if (!$finished) {
                     $this->sendStream($socket_id, $data, $message_metadata, $tool_calls, $assistant_content, $reasons_content);
@@ -195,7 +142,7 @@ class procWorker extends Factory
 
         $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
 
-        unset($socket_id, $message_metadata, $session_history, $libOpenAI, $reasons_content, $assistant_content, $tool_calls, $run_tools, $stop_requested, $check_counter);
+        unset($socket_id, $message_metadata, $session_history, $libOpenAI, $reasons_content, $assistant_content, $tool_calls, $run_tools);
     }
 
     /**

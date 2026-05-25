@@ -159,51 +159,52 @@ class go extends Factory
 
                 case 'end':
                     $current_history = $this->core->getSessionHistory();
-                    $tool_calls      = $payload['data']['tool_calls'] ?? false;
 
-                    if ($tool_calls) {
-                        $this->core->agent_llm->chat(
-                            $message['socket_id'],
-                            array_intersect_key($payload, $this->socket_session[$message['socket_id']]),
-                            $current_history
-                        );
-                    }
+                    switch ($payload_type) {
+                        case 'tools':
+                            $this->core->agent_llm->chat(
+                                $message['socket_id'],
+                                array_intersect_key($payload, $this->socket_session[$message['socket_id']]),
+                                $current_history
+                            );
+                            break;
 
-                    $this->core->sendMessage($message['socket_id'], json_encode(['type' => 'end']));
+                        case 'end':
+                            $current_count = count($current_history);
+                            $max_history   = $this->core->agent_config['agent_memory']['max_history'] ?? 20;
+                            $warning_count = $max_history * 2;
+                            $limit_count   = $max_history * 3;
 
-                    $current_count = count($current_history);
-                    $max_history   = $this->core->agent_config['agent_memory']['max_history'] ?? 20;
-                    $warning_count = $max_history * 2;
-                    $limit_count   = $max_history * 3;
+                            if ($current_count < $warning_count) {
+                                $this->clean_warning = false;
+                                break;
+                            } elseif (!$this->clean_warning) {
+                                $this->clean_warning = true;
 
-                    if ($current_count < $warning_count) {
-                        $this->clean_warning = false;
-                        break;
-                    } elseif (!$this->clean_warning) {
-                        $this->clean_warning = true;
+                                $system_prompt = '【系统提醒】当前对话历史较长（已有 ' . $current_count . ' 条，上限 ' . $max_history . ' 条）。请自动完成以下操作，并以自然语气告知用户：' . "\n\n" .
+                                    '1. 总结关键信息（用户需求、助手回复、重要工具结果等），保存到对应记忆（daily/important/system，临时内容可存 ram）。' . "\n" .
+                                    '2. 调用清理工具删除旧工具调用对，精简历史。' . "\n" .
+                                    '3. 完成后，向用户说明保存的内容概要、存储层级及剩余消息数，语气自然。' . "\n\n" .
+                                    '【特别提醒】对话历史超过 ' . $limit_count . ' 条时，系统将强制清理上下文，重要信息可能丢失，请及时保存。';
 
-                        $system_prompt = '【系统提醒】当前对话历史较长（已有 ' . $current_count . ' 条，上限 ' . $max_history . ' 条）。请自动完成以下操作，并以自然语气告知用户：' . "\n\n" .
-                            '1. 总结关键信息（用户需求、助手回复、重要工具结果等），保存到对应记忆（daily/important/system，临时内容可存 ram）。' . "\n" .
-                            '2. 调用清理工具删除旧工具调用对，精简历史。' . "\n" .
-                            '3. 完成后，向用户说明保存的内容概要、存储层级及剩余消息数，语气自然。' . "\n\n" .
-                            '【特别提醒】对话历史超过 ' . $limit_count . ' 条时，系统将强制清理上下文，重要信息可能丢失，请及时保存。';
+                                $this->core->addSessionHistory(['role' => 'user', 'content' => $system_prompt]);
 
-                        $this->core->addSessionHistory(['role' => 'user', 'content' => $system_prompt]);
+                                $current_history = $this->core->getSessionHistory();
 
-                        $current_history = $this->core->getSessionHistory();
+                                $this->core->agent_llm->chat(
+                                    $message['socket_id'],
+                                    [
+                                        'sessionId' => $this->socket_session[$message['socket_id']]['sessionId'] ?? 'default',
+                                        'messageId' => 'system-' . microtime(true),
+                                    ],
+                                    $current_history
+                                );
+                            }
 
-                        $this->core->agent_llm->chat(
-                            $message['socket_id'],
-                            [
-                                'sessionId' => $this->socket_session[$message['socket_id']]['sessionId'] ?? 'default',
-                                'messageId' => 'system-' . microtime(true),
-                            ],
-                            $current_history
-                        );
-                    }
-
-                    if ($current_count > $limit_count) {
-                        $this->core->cleanSessionHistory();
+                            if ($current_count > $limit_count) {
+                                $this->core->cleanSessionHistory();
+                            }
+                            break;
                     }
                     break;
             }
@@ -213,7 +214,7 @@ class go extends Factory
             unset($this->stream_buffers[$external_stream_id]);
         }
 
-        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $tool_calls, $current_history);
+        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $current_history);
     }
 
     /**

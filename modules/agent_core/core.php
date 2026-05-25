@@ -373,18 +373,12 @@ final class core extends Factory
             }
         );
 
-        if ($in_sandbox) {
-            $drive = current($parts);
-
-            if (str_contains($drive, ':')) {
-                array_shift($parts);
-            }
-
-            array_unshift($parts, rtrim($this->agent_config['agent_tools']['workspace_path'], '\\/'));
-        }
-
         $parts = array_values($parts);
         $path  = implode(DIRECTORY_SEPARATOR, $parts);
+
+        if ($in_sandbox && !str_starts_with($path, $this->agent_config['agent_tools']['workspace_path'])) {
+            $path = rtrim($this->agent_config['agent_tools']['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . $path;
+        }
 
         unset($in_sandbox, $parts);
         return $path;
@@ -505,7 +499,7 @@ final class core extends Factory
         $prompts[] = '=== 安全规则 ===';
 
         if ($in_sandbox) {
-            $prompts[] = '- 沙箱开启：所有文件操作以 "' . $work_path . '" 为根目录；输入路径将映射为该工作区下的相对路径（替换或拼接），禁止通过 ../、符号链接等跳出。';
+            $prompts[] = '- 沙箱开启：所有文件操作以 "' . $work_path . '" 为根目录；输入路径将映射为该工作区下的相对路径（根路径替换或相对路径拼接），禁止通过 ../、符号链接等跳出。';
         } else {
             $prompts[] = '- 沙箱关闭：按绝对路径执行，优先使用项目相关目录；禁止通过 ../ 绕过访问系统关键目录（如 C:\Windows\System32）。';
         }

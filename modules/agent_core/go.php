@@ -32,6 +32,7 @@ class go extends Factory
     public bool $clean_warning = false;
 
     public array $socket_session = [];
+    public array $stream_buffers = [];
 
     /**
      * @throws \ReflectionException
@@ -104,17 +105,15 @@ class go extends Factory
      */
     public function streamWorkerHandler(string $external_stream_id, array $context): void
     {
-        static $line_buffers = [];
-
         $stdout_stream = $context['stdout'];
         $data_chunk    = fread($stdout_stream, 8192);
 
         if (false === $data_chunk || '' === $data_chunk) {
-            unset($line_buffers[$external_stream_id]);
+            unset($this->stream_buffers[$external_stream_id]);
             return;
         }
 
-        $buffer = &$line_buffers[$external_stream_id];
+        $buffer = &$this->stream_buffers[$external_stream_id];
         $buffer .= $data_chunk;
 
         while (false !== ($line_pos = strpos($buffer, "\n"))) {

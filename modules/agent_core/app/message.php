@@ -88,9 +88,9 @@ class message extends Factory
                         'type' => 'text',
                         'text' => '--- 文件开始 ---' . "\n"
                             . '文件名: ' . $data['file']['filename'] . "\n"
-                            . 'MIME类型: ' . $data['file']['mimeType'] . "\n\n"
+                            . 'MIME类型: ' . $data['file']['mimeType'] . "\n"
                             . '文件内容:' . "\n" . $data['file']['content'] . "\n"
-                            . '--- 文件结束 ---' . "\n\n"
+                            . '--- 文件结束 ---'
                     ];
                 }
             }
@@ -207,17 +207,54 @@ class message extends Factory
     private function file_is_allowed(string $filename): bool
     {
         $whitelist = [
-            'txt', 'md', 'markdown',
-            'js', 'javascript', 'ts', 'jsx', 'tsx',
-            'php', 'php3', 'php4', 'php5', 'phpt',
-            'html', 'htm', 'xhtml',
-            'css', 'scss', 'sass', 'less',
-            'json', 'xml', 'yaml', 'yml',
-            'py', 'python',
-            'sh', 'bash', 'zsh',
-            'sql', 'plsql',
-            'c', 'cpp', 'h', 'hpp', 'java', 'go', 'rs', 'rb', 'swift',
-            'conf', 'cfg', 'ini', 'env', 'gitignore', 'dockerfile'
+            // ----- 纯文本与日志 -----
+            'txt', 'text', 'log', 'out', 'err', 'cfg', 'conf', 'ini', 'env', 'gitignore', 'dockerfile',
+            'editorconfig', 'htaccess', 'htpasswd', 'bashrc', 'zshrc', 'profile', 'vimrc', 'screenrc', 'tmux.conf',
+            'inf', 'reg', 'url', 'desktop', 'directory', 'm3u', 'm3u8', 'pls', 'cue', 'srt', 'vtt', 'ass', 'ssa', 'sub', 'idx',
+
+            // ----- 标记语言与文档 -----
+            'md', 'markdown', 'rst', 'adoc', 'asciidoc', 'tex', 'latex', 'bib', 'rtf', 'pod', 'wiki', 'mediawiki',
+            'html', 'htm', 'xhtml', 'xml', 'xsl', 'xslt', 'dtd', 'svg', 'rss', 'atom', 'json', 'jsonl', 'json5',
+            'yaml', 'yml', 'toml', 'plist', 'csv', 'tsv', 'psv', 'dif', 'diff', 'patch', 'rdf', 'owl', 'ttl', 'n3', 'nt',
+            'trig', 'trix', 'geojson', 'topojson', 'kml', 'gpx', 'osm', 'ical', 'ics', 'vcal', 'vcard', 'vcf', 'eml', 'mml', 'mathml',
+
+            // ----- 脚本与编程语言源码 -----
+            'sh', 'bash', 'zsh', 'fish', 'ksh', 'bat', 'cmd', 'ps1', 'psd1', 'psm1', 'vbs', 'vba', 'js',
+            'javascript', 'ts', 'tsx', 'jsx', 'mjs', 'cjs', 'php', 'php3', 'php4', 'php5', 'phpt', 'phtml',
+            'py', 'python', 'pyw', 'pyi', 'r', 'rmd', 'pl', 'pm', 't', 'raku', 'rb', 'ru', 'go', 'rs', 'swift',
+            'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hxx', 'inl', 'ipp', 'java', 'kt', 'kts', 'groovy', 'scala',
+            'clj', 'cljs', 'edn', 'coffee', 'lua', 'erl', 'hrl', 'ex', 'exs', 'elm', 'hs', 'lhs', 'ml', 'mli',
+            'nim', 'cr', 'zig', 'd', 'v', 'f90', 'f95', 'f03', 'f08', 'for', 'f', 'pas', 'pp', 'm', 'mm', 'adoc',
+
+            // ----- Web 模板与前端组件 -----
+            'vue', 'svelte', 'astro', 'njk', 'liquid', 'twig', 'hbs', 'mustache', 'ejs', 'pug', 'jade', 'haml',
+            'slm', 'slim', 'erb', 'rhtml', 'jsp', 'asp', 'aspx', 'cshtml', 'vbhtml', 'volt', 'smarty',
+            'tpl', 'latte', 'blade.php',
+
+            // ----- 配置文件 -----
+            'json', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'config', 'env', 'properties', 'prop', 'xml',
+            'plist', 'pkl', 'hcl', 'tf', 'tfvars', 'nomad', 'service', 'socket', 'target', 'link',
+            'editorconfig', 'prettierrc', 'eslintrc', 'babelrc', 'stylelintrc', 'htmlhintrc', 'pylintrc',
+            'flake8', 'mypy.ini', 'pytest.ini', 'tox.ini', 'clang-format', 'clang-tidy', 'cmake', 'makefile',
+            'gnumakefile', 'dockerfile', 'containerfile', 'nginx.conf', 'apache.conf', 'httpd.conf', 'php.ini',
+            'my.cnf', 'pg_hba.conf', 'redis.conf', 'mongod.conf', 'logrotate.d', 'crontab', 'systemd', 'socket',
+
+            // ----- 数据库与查询 -----
+            'sql', 'psql', 'mysql', 'sqlite', 'ddl', 'dml', 'plsql', 'pgsql', 'cql', 'hql', 'graphql',
+
+            // ----- 科学计算与数据交换（仅纯文本格式）-----
+            'csv', 'tsv', 'psv', 'dif', 'mat', 'm', 'jl', 'ipynb', 'sas', 'stata', 'dta', 'sps', 'sav', 'por',
+
+            // ----- 版本控制与忽略文件 -----
+            'git', 'gitattributes', 'gitmodules', 'gitkeep', 'mailmap', 'gitignore', 'dockerignore', 'npmignore',
+            'eslintignore', 'prettierignore', 'stylelintignore', 'jshintignore', 'cvsignore', 'hgignore',
+            'svnignore', 'bzrignore', 'cfignore', 'slugignore',
+
+            // ----- 其他常见纯文本格式（写字板可读）-----
+            'url', 'desktop', 'directory', 'm3u', 'm3u8', 'pls', 'cue', 'srt', 'vtt', 'ass', 'ssa', 'sub', 'idx',
+            'bib', 'ris', 'endnote', 'enl', 'rdf', 'owl', 'ttl', 'n3', 'nt', 'trig', 'trix',
+            'geojson', 'topojson', 'kml', 'gpx', 'osm', 'ical', 'ics', 'vcal', 'vcard', 'vcf', 'eml', 'mml', 'mathml',
+            'xhtml', 'rtf', 'inf', 'reg'
         ];
 
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));

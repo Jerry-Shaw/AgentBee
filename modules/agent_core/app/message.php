@@ -43,8 +43,8 @@ class message extends Factory
     /**
      * Normal text chat
      *
-     * @param int   $socket_id
-     * @param array $data
+     * @param string $socket_id
+     * @param array  $data
      *
      * @return array
      */
@@ -126,7 +126,7 @@ class message extends Factory
     /**
      * Process binary data with multimodal content
      *
-     * @param int    $socket_id
+     * @param string $socket_id
      * @param string $data Binary data from WebSocket
      *
      * @return string JSON string that can be processed by onMessage

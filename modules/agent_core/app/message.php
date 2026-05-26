@@ -95,7 +95,14 @@ class message extends Factory
             // 3. Handle text files (only allowed pure text content)
             if ('file' === $data['type']) {
                 if (isset($data['file']['content']) && '' !== $data['file']['content']) {
-                    $content[] = ['type' => 'text', 'text' => $data['file']['content']];
+                    $content[] = [
+                        'type' => 'text',
+                        'text' => '--- 文件开始 ---' . "\n"
+                            . '文件名: ' . $data['file']['filename'] . "\n"
+                            . 'MIME类型: ' . $data['file']['mimeType'] . "\n\n"
+                            . '文件内容:' . "\n" . $data['file']['content'] . "\n"
+                            . '--- 文件结束 ---' . "\n\n"
+                    ];
                 }
             }
         }

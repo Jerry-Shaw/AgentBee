@@ -28,15 +28,15 @@ class message extends Factory
      * Normal text chat
      *
      * @param string $socket_id
-     * @param array  $data
+     * @param array  $data_content
      *
      * @return array
      */
-    public function process_text(string $socket_id, array $data): array
+    public function process_text(string $socket_id, array $data_content): array
     {
         return [
             'agent_llm' => true,
-            'content'   => $data['text'] ?? $data['message'] ?? ''
+            'content'   => ['type' => 'text', 'text' => trim($data_content['text'] ?? '')]
         ];
     }
 

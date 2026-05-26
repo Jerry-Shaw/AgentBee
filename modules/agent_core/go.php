@@ -332,7 +332,7 @@ class go extends Factory
                 continue;
             }
 
-            $result = $this->message->$type_method($socket_id, $data['content'] ?? $data);
+            $result = $this->message->$type_method($socket_id, $data['content']);
 
             if ($result['agent_llm']) {
                 $llm_data = $result['content'];

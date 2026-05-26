@@ -68,15 +68,7 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
-        $this->core->procMgr->command([
-            $this->core->OSMgr->getPhpPath(),
-            $this->core->app->script_path,
-            '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['work_name']
-        ])->run(core::PROC_IDX_OPENAI);
-
-        $worker_pid = $this->core->procMgr->getPid(core::PROC_IDX_OPENAI);
-
-        $this->core->agent_llm->buildShmop($worker_pid);
+        $this->runProcWorker();
 
         try {
             $this->core->socketMgr
@@ -95,6 +87,37 @@ class go extends Factory
                 ->listenTo('tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'], $this->core->agent_config['agent_server']['websocket']);
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * @return void
+     * @throws \Exception
+     */
+    public function runProcWorker(): void
+    {
+        $worker_status = $this->core->procMgr->getStatus(core::PROC_IDX_OPENAI);
+
+        if (0 < $worker_status) {
+            return;
+        }
+
+        $this->core->procMgr->close(core::PROC_IDX_OPENAI);
+
+        $this->core->procMgr->command([
+            $this->core->OSMgr->getPhpPath(),
+            $this->core->app->script_path,
+            '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['work_name']
+        ])->run(core::PROC_IDX_OPENAI);
+
+        $worker_pid = $this->core->procMgr->getPid(core::PROC_IDX_OPENAI);
+
+        $this->core->socketMgr->addExternalProc(
+            $this->core->procMgr->getProc(core::PROC_IDX_OPENAI),
+            [$this, 'streamWorkerHandler'],
+            [$this, 'streamWorkerHandler']
+        );
+
+        $this->core->agent_llm->buildShmop($worker_pid);
     }
 
     /**
@@ -349,12 +372,12 @@ class go extends Factory
         }
 
         if (!empty($llm_data)) {
+            $this->runProcWorker();
             $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
-            $current_history = $this->core->getSessionHistory();
-            $this->core->agent_llm->chat($socket_id, $message_metadata, $current_history);
+            $this->core->agent_llm->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
         }
 
-        unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet, $current_history);
+        unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet);
     }
 
     /**

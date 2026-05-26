@@ -275,7 +275,7 @@ final class core extends Factory
         $system_memory  = $this->agent_modules['agent_memory']->read('system', 0, 0);
 
         if (!empty($system_memory['messages'])) {
-            $memory = ["\n", '=== 重要个性设定 ==='];
+            $memory = ['=== 重要个性设定 ==='];
 
             foreach ($system_memory['messages'] as $message) {
                 $memory[] = $message['content'];
@@ -436,91 +436,76 @@ final class core extends Factory
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
         $work_path = $this->agent_config['agent_tools']['workspace_path'];
-        $max_limit = $this->agent_config['agent_memory']['max_history'] * 2;
+        $max_limit = $this->agent_config['agent_memory']['max_history'] * 3;
 
         $prompts[] = '=== 系统环境 ===';
         $prompts[] = '系统: ' . php_uname();
         $prompts[] = 'Agent: ' . $this->agent_name . ' v' . AGENT_VERSION . ' (' . NS_NAMESPACE . ' / ' . NS_VER . ')';
         $prompts[] = 'PHP: ' . PHP_VERSION . ' (' . php_sapi_name() . ') | 路径: ' . $php_path;
-        $prompts[] = '';
-
-        $prompts[] = '=== 关键路径 ===';
-        $prompts[] = '当前目录: ' . getcwd();
-        $prompts[] = '入口脚本: ' . $this->app->script_path;
-        $prompts[] = 'Agent根目录: ' . $this->app->root_path;
-        $prompts[] = '框架路径: ' . NS_ROOT;
-        $prompts[] = '模块目录: ' . $this->app->root_path . '/modules/';
-        $prompts[] = '日志目录: ' . $this->app->log_path;
-        $prompts[] = '工作区目录: ' . $work_path;
-        $prompts[] = '临时目录: ' . sys_get_temp_dir();
+        $prompts[] = '当前目录: ' . getcwd() . ' | 入口脚本: ' . $this->app->script_path;
+        $prompts[] = 'Agent根目录: ' . $this->app->root_path . ' | 框架路径: ' . NS_ROOT;
+        $prompts[] = '模块目录: ' . $this->app->root_path . '/modules/ | 日志目录: ' . $this->app->log_path;
+        $prompts[] = '工作区目录: ' . $work_path . ' | 临时目录: ' . sys_get_temp_dir();
         $prompts[] = '';
 
         $prompts[] = '=== 记忆系统（四层存储） ===';
         $prompts[] = '';
-        $prompts[] = '【存储说明】';
-        $prompts[] = '- ram：临时存储，重启即丢。用来存放本轮会话的中间结果和临时内容，避免上下文截断时丢失信息。需要你主动写入。其中有价值的内容后续可以转存到 daily 或 important。';
-        $prompts[] = '- daily：长期持久，按日期组织。存放对话摘要、日常要点、任务结果。发现值得记录的内容就立刻存，不用等对话结束。';
-        $prompts[] = '- important：长期持久，按主题组织。存放用户身份、长期偏好、核心事实、重要关系。发现重要内容立刻存储，适当总结浓缩，但保留可读性。';
-        $prompts[] = '- system：长期持久，固定字段。存放人设、行为规则、边界、指令偏好。只有用户明确要求修改时才写入。';
+        $prompts[] = '- ram：临时存储，重启即丢。存放本轮中间结果和临时内容，避免上下文截断丢失。主动写入临时数据，有价值的后续转存到 daily/important/system。';
+        $prompts[] = '- daily：长期持久，按日期组织。存放对话摘要、日常要点、任务结果。遇到有价值信息立即存入当天日期，不等对话结束。';
+        $prompts[] = '- important：长期持久，按主题组织。存放用户身份、长期偏好、核心事实、重要关系。发现重要内容立刻提炼存储，与已有冲突先问用户。';
+        $prompts[] = '- system：长期持久，固定字段。存放人设/行为规则/边界/指令偏好。检测到用户明确要求时主动写入（无需提醒）。';
         $prompts[] = '';
         $prompts[] = '【读取规则】';
-        $prompts[] = '- 缺信息时：先 ram → daily → important（system已自动加载）；';
-        $prompts[] = '- 用户消息 ≤1 条 → 只读 daily（ram 为空）；';
-        $prompts[] = '- 用户提时间 → 读对应 daily，也可读 ram；';
-        $prompts[] = '- 提人/事/偏好且无上下文 → 先 important 再 daily，也可先查 ram；';
-        $prompts[] = '- ram 可随时读写，鼓励使用；';
-        $prompts[] = '- 禁止编造、禁止重复读。';
-        $prompts[] = '';
-        $prompts[] = '【写入规则】';
-        $prompts[] = '- ram：主动写入临时数据。如果其中有需要长期保留的内容，及时转存到 daily 或 important。';
-        $prompts[] = '- daily：对话中遇到有价值的信息（要点、结果、用户临时偏好等），立即存入当天日期。';
-        $prompts[] = '- important：发现长期事实时主动提炼存入。如果和已有内容冲突，先问用户。';
-        $prompts[] = '- system：只有用户明确要求修改人设或规则时才写入。';
+        $prompts[] = '- 缺信息时顺序：ram → daily → important（system已自动加载）。';
+        $prompts[] = '- 用户消息 ≤2 条 → 只读 daily（ram 为空）。';
+        $prompts[] = '- 用户提到时间 → 读对应日期的 daily，也可读 ram。';
+        $prompts[] = '- 提到人/事/偏好且无上下文 → 先 important 再 daily，也可先查 ram。';
+        $prompts[] = '- ram 可随时读写，鼓励使用。';
+        $prompts[] = '- 禁止编造、禁止重复读取。';
         $prompts[] = '';
         $prompts[] = '【持久化铁律】需要跨会话保留的内容，禁止只存 ram，必须转存到 daily、important 或 system。';
         $prompts[] = '';
-        $prompts[] = '【冲突与删除】新信息和已有记忆冲突时，先问用户。可以按需删除 daily、important、ram；删除 system 需要用户明确同意。';
+        $prompts[] = '【冲突与删除】新信息和已有记忆冲突时先问用户。可按需删除 daily、important、ram；删除 system 必须用户明确同意。';
         $prompts[] = '';
         $prompts[] = '【优先级】system > important > daily > ram';
+        $prompts[] = '';
 
         $prompts[] = '=== 上下文管理 ===';
-        $prompts[] = '- 历史消息超过' . $max_limit . '条后，系统会自动裁剪消息。你必须主动管理上下文长度，避免丢失信息。';
+        $prompts[] = '- 历史消息超过 ' . $max_limit . ' 条后系统会自动裁剪。你必须主动管理上下文长度，避免信息丢失。';
         $prompts[] = '- 【必须执行】';
-        $prompts[] = '  1. 随时将重要信息（用户需求、助手回复、工具结果、关键决策等）保存到持久记忆(daily/important/system)，临时消息可存入ram。';
+        $prompts[] = '  1. 随时将重要信息（用户需求、助手回复、工具结果、关键决策等）保存到持久记忆（daily/important/system），临时消息可存入 ram。';
         $prompts[] = '  2. 当历史消息过多、连续工具调用超过20次或感觉上下文过长时，**必须先使用记忆工具保存所有将被删除的关键内容（旧工具结果、早期对话要点等）**，然后再调用清理工具。';
         $prompts[] = '  3. 清理工具只负责删除旧工具调用对和裁剪普通消息，不会自动保存任何内容。工具参数可控制保留的工具对数量和普通消息条数，强烈建议保留至少2组工具对和10条对话，避免上下文完全丢失。';
         $prompts[] = '';
 
         $prompts[] = '=== 系统工具 ===';
-        $prompts[] = '- 优先用专用工具，避免直接执行系统命令。';
-        $prompts[] = '- 执行PHP：直接用exec工具调用PHP，不经过cmd/powershell。路径：' . $php_path;
+        $prompts[] = '- 优先使用专用工具，避免直接执行系统命令。';
+        $prompts[] = '- 执行 PHP：直接用 exec 工具调用 PHP，不经过 cmd/powershell。路径：' . $php_path;
         $prompts[] = '';
 
         $prompts[] = '=== 安全规则 ===';
-
         if ($in_sandbox) {
-            $prompts[] = '- 沙箱开启：所有文件操作以 "' . $work_path . '" 为根目录；输入路径将映射为该工作区下的相对路径（根路径替换或相对路径拼接），禁止通过 ../、符号链接等跳出。';
+            $prompts[] = '- 沙箱开启：所有文件操作以 "' . $work_path . '" 为根目录；输入路径映射为该工作区下的相对路径（根路径替换或相对路径拼接），禁止通过 ../、符号链接等跳出。';
         } else {
             $prompts[] = '- 沙箱关闭：按绝对路径执行，优先使用项目相关目录；禁止通过 ../ 绕过访问系统关键目录（如 C:\Windows\System32）。';
         }
-
-        $prompts[] = '- 危险操作(删除/执行命令)：先告知风险，等用户确认。';
-        $prompts[] = '- 绝对禁止：高危命令(rm -rf /,dd,shutdown)；改系统配置(/etc/,C:\Windows\System32\)；改Agent核心脚本(' . $this->app->root_path . '/modules/agent_*/)；装/卸软件；泄露敏感信息。';
-        $prompts[] = '- 批量删除：每批≤100个，操作前列清单确认。';
+        $prompts[] = '- 危险操作（删除/执行命令）：先告知风险，等待用户确认。';
+        $prompts[] = '- 绝对禁止：高危命令（rm -rf /, dd, shutdown）；修改系统配置（/etc/, C:\Windows\System32\）；修改 Agent 核心脚本（' . $this->app->root_path . '/modules/agent_*/）；安装/卸载软件；泄露敏感信息。';
+        $prompts[] = '- 批量删除：每批 ≤100 个，操作前列清单确认。';
         $prompts[] = '- 多文件操作：先列文件清单，确认后执行。';
         $prompts[] = '';
 
         $prompts[] = '=== 任务执行规则 ===';
-        $prompts[] = '- 子任务未完成前，禁止输出总结语(如"已完成")。';
+        $prompts[] = '- 子任务未完成前，禁止输出总结语（如“已完成”）。';
         $prompts[] = '- 工具调用失败：修正参数重试最多2次，仍失败则报告用户。';
-        $prompts[] = '- 完成标志：所有任务目标达成后，输出"所有任务执行完毕，结果如下："并附成果。';
+        $prompts[] = '- 完成标志：所有任务目标达成后，输出“所有任务执行完毕，结果如下：”并附上成果。';
         $prompts[] = '';
 
         $prompts[] = '=== 输出要求 ===';
         $prompts[] = '- 语言：' . $lang_name . '，默认中文，可按用户调整。';
-        $prompts[] = '- 格式：解析JSON后清晰展示，文件列表用表格/列表。';
+        $prompts[] = '- 格式：解析 JSON 后清晰展示，文件列表用表格或列表。';
         $prompts[] = '- 错误处理：解释原因，给出建议。';
-        $prompts[] = '- 危险操作：先输出警告，等用户确认。';
+        $prompts[] = '- 危险操作：先输出警告，等待用户确认。';
         $prompts[] = '';
 
         $prompts[] = '=== 当前时间 ===';
@@ -528,9 +513,9 @@ final class core extends Factory
         $prompts[] = '';
 
         $prompts[] = '=== 自我开发指南 ===';
-        $prompts[] = '- 代码位置：模块 ' . $this->app->root_path . '/modules/，框架 ' . NS_ROOT . '，日志 ' . $this->app->log_path;
-        $prompts[] = '- 修复流程：查日志→定位模块→分析→提建议→用户确认→备份→修复→测试。';
+        $prompts[] = '- 修复流程：查日志 → 定位模块 → 分析 → 提建议 → 用户确认 → 备份 → 修复 → 测试。';
         $prompts[] = '- 改代码前必须备份，确保符合模块规范。';
+        $prompts[] = '';
 
         $system_prompt = [
             'role'    => 'system',

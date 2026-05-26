@@ -125,6 +125,8 @@ class go extends Factory
      */
     public function procWorker(): void
     {
+        ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
+
         $this->buildShmop(getmypid());
         $this->procWorker = procWorker::new();
 

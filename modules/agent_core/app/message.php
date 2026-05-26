@@ -25,22 +25,6 @@ use Nervsys\Core\Factory;
 class message extends Factory
 {
     /**
-     * Process stop message from client.
-     *
-     * @param string $socket_id
-     * @param array  $data
-     *
-     * @return array
-     */
-    public function process_stop(string $socket_id, array $data): array
-    {
-        // Call LLM module to interrupt
-        \modules\agent_core\core::new()->agent_llm->interrupt($socket_id);
-        unset($socket_id, $data);
-        return ['agent_llm' => false, 'content' => ''];
-    }
-
-    /**
      * Normal text chat
      *
      * @param string $socket_id
@@ -67,7 +51,8 @@ class message extends Factory
      * - 'files' (array): list of text files, each as:
      *      ['name' => ..., 'mime' => ..., 'content' => ...] (raw text content)
      *
-     * @param array $data Incoming message data from frontend.
+     * @param string $socket_id
+     * @param array  $data_content
      *
      * @return array Associative array with 'agent_llm' (bool) and 'text' (multimodal content array).
      */
@@ -94,7 +79,11 @@ class message extends Factory
 
             // 3. Handle text files (only allowed pure text content)
             if ('file' === $data['type']) {
-                if (isset($data['file']['content']) && '' !== $data['file']['content']) {
+                if (
+                    isset($data['file']['content'])
+                    && '' !== $data['file']['content']
+                    && $this->file_is_allowed($data['file']['filename'])
+                ) {
                     $content[] = [
                         'type' => 'text',
                         'text' => '--- 文件开始 ---' . "\n"

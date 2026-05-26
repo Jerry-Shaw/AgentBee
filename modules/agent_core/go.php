@@ -73,11 +73,6 @@ class go extends Factory
         try {
             $this->core->socketMgr
                 ->setDebugMode($this->core->agent_config['debug'])
-                ->addExternalProc(
-                    $this->core->procMgr->getProc(core::PROC_IDX_OPENAI),
-                    [$this, 'streamWorkerHandler'],
-                    [$this, 'streamWorkerHandler']
-                )
                 ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'] * 2)
                 ->setEventListener('onHandshake', [$this, 'onHandshake'])
                 ->setEventListener('onHeartbeat', [$this, 'onHeartbeat'])

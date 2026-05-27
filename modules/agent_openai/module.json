@@ -1,5 +1,5 @@
 {
-  "name": "llm_openai",
+  "name": "agent_openai",
   "version": "0.0.1",
   "description": "OpenAPI Compatible API",
   "author": "秋水之冰",

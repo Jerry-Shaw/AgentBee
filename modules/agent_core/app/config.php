@@ -77,24 +77,21 @@ class config extends Factory
                 'ping_interval' => 30,
             ],
             'agent_llm'    => [
-                'provider'     => 'llm_openai',
+                'provider'     => 'agent_openai',
+                'work_name'    => 'procWorker',
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
-                'model'        => 'qwen3.6-27b',
+                'model'        => 'qwen3.6-27b-neo-code',
                 'org_id'       => '',
                 'timeout'      => 7200,
-                'keep_reasons' => true,
+                'keep_reasons' => false,
                 'params'       => [
-                    'seed'              => 42,
-                    'max_tokens'        => 8192,
+                    'max_tokens'        => 32768,
                     'temperature'       => 0.3,
                     'top_p'             => 0.85,
                     'frequency_penalty' => 0.3,
                     'presence_penalty'  => 0.2,
-                    'stop'              => [
-                        '<|im_end|>',
-                        '<|endoftext|>',
-                    ],
+                    'stop'              => [],
                     'extra_body'        => [
                         'chat_template_kwargs' => [
                             'enable_thinking' => false,
@@ -106,24 +103,24 @@ class config extends Factory
                 ],
             ],
             'agent_task'   => [
-                'provider' => 'agent_memory',
+                'provider' => 'agent_mem_db',
             ],
             'agent_memory' => [
-                'provider'    => 'agent_memory',
-                'max_history' => 20,
+                'provider'    => 'agent_mem_db',
+                'max_history' => 30,
             ],
             'agent_tools'  => [
                 'enabled'        => true,
                 'in_sandbox'     => true,
                 'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
                 'list'           => [
-                    ['name' => 'agent_memory'],
+                    ['name' => 'agent_mem_db'],
                     ['name' => 'agent_tools'],
                     ['name' => 'agent_claw'],
                 ],
             ],
             'memory_limit' => '4G',
-            'debug'        => true,
+            'debug'        => false,
         ];
 
         file_put_contents($config_file, json_encode($config, JSON_PRETTY));

@@ -32,11 +32,14 @@ final class core extends Factory
 {
     use System;
 
+    public const PROC_IDX_OPENAI = 0;
+    public const PROC_IDX_EXEC   = 1;
+
     public config    $config;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
 
-    public string $name = 'AgentBee';
+    public string $agent_name = 'AgentBee/蜂小秘';
 
     public array $llm_tools  = [];
     public array $llm_params = [];
@@ -49,6 +52,8 @@ final class core extends Factory
     public int   $session_history_limit = 20;
 
     /**
+     * Initialize core components.
+     *
      * @return void
      * @throws \ReflectionException
      */
@@ -67,10 +72,16 @@ final class core extends Factory
             $this->session_history_limit = $this->agent_config['agent_memory']['max_history'];
         }
 
+        if ('' === $this->agent_config['agent_tools']['workspace_path'] || !is_dir($this->agent_config['agent_tools']['workspace_path'])) {
+            $this->agent_config['agent_tools']['workspace_path'] = $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
+        }
+
         $this->agent_config['agent_tools']['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
     }
 
     /**
+     * Initialize all modules.
+     *
      * @return void
      * @throws \ReflectionException
      */
@@ -88,7 +99,6 @@ final class core extends Factory
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
-                continue;
             }
         }
 
@@ -96,32 +106,29 @@ final class core extends Factory
     }
 
     /**
+     * Initialize tools.
+     *
      * @return void
      * @throws \ReflectionException
      */
     public function initTools(): void
     {
-        if (!isset($this->agent_config['agent_tools']) || !isset($this->agent_config['agent_tools']['enabled'])) {
-            return;
-        }
-
-        if (true !== $this->agent_config['agent_tools']['enabled']) {
+        if (!isset($this->agent_config['agent_tools']['enabled']) || true !== $this->agent_config['agent_tools']['enabled']) {
             return;
         }
 
         $agent_tools = [];
+        $tool_list   = $this->agent_config['agent_tools']['list'] ?? [];
 
-        $this->agent_config['agent_tools']['list'] ??= [];
-
-        foreach ($this->agent_config['agent_tools']['list'] as $tool) {
+        foreach ($tool_list as $tool) {
             $tool_class = '\\modules\\' . $tool['name'] . '\\go';
             $tool_meta  = '\\modules\\' . $tool['name'] . '\\tools';
 
             try {
                 $metadata = $tool_meta::META;
 
-                foreach ($metadata as $key => $meta) {
-                    $metadata[$key]['function']['name'] = $tool['name'] . '/' . $meta['function']['name'];
+                foreach ($metadata as $index => $meta_item) {
+                    $metadata[$index]['function']['name'] = $tool['name'] . '/' . $meta_item['function']['name'];
                 }
 
                 $this->agent_tools[$tool['name']] = $tool_class::new();
@@ -130,7 +137,6 @@ final class core extends Factory
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
-                continue;
             }
         }
 
@@ -139,10 +145,12 @@ final class core extends Factory
             $this->llm_tools['tool_choice'] = 'auto';
         }
 
-        unset($agent_tools, $tool, $tool_class, $tool_meta, $metadata, $key, $meta);
+        unset($agent_tools, $tool_list, $tool, $tool_class, $tool_meta, $metadata, $index, $meta_item);
     }
 
     /**
+     * Add a message to session history.
+     *
      * @param array $content
      *
      * @return void
@@ -164,10 +172,10 @@ final class core extends Factory
 
             $target_id = 0;
             $min_diff  = INF;
-            $drop      = $message_count - $this->session_history_limit;
+            $drop_num  = $message_count - $this->session_history_limit;
 
             foreach ($user_keys as $id) {
-                $diff = abs($drop - $id);
+                $diff = abs($drop_num - $id);
                 if ($diff < $min_diff) {
                     $min_diff  = $diff;
                     $target_id = $id;
@@ -181,13 +189,15 @@ final class core extends Factory
                 array_splice($this->session_history, 1, $target_id);
             }
 
-            unset($role_list, $user_keys, $target_id, $min_diff, $drop, $id, $diff);
+            unset($role_list, $user_keys, $target_id, $min_diff, $drop_num, $id, $diff);
         }
 
         unset($content, $message_count);
     }
 
     /**
+     * Get current session history.
+     *
      * @return array
      */
     public function getSessionHistory(): array
@@ -196,6 +206,66 @@ final class core extends Factory
     }
 
     /**
+     * @return void
+     * @throws \Exception
+     */
+    public function cleanSessionHistory(): void
+    {
+        $keep_user_assistant = 8;
+        $keep_tool_calls     = 2;
+        $keep_tool_results   = 2;
+
+        $new_history = [];
+        $last_role   = '';
+        $last_key    = count($this->session_history) - 1;
+
+        for ($i = $last_key; $i > 0; --$i) {
+            $message_role  = $this->session_history[$i]['role'];
+            $is_tool_calls = $this->session_history[$i]['tool_calls'] ?? false;
+
+            if (0 < $keep_user_assistant) {
+                if ('user' === $message_role) {
+                    $new_history[$i] = $this->session_history[$i];
+                    --$keep_user_assistant;
+                    $last_role = 'user';
+                } elseif ('assistant' === $message_role && !$is_tool_calls) {
+                    $new_history[$i] = $this->session_history[$i];
+                    --$keep_user_assistant;
+                    $last_role = 'assistant';
+                }
+
+                if ('user' !== $last_role && !$is_tool_calls && in_array($message_role, ['user', 'assistant'], true)) {
+                    ++$keep_user_assistant;
+                }
+            }
+
+            if (0 < $keep_tool_results) {
+                if ('tool' === $message_role) {
+                    $new_history[$i] = $this->session_history[$i];
+                    --$keep_tool_results;
+                }
+            }
+
+            if (0 < $keep_tool_calls) {
+                if ('assistant' === $message_role && $is_tool_calls) {
+                    $new_history[$i] = $this->session_history[$i];
+                    --$keep_tool_calls;
+                }
+            }
+
+            if (0 >= $keep_user_assistant && 0 >= $keep_tool_results && 0 >= $keep_tool_calls) {
+                break;
+            }
+        }
+
+        ksort($new_history, SORT_NUMERIC);
+        array_unshift($new_history, $this->getSystemMemory());
+        $this->session_history = array_values($new_history);
+    }
+
+    /**
+     * Get system memory prompt.
+     *
      * @return array
      * @throws \Exception
      */
@@ -205,7 +275,7 @@ final class core extends Factory
         $system_memory  = $this->agent_modules['agent_memory']->read('system', 0, 0);
 
         if (!empty($system_memory['messages'])) {
-            $memory = ["\n", '=== 重要个性设定 ==='];
+            $memory = ['=== 重要个性设定 ==='];
 
             foreach ($system_memory['messages'] as $message) {
                 $memory[] = $message['content'];
@@ -214,11 +284,13 @@ final class core extends Factory
             $system_default['content'] .= implode("\n", $memory);
         }
 
-        unset($system_memory, $memory);
+        unset($system_memory, $memory, $message);
         return $system_default;
     }
 
     /**
+     * Execute tool calls.
+     *
      * @param array $tool_calls
      *
      * @return array
@@ -230,44 +302,41 @@ final class core extends Factory
 
         foreach ($tool_calls as $tool_call) {
             $fn_name = $tool_call['function']['name'];
-            $fn_argv = json_decode($tool_call['function']['arguments'], true) ?? [];
+            $fn_args = json_decode($tool_call['function']['arguments'], true) ?? [];
 
             if (!str_contains($fn_name, '/')) {
                 $results[] = [
                     'tool_call_id'  => $tool_call['id'],
                     'function_name' => $fn_name,
-                    'content'       => 'Invalid tool function name format: ' . $fn_name . '. Expected "module/method" (e.g., "agent_tools/readFile").'
+                    'content'       => json_encode(['status' => 'error', 'message' => 'Invalid tool format: ' . $fn_name], JSON_FORMAT)
                 ];
-
                 continue;
             }
 
-            [$module, $method] = explode('/', $fn_name);
-
+            [$module_name, $method_name] = explode('/', $fn_name);
             try {
-                $arguments      = Factory::buildArgs(Reflect::getCallable([$this->agent_tools[$module], $method])->getParameters(), (array)$fn_argv);
-                $tool_result    = $this->agent_tools[$module]->$method(...$arguments);
-                $result_content = json_encode($tool_result, JSON_FORMAT);
+                $params         = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();
+                $args           = Factory::buildArgs($params, (array)$fn_args);
+                $tool_result    = $this->agent_tools[$module_name]->$method_name(...$args);
+                $result_content = json_encode(['status' => 'success', 'data' => $tool_result], JSON_FORMAT);
 
                 if (false === $result_content) {
-                    $result_content = json_last_error_msg();
+                    $result_content = json_encode(['status' => 'error', 'message' => json_last_error_msg()], JSON_FORMAT);
                 }
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
-                $result_content = $throwable->getMessage();
+                $result_content = json_encode(['status' => 'error', 'message' => mb_substr($throwable->getMessage(), 0, 256, 'UTF-8')], JSON_FORMAT);
                 unset($throwable);
             }
 
-            $llm_result = [
+            $results[] = [
                 'tool_call_id'  => $tool_call['id'],
                 'function_name' => $fn_name,
                 'content'       => $result_content
             ];
-
-            $results[] = $llm_result;
         }
 
-        unset($tool_calls, $tool_call, $fn_name, $fn_argv, $module, $method, $arguments, $tool_result, $result_content, $llm_result);
+        unset($tool_calls, $tool_call, $fn_name, $fn_args, $module_name, $method_name, $params, $args, $tool_result, $result_content);
         return $results;
     }
 
@@ -304,34 +373,32 @@ final class core extends Factory
             }
         );
 
-        if ($in_sandbox) {
-            $drive = current($parts);
-
-            if (str_contains($drive, ':')) {
-                array_shift($parts);
-            }
-
-            array_unshift($parts, rtrim($this->agent_config['agent_tools']['workspace_path'], '\\/'));
-        }
-
         $parts = array_values($parts);
         $path  = implode(DIRECTORY_SEPARATOR, $parts);
+
+        if ($in_sandbox && !str_starts_with($path, $this->agent_config['agent_tools']['workspace_path'])) {
+            $path = rtrim($this->agent_config['agent_tools']['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . $path;
+        }
 
         unset($in_sandbox, $parts);
         return $path;
     }
 
     /**
+     * Get a module instance.
+     *
      * @param string $name
      *
      * @return object|null
      */
-    public function getModule(string $name): object|null
+    public function getModule(string $name): ?object
     {
         return $this->agent_modules[$name] ?? null;
     }
 
     /**
+     * Get LLM parameters (including tools).
+     *
      * @return array
      */
     public function getLLMParams(): array
@@ -340,6 +407,8 @@ final class core extends Factory
     }
 
     /**
+     * Send WebSocket message.
+     *
      * @param string $socket_id
      * @param string $message
      *
@@ -349,9 +418,12 @@ final class core extends Factory
     public function sendMessage(string $socket_id, string $message): void
     {
         $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
+        unset($socket_id, $message);
     }
 
     /**
+     * Get system default prompt.
+     *
      * @param bool $in_sandbox
      *
      * @return array
@@ -359,141 +431,104 @@ final class core extends Factory
      */
     public function getSystemDefault(bool $in_sandbox = true): array
     {
-        $php_path = $this->OSMgr->getPhpPath();
-
         $prompts   = [];
+        $php_path  = $this->OSMgr->getPhpPath();
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
         $work_path = $this->agent_config['agent_tools']['workspace_path'];
+        $max_limit = $this->agent_config['agent_memory']['max_history'] * 3;
 
         $prompts[] = '=== 系统环境 ===';
         $prompts[] = '系统: ' . php_uname();
-        $prompts[] = 'Agent: ' . $this->name . ' v' . AGENT_VERSION . ' (' . NS_NAMESPACE . ' / ' . NS_VER . ')';
+        $prompts[] = 'Agent: ' . $this->agent_name . ' v' . AGENT_VERSION . ' (' . NS_NAMESPACE . ' / ' . NS_VER . ')';
         $prompts[] = 'PHP: ' . PHP_VERSION . ' (' . php_sapi_name() . ') | 路径: ' . $php_path;
+        $prompts[] = '当前目录: ' . getcwd() . ' | 入口脚本: ' . $this->app->script_path;
+        $prompts[] = 'Agent根目录: ' . $this->app->root_path . ' | 框架路径: ' . NS_ROOT;
+        $prompts[] = '模块目录: ' . $this->app->root_path . '/modules/ | 日志目录: ' . $this->app->log_path;
+        $prompts[] = '工作区目录: ' . $work_path . ' | 临时目录: ' . sys_get_temp_dir();
         $prompts[] = '';
 
-        $prompts[] = '=== 关键路径 ===';
-        $prompts[] = '当前目录: ' . getcwd();
-        $prompts[] = '入口脚本: ' . $this->app->script_path;
-        $prompts[] = 'Agent根目录: ' . $this->app->root_path;
-        $prompts[] = '框架路径: ' . NS_ROOT;
-        $prompts[] = '模块目录: ' . $this->app->root_path . '/modules/';
-        $prompts[] = '日志目录: ' . $this->app->log_path;
-        $prompts[] = '工作区目录: ' . $work_path;
-        $prompts[] = '临时目录: ' . sys_get_temp_dir();
+        $prompts[] = '=== 记忆系统（四层存储） ===';
         $prompts[] = '';
-
-        $prompts[] = '=== 记忆系统（save/read/search）===';
-        $prompts[] = '你自主决定存储，无需用户确认。遇到有用内容主动保存。';
+        $prompts[] = '- ram：临时存储，重启即丢。存放本轮中间结果和临时内容，避免上下文截断丢失。主动写入临时数据，有价值的后续转存到 daily/important/system。';
+        $prompts[] = '- daily：长期持久，按日期组织。存放对话摘要、日常要点、任务结果。遇到有价值信息立即存入当天日期，不等对话结束。';
+        $prompts[] = '- important：长期持久，按主题组织。存放用户身份、长期偏好、核心事实、重要关系。发现重要内容立刻提炼存储，与已有冲突先问用户。';
+        $prompts[] = '- system：长期持久，固定字段。存放人设/行为规则/边界/指令偏好。检测到用户明确要求时主动写入（无需提醒）。';
         $prompts[] = '';
-        $prompts[] = '【重要程度（从高到低）】';
-        $prompts[] = 'system（永久） > important（永久） > daily（按日期） > ram（临时，重启丢失）';
+        $prompts[] = '【读取规则】';
+        $prompts[] = '- 缺信息时顺序：ram → daily → important（system已自动加载）。';
+        $prompts[] = '- 用户消息 ≤2 条 → 只读 daily（ram 为空）。';
+        $prompts[] = '- 用户提到时间 → 读对应日期的 daily，也可读 ram。';
+        $prompts[] = '- 提到人/事/偏好且无上下文 → 先 important 再 daily，也可先查 ram。';
+        $prompts[] = '- ram 可随时读写，鼓励使用。';
+        $prompts[] = '- 禁止编造、禁止重复读取。';
         $prompts[] = '';
-        $prompts[] = '【存取流程】';
-        $prompts[] = '1. system层自动附加到对话开头，无需你读取。';
-        $prompts[] = '2. 每轮对话先 read ram 取回最近上下文，保持连贯。';
-        $prompts[] = '3. 再按需 read daily / important，或 search 历史记忆。';
-        $prompts[] = '4. 临时信息、频繁读写的上下文 → 存 ram（大胆用，尽量填满）。';
-        $prompts[] = '5. 值得长期存储的信息 → 立即转存 daily / important / system。';
+        $prompts[] = '【持久化铁律】需要跨会话保留的内容，禁止只存 ram，必须转存到 daily、important 或 system。';
         $prompts[] = '';
-        $prompts[] = '【system】永久 · 最高级';
-        $prompts[] = '存放：角色设定、行为规则、能力边界。';
-        $prompts[] = '写入时机：用户明确表达对你的期望或要求时。';
-        $prompts[] = '要求：浓缩为核心规则，避免冗长。';
+        $prompts[] = '【冲突与删除】新信息和已有记忆冲突时先问用户。可按需删除 daily、important、ram；删除 system 必须用户明确同意。';
         $prompts[] = '';
-        $prompts[] = '【important】永久 · 高级';
-        $prompts[] = '存放：用户的长期关键信息（身份、偏好、配置、常用命令）。';
-        $prompts[] = '写入时机：识别到值得长期存储的事实，立即存入。';
-        $prompts[] = '要求：将多轮对话总结为简短事实，避免重复。';
-        $prompts[] = '';
-        $prompts[] = '【daily】按日期 · 中级（随时存，不限次数，主动多存）';
-        $prompts[] = '存放：日常对话要点、工具调用结果、用户问题与你的回复摘要。';
-        $prompts[] = '写入时机：任何有实质内容的交互后，简要总结后即可存储。闲聊内容不存。';
-        $prompts[] = '要求：保留完整上下文（问题+答案+关键数据），可总结浓缩，去掉“你好/谢谢”等废话。';
-        $prompts[] = '';
-        $prompts[] = '【ram】临时 · 低级（优先使用）';
-        $prompts[] = '存放：本轮会话的连续对话片段、工具调用及结果、中间计算结果、频繁存取的信息。';
-        $prompts[] = '特点：读写极快，进程/重启后完全丢失，仅当前会话有效。';
-        $prompts[] = '策略：大胆存，尽量用满（不影响性能），每轮先 read ram 保持连贯。';
-        $prompts[] = '去重：ram 层无需 search 去重，直接 save 追加即可。';
-        $prompts[] = '';
-        $prompts[] = '【核心原则】';
-        $prompts[] = '· 主动存储：只要不是纯闲聊，就存 ram → 再按需转存 daily/important/system。';
-        $prompts[] = '· daily 高频使用：有用就存，主动保存，不限制次数，尽量保留完整对话脉络。';
-        $prompts[] = '· 内容浓缩：丢弃无意义内容（你好、谢谢、报错等），只保留有价值信息。';
-        $prompts[] = '· 每轮先读 ram 或 daily：确保上下文连续，避免遗忘。';
+        $prompts[] = '【优先级】system > important > daily > ram';
         $prompts[] = '';
 
         $prompts[] = '=== 上下文管理 ===';
-        $prompts[] = '· 上下文窗口上限为 ' . $this->agent_config['agent_memory']['max_history'] . ' 条，且必须以 user 消息开始。';
-        $prompts[] = '· 截断机制：超出上限时，系统将从后往前保留足够数量的消息（确保数量大于或等于上限数），并进一步向前追溯至首条为 user 为止，其余更早的内容将被永久丢弃。';
-        $prompts[] = '· 记忆迁移触发：在接近窗口上限前，必须主动将当前会话的关键状态、中间结论和重要事实总结并迁移至 memory 系统（临时 -> ram, 日常 -> daily, 长期 -> important），以对抗截断导致的信息丢失。';
+        $prompts[] = '- 历史消息超过 ' . $max_limit . ' 条后系统会自动裁剪。你必须主动管理上下文长度，避免信息丢失。';
+        $prompts[] = '- 【必须执行】';
+        $prompts[] = '  1. 随时将重要信息（用户需求、助手回复、工具结果、关键决策等）保存到持久记忆（daily/important/system），临时消息可存入 ram。';
+        $prompts[] = '  2. 当历史消息过多、连续工具调用超过20次或感觉上下文过长时，**必须先使用记忆工具保存所有将被删除的关键内容（旧工具结果、早期对话要点等）**，然后再调用清理工具。';
+        $prompts[] = '  3. 清理工具只负责删除旧工具调用对和裁剪普通消息，不会自动保存任何内容。工具参数可控制保留的工具对数量和普通消息条数，强烈建议保留至少2组工具对和10条对话，避免上下文完全丢失。';
         $prompts[] = '';
 
         $prompts[] = '=== 系统工具 ===';
-        $prompts[] = '优先使用专用工具，避免直接执行系统命令。';
-        $prompts[] = '重要：php 可直接通过 exec 工具运行（Windows 下无需 powershell/cmd 中转），路径: ' . $php_path;
+        $prompts[] = '- 优先使用专用工具，避免直接执行系统命令。';
+        $prompts[] = '- 执行 PHP：直接用 exec 工具调用 PHP，不经过 cmd/powershell。路径：' . $php_path;
         $prompts[] = '';
 
         $prompts[] = '=== 安全规则 ===';
         if ($in_sandbox) {
-            $prompts[] = '【沙箱已启用】所有文件操作都会被重定向到工作区目录内：' . $work_path;
-            $prompts[] = '禁止：访问工作区外路径、使用 ../ 跳出、使用绝对路径。所有路径都会被截断并重定向到工作区目录内。';
+            $prompts[] = '- 沙箱开启：所有文件操作以 "' . $work_path . '" 为根目录；输入路径映射为该工作区下的相对路径（根路径替换或相对路径拼接），禁止通过 ../、符号链接等跳出。';
         } else {
-            $prompts[] = '【沙箱已关闭】文件操作按传入的绝对路径执行。';
-            $prompts[] = '建议：操作限定在工作区或Agent根目录内，禁止使用 ../ 绕过限制。';
+            $prompts[] = '- 沙箱关闭：按绝对路径执行，优先使用项目相关目录；禁止通过 ../ 绕过访问系统关键目录（如 C:\Windows\System32）。';
         }
-        $prompts[] = '【危险操作】删除文件/目录、执行命令前，必须告知风险并等待用户确认。';
-        $prompts[] = '【优先原则】能用专用工具就不执行系统命令，exec仅作为最后手段。';
-        $prompts[] = '【绝对禁止】高危命令（rm -rf /、dd、shutdown等）；修改系统配置（/etc/、C:\Windows\System32\）；修改Agent核心脚本（' . $this->app->root_path . '/modules/agent_*/）；安装/卸载软件；泄漏敏感信息。';
-        $prompts[] = '【网络请求】仅允许安全API端点，必须验证用户提供的URL和文件路径。';
-        $prompts[] = '【批量删除】每批不超过100个文件，操作前先列出文件清单并确认。';
-        $prompts[] = '【操作确认】涉及多个文件的操作，先列出受影响文件列表，确认后再执行。';
+        $prompts[] = '- 危险操作（删除/执行命令）：先告知风险，等待用户确认。';
+        $prompts[] = '- 绝对禁止：高危命令（rm -rf /, dd, shutdown）；修改系统配置（/etc/, C:\Windows\System32\）；修改 Agent 核心脚本（' . $this->app->root_path . '/modules/agent_*/）；安装/卸载软件；泄露敏感信息。';
+        $prompts[] = '- 批量删除：每批 ≤100 个，操作前列清单确认。';
+        $prompts[] = '- 多文件操作：先列文件清单，确认后执行。';
         $prompts[] = '';
 
         $prompts[] = '=== 任务执行规则 ===';
-        $prompts[] = '· 持续执行，直到所有子任务完成：';
-        $prompts[] = '  - 若有未完成的子任务（读取文件、编写代码、测试、创建模块等），必须继续调用工具。';
-        $prompts[] = '  - 禁止提前输出任何形式的总结性话语，如：“已完成”、“信息已收集”、“任务结束”、“可以开始编写了”等总结语。';
-        $prompts[] = '';
-        $prompts[] = '· 工具调用失败时：';
-        $prompts[] = '  - 根据错误信息修正参数（如补充缺失字段、改正类型）。';
-        $prompts[] = '  - 同一工具最多重试 3 次。3 次后仍失败则报告用户。';
-        $prompts[] = '';
-        $prompts[] = '· 任务完成的标志：';
-        $prompts[] = '  - 所有要求的文件都已创建且验证通过后，输出：“所有任务执行完毕，结果如下：”并附上成果。';
-        $prompts[] = '  - 未输出此标志前，继续工作。';
-        $prompts[] = '';
-        $prompts[] = '· 调用工具时，`arguments` 必须是**完整的 JSON 对象字符串**，绝不能为空字符串 `""`。';
-        $prompts[] = '  例如：`{"path":"C:/file.txt","content":"data"}`。空参数会导致工具报错并中断任务。';
+        $prompts[] = '- 子任务未完成前，禁止输出总结语（如“已完成”）。';
+        $prompts[] = '- 工具调用失败：修正参数重试最多2次，仍失败则报告用户。';
+        $prompts[] = '- 完成标志：所有任务目标达成后，输出“所有任务执行完毕，结果如下：”并附上成果。';
         $prompts[] = '';
 
         $prompts[] = '=== 输出要求 ===';
-        $prompts[] = '语言：用户系统语言为 ' . $lang_name . '，优先使用中文回答。也可根据用户要求调整。';
-        $prompts[] = '格式：工具返回JSON需解析后清晰展示；文件列表使用表格或列表。';
-        $prompts[] = '错误处理：解释错误原因，提供解决建议。';
-        $prompts[] = '危险操作：先输出警告，等待用户明确确认后再执行。';
+        $prompts[] = '- 语言：' . $lang_name . '，默认中文，可按用户调整。';
+        $prompts[] = '- 格式：解析 JSON 后清晰展示，文件列表用表格或列表。';
+        $prompts[] = '- 错误处理：解释原因，给出建议。';
+        $prompts[] = '- 危险操作：先输出警告，等待用户确认。';
         $prompts[] = '';
 
         $prompts[] = '=== 当前时间 ===';
-        $prompts[] = '时间: ' . date('Y-m-d H:i:s') . ' 时区: ' . date_default_timezone_get();
+        $prompts[] = '时间：' . date('Y-m-d H:i:s') . '，时区：' . $this->app->timezone;
         $prompts[] = '';
 
         $prompts[] = '=== 自我开发指南 ===';
-        $prompts[] = '【代码位置】模块目录：' . $this->app->root_path . '/modules/，框架路径：' . NS_ROOT . '，日志目录：' . $this->app->log_path;
-        $prompts[] = '【修复流程】查日志 → 定位模块 → 分析原因 → 提建议 → 用户确认 → 备份原文件 → 修复 → 测试。';
-        $prompts[] = '【注意事项】修改代码前必须备份，确保符合模块规范。';
+        $prompts[] = '- 修复流程：查日志 → 定位模块 → 分析 → 提建议 → 用户确认 → 备份 → 修复 → 测试。';
+        $prompts[] = '- 改代码前必须备份，确保符合模块规范。';
+        $prompts[] = '';
 
         $system_prompt = [
             'role'    => 'system',
             'content' => implode("\n", $prompts)
         ];
 
-        unset($in_sandbox, $prompts, $lang_code, $lang_name, $work_path);
+        unset($in_sandbox, $php_path, $lang_code, $lang_name, $work_path, $prompts);
         return $system_prompt;
     }
 
     /**
+     * Magic getter for modules.
+     *
      * @param string $name
      *
      * @return object

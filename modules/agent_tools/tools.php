@@ -1,302 +1,222 @@
 <?php
 
-/**
- * Agent Tools Metadata for AgentBee
- *
- * Provides tool definitions conforming to OpenAI's function-calling standard format.
- *
- * Copyright 2026 秋水之冰 <27206617@qq.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 namespace modules\agent_tools;
 
 class tools
 {
     public const META = [
-        // ==================== exec ====================
+        // exec
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'exec',
-                'description' => "执行系统命令（危险）。\n\n" .
-                    "⚠️ **核心限制**：\n" .
-                    "- `program` 必须是**独立的可执行文件**（如 `powershell.exe`, `git`, `python`, `ls`, `cat`）。\n" .
-                    "- **严禁使用 cmd 内置命令**：`dir`, `echo`, `type`, `cd`, `mkdir`, `copy`, `del`, `move`, `ren`, `rd`——它们不是独立的 .exe 文件。\n" .
-                    "- 如需使用内置功能，必须通过 `powershell -Command \"...\"` 或 `cmd /c \"...\"` 包装。\n\n" .
-                    "📝 **参数要求**：\n" .
-                    "- `argv` 必须是**字符串数组**，每个参数单独一项。无参数时传 `[]`。\n" .
-                    "- **禁止将整个命令写成单个字符串**（如 `\"ls -la\"` 错误，应为 `[\"ls\", \"-la\"]`）。\n" .
-                    "- `timeout`（可选，默认300秒）：空闲超时，0=无超时。\n" .
-                    "- `work_path`（可选）：工作目录，默认为工作区根目录。\n\n" .
-                    "✅ **正确示例**：\n" .
-                    "```json\n" .
-                    "{\"program\": \"powershell\", \"argv\": [\"-Command\", \"Get-ChildItem\"], \"timeout\": 30}\n" .
-                    "{\"program\": \"git\", \"argv\": [\"status\"], \"work_path\": \"/project\"}\n" .
-                    "```\n\n" .
-                    "❌ **错误示例**：\n" .
-                    "```json\n" .
-                    "{\"program\": \"dir\", \"argv\": []}                       // dir 是内置命令\n" .
-                    "{\"program\": \"powershell\", \"argv\": \"-Command Get-ChildItem\"}  // argv 必须是数组\n" .
-                    "\"\"                                                   // 空 arguments，缺少所有字段\n" .
-                    "```\n\n" .
-                    "📤 **返回值**：`{\"output\": \"stdout\", \"error\": \"stderr\"}`\n\n" .
-                    "⚠️ 禁止执行破坏性命令（rm -rf, del /f /s, format, shutdown 等）。",
+                'description' => "执行系统命令。\n" .
+                    "限制：program 必须是独立可执行文件（如 powershell.exe, git, python, ls）。\n" .
+                    "禁止 cmd 内置命令：dir, echo, type, cd, mkdir, copy, del, move, ren, rd。\n" .
+                    "argv 必须是字符串数组，如 [\"-l\", \"-a\"]。禁止传单个字符串。\n" .
+                    "timeout（秒，默认300），work_path（可选）。\n" .
+                    "返回：{\"output\":\"...\", \"error\":\"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'program'   => ['type' => 'string', 'description' => "必填：可执行文件路径或文件名，不能为空"],
-                        'argv'      => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => "必填：参数数组，如 [\"-l\", \"-a\"]，不能是字符串"],
-                        'timeout'   => ['type' => 'integer', 'default' => 300, 'description' => "可选：空闲超时秒数"],
-                        'work_path' => ['type' => 'string', 'description' => "可选：工作目录"]
+                        'program'   => ['type' => 'string', 'description' => '可执行文件路径或文件名'],
+                        'argv'      => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '参数数组，如 ["-l","-a"]'],
+                        'timeout'   => ['type' => 'integer', 'default' => 300, 'description' => '空闲超时秒数，0=无超时'],
+                        'work_path' => ['type' => 'string', 'description' => '工作目录，默认为工作区'],
                     ],
-                    'required'   => ['program', 'argv']
-                ]
-            ]
+                    'required'   => ['program', 'argv'],
+                ],
+            ],
         ],
-
-        // ==================== getTime ====================
+        // getTime
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'getTime',
-                'description' => "获取当前系统时间。\n\n" .
-                    "📤 **返回**：`{\"datetime\": \"YYYY-MM-DD HH:MM:SS\", \"timestamp\": 整数秒数}`\n\n" .
-                    "✅ **示例调用**：无参数，直接调用即可。",
-            ]
+                'description' => "获取当前系统时间。返回：{\"datetime\":\"YYYY-MM-DD HH:MM:SS\", \"timestamp\":秒数}",
+            ],
         ],
-
-        // ==================== readFile ====================
+        // cleanContext
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'cleanContext',
+                'description' => '清理上下文：保留最近 max_dialog_messages 条普通消息和最近 keep_tool_pairs 组工具调用对。非强制模式（默认）强制至少保留2组工具对和10条对话，避免上下文丢失。强制模式(force_clean=true)允许设为0，需谨慎。重要：调用前必须先用记忆工具保存即将被删除的重要内容。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'max_dialog_messages' => [
+                            'type'        => 'integer',
+                            'description' => '保留普通消息条数上限，默认10（非强制时最小2）',
+                            'default'     => 10,
+                        ],
+                        'keep_tool_pairs'     => [
+                            'type'        => 'integer',
+                            'description' => '保留最近工具调用对组数，默认2（非强制时最小1）',
+                            'default'     => 2,
+                        ],
+                        'force_clean'         => [
+                            'type'        => 'boolean',
+                            'description' => '是否强制清理（允许0值），默认false',
+                            'default'     => false,
+                        ],
+                    ],
+                    'required'   => [],
+                ],
+            ],
+        ],
+        // readFile
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'readFile',
-                'description' => "读取文件内容。\n\n" .
-                    "📝 **参数要求**：\n" .
-                    "- `path`（必填）：文件路径，不能为空。\n" .
-                    "- `offset`（可选，默认0）：起始字节位置。\n" .
-                    "- `limit`（可选，默认8192）：读取字节数，0=整个文件。\n\n" .
-                    "✅ **正确示例**：\n" .
-                    "```json\n" .
-                    "{\"path\": \"/var/log/app.log\", \"offset\": 100, \"limit\": 4096}\n" .
-                    "```\n\n" .
-                    "❌ **错误示例**：\n" .
-                    "```json\n" .
-                    "{\"path\": \"\"}          // path 不能为空\n" .
-                    "{\"offset\": 10}         // 缺少 path\n" .
-                    "\"\"                     // 空 arguments\n" .
-                    "```\n\n" .
-                    "📤 **成功返回**：`{\"content\": \"文件内容\"}`  \n" .
-                    "📤 **失败返回**：`{\"error\": \"错误描述\"}`",
+                'description' => "读取文件内容。\n" .
+                    "参数：path（必填），offset（默认0），limit（默认8192，0=整个文件）。\n" .
+                    "返回：{\"content\":\"...\"} 或 {\"error\":\"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'   => ['type' => 'string', 'description' => "必填：文件路径，不能为空"],
-                        'offset' => ['type' => 'integer', 'default' => 0, 'description' => "可选：起始偏移字节数"],
-                        'limit'  => ['type' => 'integer', 'default' => 8192, 'description' => "可选：读取字节数，0表示全部"]
+                        'path'   => ['type' => 'string', 'description' => '文件路径'],
+                        'offset' => ['type' => 'integer', 'default' => 0, 'description' => '起始字节'],
+                        'limit'  => ['type' => 'integer', 'default' => 8192, 'description' => '读取字节数，0=全部'],
                     ],
-                    'required'   => ['path']
-                ]
-            ]
+                    'required'   => ['path'],
+                ],
+            ],
         ],
-
-        // ==================== writeFile ====================
+        // writeFile
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeFile',
-                'description' => "写入文件（自动创建父目录）。\n\n" .
-                    "📝 **参数要求**：\n" .
-                    "- `path`（必填）：目标文件路径，不能为空。\n" .
-                    "- `content`（必填）：要写入的字符串内容（可以是空字符串）。\n" .
-                    "- `append`（可选，默认false）：true=追加，false=覆盖。\n\n" .
-                    "⚠️ **极其重要**：`arguments` 必须是一个**完整的 JSON 对象字符串**，绝对不能是空字符串 `\"\"`。\n\n" .
-                    "✂️ **分段写入规则（必须遵守）**：\n" .
-                    "- 每次调用 `writeFile` 写入的 `content` 不得超过 **2000 个字符**。\n" .
-                    "- 如果文件内容超过此限制，必须**分多次调用** `writeFile`，后续调用必须使用 `append=true` 追加内容。\n" .
-                    "- 示例：第一次写入头部（`append=false`），后续每次追加中间部分（`append=true`），最后追加结尾。\n\n" .
-                    "✅ **正确示例**：\n" .
-                    "```json\n" .
-                    "{\"path\": \"E:/output.txt\", \"content\": \"短内容（<2000字符）\", \"append\": false}\n" .
-                    "{\"path\": \"E:/output.txt\", \"content\": \"追加的第二段\", \"append\": true}\n" .
-                    "```\n\n" .
-                    "❌ **错误示例**：\n" .
-                    "```json\n" .
-                    "\"\"                                 // 空 arguments\n" .
-                    "{\"path\": \"/tmp/x.txt\"}             // 缺少 content\n" .
-                    "{\"content\": \"超过2000字符的长文件内容...（此处省略）\", \"append\": false}  // 单次过长，违反规则\n" .
-                    "```\n\n" .
-                    "📤 **成功返回**：`{\"bytes_written\": N}`  \n" .
-                    "📤 **失败返回**：`{\"error\": \"错误描述\"}`",
+                'description' => "写入文件（自动创建目录）。\n" .
+                    "参数：path（必填），content（必填），append（默认false）。\n" .
+                    "单次 content 建议不超过4096字符，大文件必须分多次追加（append=true）。\n" .
+                    "返回：{\"bytes_written\": N} 或 {\"error\":\"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'    => ['type' => 'string', 'description' => "必填：文件路径，不能为空"],
-                        'content' => ['type' => 'string', 'description' => "必填：要写入的字符串内容（单次≤2000字符）"],
-                        'append'  => ['type' => 'boolean', 'default' => false, 'description' => "可选：是否追加"]
+                        'path'    => ['type' => 'string', 'description' => '文件路径'],
+                        'content' => ['type' => 'string', 'description' => '要写入的内容（≤4096字符）'],
+                        'append'  => ['type' => 'boolean', 'default' => false, 'description' => '是否追加'],
                     ],
-                    'required'   => ['path', 'content']
-                ]
-            ]
+                    'required'   => ['path', 'content'],
+                ],
+            ],
         ],
-
-        // ==================== deleteFile ====================
+        // copyFile
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'copyFile',
+                'description' => "复制文件。\n参数：src（源文件路径），dst（目标路径）。\n目标文件存在时将被覆盖。\n返回：成功 → {\"file_copied\": \"File copied to: 目标路径\"}，失败 → {\"error\": \"...\"}",
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'src' => ['type' => 'string', 'description' => '源文件路径'],
+                        'dst' => ['type' => 'string', 'description' => '目标文件路径'],
+                    ],
+                    'required'   => ['src', 'dst'],
+                ],
+            ],
+        ],
+        // deleteFile
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'deleteFile',
-                'description' => "永久删除文件（危险）。\n\n" .
-                    "📝 **参数**：`path`（必填），不能为空。\n\n" .
-                    "✅ **正确示例**：\n" .
-                    "```json\n" .
-                    "{\"path\": \"C:/temp/old.log\"}\n" .
-                    "```\n\n" .
-                    "❌ **错误示例**：`{\"path\": \"\"}` 或 `{}` 或 `\"\"`\n\n" .
-                    "📤 **成功返回**：`{\"deleted\": true}`  \n" .
-                    "📤 **文件不存在**：`{\"deleted\": false, \"message\": \"File does not exist\"}`\n\n" .
-                    "⚠️ 操作不可逆，使用前必须向用户确认。",
+                'description' => "永久删除文件（危险）。参数：path（必填）。返回：{\"deleted\": true} 或 {\"deleted\":false,\"message\":\"...\"}。操作前须用户确认。",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string', 'description' => "必填：文件路径，不能为空"]],
-                    'required'   => ['path']
-                ]
-            ]
+                    'properties' => ['path' => ['type' => 'string', 'description' => '文件路径']],
+                    'required'   => ['path'],
+                ],
+            ],
         ],
-
-        // ==================== searchFiles ====================
+        // searchFiles
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'searchFiles',
-                'description' => "使用 glob 模式搜索文件。\n\n" .
-                    "📝 **参数**：\n" .
-                    "- `path`（必填）：搜索起始目录。\n" .
-                    "- `pattern`（必填）：文件名模式，如 `*.php`。\n" .
-                    "- `recursive`（可选，默认false）：是否递归子目录。\n\n" .
-                    "✅ **正确示例**：\n" .
-                    "```json\n" .
-                    "{\"path\": \"/home/user\", \"pattern\": \"*.txt\", \"recursive\": true}\n" .
-                    "```\n\n" .
-                    "❌ **错误示例**：`{\"pattern\": \"*.txt\"}`（缺少path）或空arguments\n\n" .
-                    "📤 **返回**：`{\"files\": [\"/path/to/file1\", ...]}`",
+                'description' => "glob 模式搜索文件。\n参数：path（起始目录），pattern（如 *.php），recursive（默认false）。\n返回：{\"files\": [...]}",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'path'      => ['type' => 'string', 'description' => "必填：搜索起始目录"],
-                        'pattern'   => ['type' => 'string', 'description' => "必填：glob 模式"],
-                        'recursive' => ['type' => 'boolean', 'default' => false, 'description' => "可选：是否递归"]
+                        'path'      => ['type' => 'string', 'description' => '搜索起始目录'],
+                        'pattern'   => ['type' => 'string', 'description' => '文件名模式，如 *.php'],
+                        'recursive' => ['type' => 'boolean', 'default' => false, 'description' => '是否递归'],
                     ],
-                    'required'   => ['path', 'pattern']
-                ]
-            ]
+                    'required'   => ['path', 'pattern'],
+                ],
+            ],
         ],
-
-        // ==================== getFileSize ====================
+        // getFileSize
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'getFileSize',
-                'description' => "获取文件字节数。\n\n" .
-                    "📝 **参数**：`path`（必填）。\n\n" .
-                    "✅ **示例**：`{\"path\": \"C:/data/file.bin\"}`\n\n" .
-                    "❌ **错误**：空arguments或缺少path\n\n" .
-                    "📤 **成功**：`{\"filesize\": 12345}`  \n" .
-                    "📤 **失败**：`{\"error\": \"File not found: path\"}`",
+                'description' => "获取文件字节数。参数：file_path。返回：{\"filesize\": N} 或 {\"error\":\"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string', 'description' => "必填：文件路径"]],
-                    'required'   => ['path']
-                ]
-            ]
+                    'properties' => ['file_path' => ['type' => 'string', 'description' => '文件路径']],
+                    'required'   => ['file_path'],
+                ],
+            ],
         ],
-
-        // ==================== listDirectory ====================
+        // listDirectory
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'listDirectory',
-                'description' => "列出目录内容（非递归）。\n\n" .
-                    "📝 **参数**：`path`（必填）。\n\n" .
-                    "✅ **示例**：`{\"path\": \"/var/log\"}`\n\n" .
-                    "❌ **错误**：空arguments或缺少path\n\n" .
-                    "📤 **返回**：`{\"contents\": [{\"filename\":\"...\", \"filesize\":123, \"isFile\":true}, ...]}`",
+                'description' => "列出目录内容（非递归）。参数：path。返回：{\"contents\": [{\"filename\":\"...\",\"filesize\":N,\"isFile\":bool}, ...]}",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string', 'description' => "必填：目录路径"]],
-                    'required'   => ['path']
-                ]
-            ]
+                    'properties' => ['path' => ['type' => 'string', 'description' => '目录路径']],
+                    'required'   => ['path'],
+                ],
+            ],
         ],
-
-        // ==================== createDirectory ====================
+        // createDirectory
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'createDirectory',
-                'description' => "创建目录（自动创建父目录）。\n\n" .
-                    "📝 **参数**：`path`（必填）。\n\n" .
-                    "✅ **示例**：`{\"path\": \"E:/Projects/newfolder/sub\"}`\n\n" .
-                    "❌ **错误**：空arguments或缺少path\n\n" .
-                    "📤 **返回**：`{\"created_path\": \"E:/Projects/newfolder/sub\"}`",
+                'description' => "创建目录（自动创建父目录）。参数：path。返回：{\"created_path\":\"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string', 'description' => "必填：要创建的目录路径"]],
-                    'required'   => ['path']
-                ]
-            ]
+                    'properties' => ['path' => ['type' => 'string', 'description' => '目录路径']],
+                    'required'   => ['path'],
+                ],
+            ],
         ],
-
-        // ==================== copyDirectory ====================
+        // copyDirectory
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'copyDirectory',
-                'description' => "递归复制目录（目标目录必须不存在）。\n\n" .
-                    "📝 **参数**：`src`（源），`dst`（目标），均必填。\n\n" .
-                    "✅ **示例**：`{\"src\": \"/backup/old\", \"dst\": \"/backup/new\"}`\n\n" .
-                    "❌ **错误**：缺少src或dst，或空arguments\n\n" .
-                    "📤 **成功**：`{\"copied_files\": 42, \"destination\": \"/backup/new\"}`  \n" .
-                    "📤 **失败**：`{\"error\": \"...\"}`",
+                'description' => "递归复制目录，目标必须不存在。参数：src, dst。返回：{\"copied_files\":N, \"destination\":\"...\"} 或 {\"error\":\"...\"}",
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'src' => ['type' => 'string', 'description' => "必填：源目录路径"],
-                        'dst' => ['type' => 'string', 'description' => "必填：目标目录路径，必须不存在"]
+                        'src' => ['type' => 'string', 'description' => '源目录'],
+                        'dst' => ['type' => 'string', 'description' => '目标目录（必须不存在）'],
                     ],
-                    'required'   => ['src', 'dst']
-                ]
-            ]
+                    'required'   => ['src', 'dst'],
+                ],
+            ],
         ],
-
-        // ==================== deleteDirectory ====================
+        // deleteDirectory
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'deleteDirectory',
-                'description' => "递归删除目录（危险）。\n\n" .
-                    "📝 **参数**：`path`（必填）。\n\n" .
-                    "✅ **示例**：`{\"path\": \"C:/temp/old_cache\"}`\n\n" .
-                    "❌ **错误**：空arguments或缺少path\n\n" .
-                    "📤 **成功**：`{\"deleted\": true, \"files_removed\": 128}`  \n" .
-                    "📤 **目录不存在**：`{\"deleted\": false, \"message\": \"Directory does not exist\"}`\n\n" .
-                    "⚠️ 操作不可逆，使用前必须向用户确认。",
+                'description' => "递归删除目录（危险）。参数：path。返回：{\"deleted\":true,\"files_removed\":N} 或 {\"deleted\":false,\"message\":\"...\"}。操作前须用户确认。",
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string', 'description' => "必填：要删除的目录路径"]],
-                    'required'   => ['path']
-                ]
-            ]
-        ]
+                    'properties' => ['path' => ['type' => 'string', 'description' => '目录路径']],
+                    'required'   => ['path'],
+                ],
+            ],
+        ],
     ];
 }

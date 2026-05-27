@@ -29,6 +29,11 @@ class go extends Factory
     public core    $core;
     public message $message;
 
+    public bool $clean_warning = false;
+
+    public array $socket_session = [];
+    public array $stream_buffers = [];
+
     /**
      * @throws \ReflectionException
      * @throws \Exception
@@ -41,9 +46,10 @@ class go extends Factory
         $this->core->initTools();
         $this->core->initModules();
 
-        if (!is_dir($this->core->agent_config['agent_tools']['workspace_path'])) {
+        $workspace_path = $this->core->agent_config['agent_tools']['workspace_path'] ?? '';
+        if ('' !== $workspace_path && !is_dir($workspace_path)) {
             try {
-                mkdir($this->core->agent_config['agent_tools']['workspace_path'], 0777, true);
+                mkdir($workspace_path, 0777, true);
             } catch (\Throwable) {
             }
         }
@@ -53,11 +59,16 @@ class go extends Factory
     }
 
     /**
+     * Start WebSocket server and worker process.
+     *
      * @return void
+     * @throws \Exception
      */
     public function start(): void
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
+
+        $this->runProcWorker();
 
         try {
             $this->core->socketMgr
@@ -74,27 +85,188 @@ class go extends Factory
     }
 
     /**
-     * @param int    $socket_id
-     * @param string $ws_proto
+     * @return void
+     * @throws \Exception
+     */
+    public function runProcWorker(): void
+    {
+        $worker_status = $this->core->procMgr->getStatus(core::PROC_IDX_OPENAI);
+
+        if (0 < $worker_status) {
+            return;
+        }
+
+        $this->core->procMgr->close(core::PROC_IDX_OPENAI);
+
+        $this->core->procMgr->command([
+            $this->core->OSMgr->getPhpPath(),
+            $this->core->app->script_path,
+            '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['work_name']
+        ])->run(core::PROC_IDX_OPENAI);
+
+        $worker_pid = $this->core->procMgr->getPid(core::PROC_IDX_OPENAI);
+
+        $this->core->socketMgr->addExternalProc(
+            $this->core->procMgr->getProc(core::PROC_IDX_OPENAI),
+            [$this, 'streamWorkerHandler'],
+            [$this, 'streamWorkerHandler']
+        );
+
+        $this->core->agent_llm->buildShmop($worker_pid);
+    }
+
+    /**
+     * Callback for external stream (stdout from worker).
+     *
+     * @param string $external_stream_id
+     * @param array  $context
+     *
+     * @return void
+     * @throws \ReflectionException
+     * @throws \Exception
+     */
+    public function streamWorkerHandler(string $external_stream_id, array $context): void
+    {
+        $stdout_stream = $context['stdout'];
+        $data_chunk    = fread($stdout_stream, 8192);
+
+        if (false === $data_chunk || '' === $data_chunk) {
+            unset($this->stream_buffers[$external_stream_id]);
+            return;
+        }
+
+        $buffer = &$this->stream_buffers[$external_stream_id];
+        $buffer .= $data_chunk;
+
+        while (false !== ($line_pos = strpos($buffer, "\n"))) {
+            $line   = substr($buffer, 0, $line_pos);
+            $buffer = substr($buffer, $line_pos + 1);
+            $line   = trim($line);
+
+            if ('' === $line) {
+                continue;
+            }
+
+            $message = json_decode($line, true);
+
+            if (!is_array($message)) {
+                continue;
+            }
+
+            $payload      = $message['payload'];
+            $payload_type = $payload['type'];
+
+            switch ($message['type']) {
+                case 'stream':
+                    $this->core->sendMessage($message['socket_id'], json_encode($payload, JSON_FORMAT));
+
+                    if ('error' === $payload_type) {
+                        unset($this->stream_buffers[$external_stream_id]);
+                    }
+                    break;
+
+                case 'history':
+                    if (isset($payload['data'])) {
+                        switch ($payload_type) {
+                            case 'add':
+                                $this->core->addSessionHistory($payload['data']);
+                                break;
+
+                            case 'sync':
+                                $this->core->session_history = $payload['data'];
+                                break;
+                        }
+                    }
+                    break;
+
+                case 'end':
+                    $current_history = $this->core->getSessionHistory();
+
+                    switch ($payload_type) {
+                        case 'tools':
+                            $this->core->agent_llm->chat(
+                                $message['socket_id'],
+                                array_intersect_key($payload, $this->socket_session[$message['socket_id']]),
+                                $current_history
+                            );
+                            break;
+
+                        case 'end':
+                            $current_count = count($current_history);
+                            $max_history   = $this->core->agent_config['agent_memory']['max_history'] ?? 20;
+                            $warning_count = $max_history * 2;
+                            $limit_count   = $max_history * 3;
+
+                            if ($current_count < $warning_count) {
+                                $this->clean_warning = false;
+                                break;
+                            } elseif (!$this->clean_warning) {
+                                $this->clean_warning = true;
+
+                                $system_prompt = '【系统提醒】当前对话历史较长（已有 ' . $current_count . ' 条，上限 ' . $max_history . ' 条）。请自动完成以下操作，并以自然语气告知用户：' . "\n\n" .
+                                    '1. 总结关键信息（用户需求、助手回复、重要工具结果等），保存到对应记忆（daily/important/system，临时内容可存 ram）。' . "\n" .
+                                    '2. 调用清理工具删除旧工具调用对，精简历史。' . "\n" .
+                                    '3. 完成后，向用户说明保存的内容概要、存储层级及剩余消息数，语气自然。' . "\n\n" .
+                                    '【特别提醒】对话历史超过 ' . $limit_count . ' 条时，系统将强制清理上下文，重要信息可能丢失，请及时保存。';
+
+                                $this->core->addSessionHistory(['role' => 'user', 'content' => $system_prompt]);
+
+                                $current_history = $this->core->getSessionHistory();
+
+                                $this->core->agent_llm->chat(
+                                    $message['socket_id'],
+                                    [
+                                        'sessionId' => $this->socket_session[$message['socket_id']]['sessionId'] ?? 'default',
+                                        'messageId' => 'system-' . microtime(true),
+                                    ],
+                                    $current_history
+                                );
+                            }
+
+                            if ($current_count > $limit_count) {
+                                $this->core->cleanSessionHistory();
+                            }
+                            break;
+                    }
+                    break;
+            }
+        }
+
+        if (feof($stdout_stream)) {
+            unset($this->stream_buffers[$external_stream_id]);
+        }
+
+        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $current_history);
+    }
+
+    /**
+     * WebSocket handshake callback.
+     *
+     * @param string $socket_id
+     * @param string $websocket_protocol
      *
      * @return bool
      */
-    public function onHandshake(int $socket_id, string $ws_proto): bool
+    public function onHandshake(string $socket_id, string $websocket_protocol): bool
     {
+        unset($socket_id, $websocket_protocol);
         return true;
     }
 
     /**
-     * @param int $socket_id
+     * Heartbeat callback.
+     *
+     * @param string $socket_id
      *
      * @return string
      * @throws \Exception
      */
-    public function onHeartbeat(int $socket_id): string
+    public function onHeartbeat(string $socket_id): string
     {
         $task_list = $this->core->agent_task->runTask();
 
         if (empty($task_list)) {
+            unset($socket_id, $task_list);
             return '';
         }
 
@@ -109,85 +281,122 @@ class go extends Factory
             $task_json . PHP_EOL . PHP_EOL .
             '请按顺序处理每个任务：' . PHP_EOL .
             '1. 根据 task_prompt 执行相应操作（发送提醒、调用工具、回答问题等）。' . PHP_EOL .
-            '2. 执行后将任务摘要和执行结果存入 daily 记忆层。' . PHP_EOL .
-            '3. 如需回复用户，直接输出内容。' . PHP_EOL .
-            '4. 全部处理完毕后，若无用户交互，回复“定时任务已处理”。' . PHP_EOL .
-            '5. 重要事件可额外存入 important 层。';
+            '2. 执行后将任务摘要和执行结果按需存入 daily 记忆层。重要事件可额外存入 important 层。' . PHP_EOL .
+            '3. 全部处理完毕后，向用户说明任务概要、处理结果、存储层级，语气自然。';
 
         $this->core->addSessionHistory(['role' => 'user', 'content' => $task_content]);
-        $this->core->agent_llm->chat($socket_id, [], $this->core->getLLMParams());
 
-        unset($socket_id, $task_list, $task_jobs, $task_json, $task_content);
+        $current_history = $this->core->getSessionHistory();
+
+        $this->core->agent_llm->chat(
+            $socket_id,
+            [
+                'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
+                'messageId' => 'task-' . microtime(true),
+            ],
+            $current_history
+        );
+
+        unset($socket_id, $task_list, $task_jobs, $task_json, $task_content, $current_history);
         return '';
     }
 
     /**
+     * WebSocket message callback.
+     *
+     * @param string $socket_id
+     * @param string $message
+     * @param bool   $is_binary
+     *
+     * @return void
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function onMessage(int $socket_id, string $message): void
+    public function onMessage(string $socket_id, string $message, bool $is_binary): void
     {
         if ('' === $message) {
             return;
+        }
+
+        if ($is_binary) {
+            $message = $this->message->process_binary($socket_id, $message);
         }
 
         $end_data = [];
         $llm_data = [];
         $messages = str_contains($message, "\n") ? explode("\n", $message) : [$message];
 
-        foreach ($messages as $message) {
-            $data = json_decode($message, true);
+        foreach ($messages as $line) {
+            $data = json_decode($line, true);
 
             if (!is_array($data) || !isset($data['type'])) {
                 continue;
             }
 
-            $message_type = 'process_' . $data['type'];
+            $this->socket_session[$socket_id] = [
+                'sessionId' => $data['sessionId'],
+                'messageId' => $data['messageId']
+            ];
 
-            if (!method_exists($this->message, $message_type)) {
+            if ('stop' === $data['type']) {
+                $this->core->agent_llm->abort($socket_id);
+                $this->core->sendMessage($socket_id, json_encode(['type' => 'end'] + $this->socket_session[$socket_id]));
+                return;
+            }
+
+            $type_method = 'process_' . $data['type'];
+
+            if (!method_exists($this->message, $type_method)) {
                 continue;
             }
 
-            $message_data = $this->message->$message_type($socket_id, $data);
+            $result = $this->message->$type_method($socket_id, $data['content']);
 
-            if ($message_data['agent_llm']) {
-                $llm_data[] = $message_data['text'];
+            if ($result['agent_llm']) {
+                $llm_data = $result['content'];
             }
 
-            unset($data['message']);
+            unset($data['content']);
             $end_data[] = $data;
         }
 
-        $msg_meta = array_pop($end_data);
+        $message_metadata = array_pop($end_data);
 
-        foreach ($end_data as $send_end) {
-            $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $send_end));
+        foreach ($end_data as $end_packet) {
+            $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $end_packet));
         }
 
         if (!empty($llm_data)) {
-            $this->core->addSessionHistory(['role' => 'user', 'content' => implode("\n", $llm_data)]);
-            $this->core->agent_llm->chat($socket_id, $msg_meta, $this->core->getLLMParams());
+            $this->runProcWorker();
+            $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
+            $this->core->agent_llm->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
         }
 
-        unset($socket_id, $message, $end_data, $llm_data, $messages, $data, $message_type, $message_data, $msg_meta, $send_end);
+        unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet);
     }
 
     /**
-     * @param int $socket_id
+     * Callback for sending string messages.
+     *
+     * @param string $socket_id
      *
      * @return array
      */
-    public function onSendString(int $socket_id): array
+    public function onSendString(string $socket_id): array
     {
+        unset($socket_id);
         return [];
     }
 
     /**
-     * @param int $socket_id
+     * WebSocket close callback.
+     *
+     * @param string $socket_id
      *
      * @return void
      */
-    public function onClose(int $socket_id): void
+    public function onClose(string $socket_id): void
     {
+        unset($socket_id);
     }
 }

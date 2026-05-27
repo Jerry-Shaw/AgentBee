@@ -6,6 +6,7 @@
  * Provides system/important/daily memory storage using JSONL format.
  *
  * Copyright 2026 秋水之冰 <27206617@qq.com>
+ *  Copyright 2026 AgentBee self developed
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_memory;
+namespace modules\agent_mem_file;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
@@ -39,6 +40,11 @@ class go extends Factory
     private string $important_file;
 
     public array $ram_memory = [];
+
+    private const LEVELS      = ['system', 'important', 'daily', 'ram'];
+    private const ROLES       = ['user', 'assistant', 'system', 'tool'];
+    private const SEARCH_MODE = ['or', 'and'];
+    private const ALL_LEVELS  = ['system', 'important', 'daily', 'ram', 'all'];
 
     /**
      * @throws \ReflectionException
@@ -71,6 +77,10 @@ class go extends Factory
             }
         }
     }
+
+    // =========================================================================
+    //  Task Management
+    // =========================================================================
 
     /**
      * @param string $task_id
@@ -174,6 +184,10 @@ class go extends Factory
         return $task_run;
     }
 
+    // =========================================================================
+    //  Memory CRUD
+    // =========================================================================
+
     /**
      * Save a memory entry (append mode, JSONL format)
      *
@@ -185,18 +199,17 @@ class go extends Factory
      */
     public function save(string $level, string $role, string $content): array
     {
-        if (!in_array($level, ['system', 'important', 'daily', 'ram'], true)) {
+        if (!in_array($level, self::LEVELS, true)) {
             return ['error' => "Invalid level: {$level}"];
         }
 
-        if (!in_array($role, ['user', 'assistant', 'system', 'tool'], true)) {
+        if (!in_array($role, self::ROLES, true)) {
             return ['error' => "Invalid role: {$role}"];
         }
 
         // RAM layer: store in memory array
         if ('ram' === $level) {
-            $message            = ['role' => $role, 'content' => $content];
-            $this->ram_memory[] = $message;
+            $this->ram_memory[] = ['role' => $role, 'content' => $content, 'created_at' => time()];
             return ['saved' => true, 'path' => 'ram://memory', 'role' => $role];
         }
 
@@ -207,7 +220,7 @@ class go extends Factory
             $role = 'user';
         }
 
-        $line = json_encode(['role' => $role, 'content' => $content], JSON_FORMAT);
+        $line = json_encode(['role' => $role, 'content' => $content, 'created_at' => time()], JSON_FORMAT);
 
         if (false === $line) {
             return ['error' => 'JSON encode failed'];
@@ -250,7 +263,7 @@ class go extends Factory
      */
     public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
     {
-        if (!in_array($level, ['system', 'important', 'daily', 'ram'], true)) {
+        if (!in_array($level, self::LEVELS, true)) {
             return ['error' => "Invalid level: {$level}"];
         }
 
@@ -337,11 +350,11 @@ class go extends Factory
         string $end_date = ''
     ): array
     {
-        if (!in_array($level, ['system', 'important', 'daily', 'ram', 'all'], true)) {
+        if (!in_array($level, self::ALL_LEVELS, true)) {
             return ['error' => "Invalid level: {$level}"];
         }
 
-        if (!in_array($mode, ['or', 'and'], true)) {
+        if (!in_array($mode, self::SEARCH_MODE, true)) {
             return ['error' => "Invalid mode: {$mode}"];
         }
 
@@ -351,7 +364,7 @@ class go extends Factory
 
         $results          = [];
         $keywords_lower   = array_map('strtolower', $keywords);
-        $levels_to_search = ('all' === $level) ? ['system', 'important', 'daily', 'ram'] : [$level];
+        $levels_to_search = ('all' === $level) ? self::LEVELS : [$level];
 
         // Build list of daily files within date range
         $daily_files = [];
@@ -488,6 +501,305 @@ class go extends Factory
         unset($results, $selected, $daily_files);
         return $result;
     }
+
+    // =========================================================================
+    //  Memory Delete
+    // =========================================================================
+
+    /**
+     * Delete memory entries by keywords and/or time range
+     *
+     * Supports all four layers (system/important/daily/ram).
+     * - keywords: content-based matching (case-insensitive, AND/OR mode)
+     * - start_time/end_time: Unix timestamp range filter on created_at
+     * - At least one of keywords or time range must be provided
+     *
+     * @param string $level      system|important|daily|ram|all
+     * @param string $keywords   Comma-separated keywords (empty = no content filter)
+     * @param string $mode       or|and (default: or)
+     * @param string $start_date YYYYMMDD (only for daily layer file selection)
+     * @param string $end_date   YYYYMMDD (only for daily layer file selection)
+     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
+     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
+     *
+     * @return array ['deleted' => N] or ['error' => ...]
+     */
+    public function delete(
+        string $level,
+        string $keywords = '',
+        string $mode = 'or',
+        string $start_date = '',
+        string $end_date = '',
+        int    $start_time = 0,
+        int    $end_time = 0
+    ): array
+    {
+        if (!in_array($level, self::ALL_LEVELS, true)) {
+            return ['error' => "Invalid level: {$level}"];
+        }
+
+        if (!in_array($mode, self::SEARCH_MODE, true)) {
+            return ['error' => "Invalid mode: {$mode}"];
+        }
+
+        // Parse keywords
+        $kw_list = [];
+        if ('' !== $keywords) {
+            foreach (explode(',', $keywords) as $kw) {
+                $kw = trim($kw);
+                if ('' !== $kw) {
+                    $kw_list[] = strtolower($kw);
+                }
+            }
+        }
+
+        // Must have at least one filter condition
+        if (empty($kw_list) && 0 === $start_time && 0 === $end_time) {
+            return ['error' => 'At least one of keywords or time range (start_time/end_time) must be provided'];
+        }
+
+        $levels_to_process = ('all' === $level) ? self::LEVELS : [$level];
+        $total_deleted     = 0;
+
+        foreach ($levels_to_process as $lv) {
+            if ('ram' === $lv) {
+                $total_deleted += $this->deleteRAM($kw_list, $mode, $start_time, $end_time);
+            } else {
+                $total_deleted += $this->deleteFromFile($lv, $kw_list, $mode, $start_date, $end_date, $start_time, $end_time);
+            }
+        }
+
+        return ['deleted' => $total_deleted];
+    }
+
+    /**
+     * Delete matching entries from RAM memory array
+     *
+     * @param array  $kw_list    Lowercased keywords
+     * @param string $mode       or|and
+     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
+     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
+     *
+     * @return int Number of deleted entries
+     */
+    private function deleteRAM(array $kw_list, string $mode, int $start_time, int $end_time): int
+    {
+        $before_count = count($this->ram_memory);
+
+        $this->ram_memory = array_values(array_filter($this->ram_memory, function (array $entry) use ($kw_list, $mode, $start_time, $end_time): bool
+        {
+            // Time filter
+            $entry_time = $entry['created_at'] ?? 0;
+            if (0 !== $start_time && $entry_time < $start_time) {
+                return true;
+            }
+            if (0 !== $end_time && $entry_time > $end_time) {
+                return true;
+            }
+
+            // If no keywords, time match alone means delete
+            if (empty($kw_list)) {
+                return false;
+            }
+
+            // Keyword filter
+            $haystack = strtolower($entry['role'] . ' ' . $entry['content']);
+
+            if ('or' === $mode) {
+                foreach ($kw_list as $kw) {
+                    if (str_contains($haystack, $kw)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            // AND mode
+            foreach ($kw_list as $kw) {
+                if (!str_contains($haystack, $kw)) {
+                    return true;
+                }
+            }
+            return false;
+        }));
+
+        return $before_count - count($this->ram_memory);
+    }
+
+    /**
+     * Delete matching entries from a file-based memory layer
+     * Reads all lines, filters out matches, rewrites the file.
+     *
+     * @param string $level      system|important|daily
+     * @param array  $kw_list    Lowercased keywords
+     * @param string $mode       or|and
+     * @param string $start_date YYYYMMDD (for daily file selection)
+     * @param string $end_date   YYYYMMDD (for daily file selection)
+     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
+     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
+     *
+     * @return int Number of deleted entries
+     */
+    private function deleteFromFile(string $level, array $kw_list, string $mode, string $start_date, string $end_date, int $start_time, int $end_time): int
+    {
+        $files = [];
+
+        if ('daily' === $level) {
+            // Build list of daily files within date range
+            $start = ('' === $start_date) ? '00000000' : $this->validateDate($start_date);
+            $end   = ('' === $end_date) ? '99999999' : $this->validateDate($end_date);
+
+            if ($start > $end) {
+                [$start, $end] = [$end, $start];
+            }
+
+            $all_daily = glob($this->daily_dir . '*.txt');
+
+            if (false !== $all_daily) {
+                foreach ($all_daily as $file) {
+                    $filename = basename($file, '.txt');
+                    if (ctype_digit($filename) && 8 === strlen($filename) && $filename >= $start && $filename <= $end) {
+                        $files[] = $file;
+                    }
+                }
+            }
+        } else {
+            $target = $this->getTargetFile($level);
+            if (is_file($target)) {
+                $files[] = $target;
+            }
+        }
+
+        $total_deleted = 0;
+
+        foreach ($files as $file) {
+            $total_deleted += $this->deleteFromFileLines($file, $kw_list, $mode, $start_time, $end_time);
+        }
+
+        return $total_deleted;
+    }
+
+    /**
+     * Delete matching lines from a single JSONL file
+     * Reads all lines, filters out matches, rewrites the file.
+     *
+     * @param string $file       File path
+     * @param array  $kw_list    Lowercased keywords
+     * @param string $mode       or|and
+     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
+     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
+     *
+     * @return int Number of deleted entries
+     */
+    private function deleteFromFileLines(string $file, array $kw_list, string $mode, int $start_time, int $end_time): int
+    {
+        if (!is_file($file)) {
+            return 0;
+        }
+
+        $handle = fopen($file, 'rb');
+
+        if (false === $handle) {
+            return 0;
+        }
+
+        $kept_lines = [];
+        $deleted    = 0;
+
+        while (false !== ($line = fgets($handle))) {
+            $trimmed = rtrim($line, "\r\n");
+
+            if ('' === $trimmed) {
+                continue;
+            }
+
+            $msg = json_decode($trimmed, true);
+
+            if (!is_array($msg) || !isset($msg['role'], $msg['content'])) {
+                $kept_lines[] = $line;
+                continue;
+            }
+
+            $should_delete = $this->shouldDeleteEntry($msg, $kw_list, $mode, $start_time, $end_time);
+
+            if ($should_delete) {
+                ++$deleted;
+            } else {
+                $kept_lines[] = $line;
+            }
+        }
+
+        fclose($handle);
+
+        // Rewrite file only if something was deleted
+        if ($deleted > 0) {
+            $handle = fopen($file, 'wb');
+
+            if (false !== $handle) {
+                foreach ($kept_lines as $kept) {
+                    fwrite($handle, $kept);
+                }
+                fclose($handle);
+            }
+        }
+
+        unset($kept_lines, $handle, $line, $trimmed, $msg, $should_delete);
+        return $deleted;
+    }
+
+    /**
+     * Check if a single memory entry should be deleted
+     *
+     * @param array  $msg        Decoded message with role, content, created_at
+     * @param array  $kw_list    Lowercased keywords
+     * @param string $mode       or|and
+     * @param int    $start_time Unix timestamp lower bound (0 = no limit)
+     * @param int    $end_time   Unix timestamp upper bound (0 = no limit)
+     *
+     * @return bool True if entry should be deleted
+     */
+    private function shouldDeleteEntry(array $msg, array $kw_list, string $mode, int $start_time, int $end_time): bool
+    {
+        // Time filter
+        $entry_time = $msg['created_at'] ?? 0;
+
+        if (0 !== $start_time && $entry_time < $start_time) {
+            return false;
+        }
+
+        if (0 !== $end_time && $entry_time > $end_time) {
+            return false;
+        }
+
+        // If no keywords, time match alone means delete
+        if (empty($kw_list)) {
+            return true;
+        }
+
+        // Keyword filter
+        $haystack = strtolower($msg['role'] . ' ' . $msg['content']);
+
+        if ('or' === $mode) {
+            foreach ($kw_list as $kw) {
+                if (str_contains($haystack, $kw)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // AND mode
+        foreach ($kw_list as $kw) {
+            if (!str_contains($haystack, $kw)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // =========================================================================
+    //  Internal Helpers
+    // =========================================================================
 
     /**
      * @param string $level

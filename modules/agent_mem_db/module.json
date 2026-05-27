@@ -1,0 +1,13 @@
+{
+  "name": "agent_mem_db",
+  "version": "0.1.0",
+  "description": "SQLite-based memory management system - System/Important/Daily/RAM with full-text search and task scheduling",
+  "author": "AgentBee self developed",
+  "email": "",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  }
+}

@@ -86,8 +86,7 @@ class config extends Factory
                 'timeout'      => 7200,
                 'keep_reasons' => false,
                 'params'       => [
-                    'seed'              => 42,
-                    'max_tokens'        => 16384,
+                    'max_tokens'        => 32768,
                     'temperature'       => 0.3,
                     'top_p'             => 0.85,
                     'frequency_penalty' => 0.3,
@@ -108,7 +107,7 @@ class config extends Factory
             ],
             'agent_memory' => [
                 'provider'    => 'agent_mem_db',
-                'max_history' => 20,
+                'max_history' => 30,
             ],
             'agent_tools'  => [
                 'enabled'        => true,
@@ -121,7 +120,7 @@ class config extends Factory
                 ],
             ],
             'memory_limit' => '4G',
-            'debug'        => true,
+            'debug'        => false,
         ];
 
         file_put_contents($config_file, json_encode($config, JSON_PRETTY));

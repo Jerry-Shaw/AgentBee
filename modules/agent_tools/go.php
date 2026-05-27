@@ -51,7 +51,7 @@ class go extends Factory
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function exec(string $program, array|string $argv = [], int $timeout = 300, string $work_path = ''): array
+    public function exec(string $program, array|string $argv = [], int $timeout = 30, string $work_path = ''): array
     {
         $result = [
             'output' => '',

@@ -27,65 +27,65 @@ class tools
 {
     public const META = [
         [
-            'type' => 'function',
+            'type'     => 'function',
             'function' => [
-                'name' => 'addTask',
+                'name'        => 'addTask',
                 'description' => '添加定时任务。参数:task_id, task_prompt, run_at(时间戳), repeat(默认false), repeat_interval(秒)。返回 {"bytes_written":N}',
-                'parameters' => ['type' => 'object', 'properties' => ['task_id' => ['type' => 'string'], 'task_prompt' => ['type' => 'string'], 'run_at' => ['type' => 'integer'], 'repeat' => ['type' => 'boolean', 'default' => false], 'repeat_interval' => ['type' => 'integer', 'default' => 0]], 'required' => ['task_id', 'task_prompt', 'run_at']],
+                'parameters'  => ['type' => 'object', 'properties' => ['task_id' => ['type' => 'string'], 'task_prompt' => ['type' => 'string'], 'run_at' => ['type' => 'integer'], 'repeat' => ['type' => 'boolean', 'default' => false], 'repeat_interval' => ['type' => 'integer', 'default' => 0]], 'required' => ['task_id', 'task_prompt', 'run_at']],
             ],
         ],
         [
-            'type' => 'function',
+            'type'     => 'function',
             'function' => [
-                'name' => 'removeTask',
+                'name'        => 'removeTask',
                 'description' => '删除定时任务。参数:task_id。返回 {"success":true,"message":"..."}',
-                'parameters' => ['type' => 'object', 'properties' => ['task_id' => ['type' => 'string']], 'required' => ['task_id']],
+                'parameters'  => ['type' => 'object', 'properties' => ['task_id' => ['type' => 'string']], 'required' => ['task_id']],
             ],
         ],
         [
-            'type' => 'function',
+            'type'     => 'function',
             'function' => [
-                'name' => 'listTasks',
+                'name'        => 'listTasks',
                 'description' => '列出所有任务。无参数。返回任务数组 [{task_id,task_prompt,run_at,repeat,repeat_interval,created_at}]',
             ],
         ],
         [
-            'type' => 'function',
+            'type'     => 'function',
             'function' => [
-                'name' => 'runTask',
+                'name'        => 'runTask',
                 'description' => '手动触发任务调度,返回到期任务。无参数。返回任务数组(同listTasks)',
             ],
         ],
         [
-            'type' => 'function',
+            'type'     => 'function',
             'function' => [
-                'name' => 'save',
+                'name'        => 'save',
                 'description' => '保存记忆。参数:level(system|important|daily|ram),role(user|assistant|system|tool),content。返回 {"saved":true,"path":"..."}',
-                'parameters' => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram']], 'role' => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool']], 'content' => ['type' => 'string']], 'required' => ['level', 'role', 'content']],
+                'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram']], 'role' => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool']], 'content' => ['type' => 'string']], 'required' => ['level', 'role', 'content']],
             ],
         ],
         [
-            'type' => 'function',
+            'type'     => 'function',
             'function' => [
-                'name' => 'read',
+                'name'        => 'read',
                 'description' => '读取记忆。参数:level, offset(0), length(100,0=全部), date(仅daily,YYYYMMDD)。返回 {"messages":[...],"total":N}',
-                'parameters' => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram']], 'offset' => ['type' => 'integer', 'default' => 0], 'length' => ['type' => 'integer', 'default' => 100], 'date' => ['type' => 'string', 'pattern' => '^\d{8}$']], 'required' => ['level']],
+                'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram']], 'offset' => ['type' => 'integer', 'default' => 0], 'length' => ['type' => 'integer', 'default' => 100], 'date' => ['type' => 'string', 'pattern' => '^\d{8}$']], 'required' => ['level']],
             ],
         ],
         [
-            'type' => 'function',
+            'type'     => 'function',
             'function' => [
-                'name' => 'search',
+                'name'        => 'search',
                 'description' => '搜索记忆。参数:level(含all), keywords(数组), mode(or|and), offset, length, start_date, end_date(仅daily)。返回同read',
-                'parameters' => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram', 'all']], 'keywords' => ['type' => 'array', 'items' => ['type' => 'string']], 'mode' => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'], 'offset' => ['type' => 'integer', 'default' => 0], 'length' => ['type' => 'integer', 'default' => 100], 'start_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'end_date' => ['type' => 'string', 'pattern' => '^\d{8}$']], 'required' => ['level', 'keywords']],
+                'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram', 'all']], 'keywords' => ['type' => 'array', 'items' => ['type' => 'string']], 'mode' => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'], 'offset' => ['type' => 'integer', 'default' => 0], 'length' => ['type' => 'integer', 'default' => 100], 'start_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'end_date' => ['type' => 'string', 'pattern' => '^\d{8}$']], 'required' => ['level', 'keywords']],
             ],
         ],
         [
-            'type' => 'function',
+            'type'     => 'function',
             'function' => [
-                'name' => 'delete',
+                'name'        => 'delete',
                 'description' => '删除记忆。参数:level, keywords(逗号分隔), mode(or|and), start_date/end_date(YYYYMMDD), start_time/end_time(时间戳)。至少提供keywords或时间范围之一。返回 {"deleted":N} 或 {"error":"..."}',
-                'parameters' => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram', 'all']], 'keywords' => ['type' => 'string', 'default' => ''], 'mode' => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'], 'start_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'end_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'start_time' => ['type' => 'integer', 'default' => 0], 'end_time' => ['type' => 'integer', 'default' => 0]], 'required' => ['level']],
+                'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram', 'all']], 'keywords' => ['type' => 'string', 'default' => ''], 'mode' => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'], 'start_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'end_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'start_time' => ['type' => 'integer', 'default' => 0], 'end_time' => ['type' => 'integer', 'default' => 0]], 'required' => ['level']],
             ],
         ],
     ];

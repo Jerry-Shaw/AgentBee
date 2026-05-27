@@ -203,11 +203,7 @@ class go extends Factory
                             } elseif (!$this->clean_warning) {
                                 $this->clean_warning = true;
 
-                                $system_prompt = '【系统提醒】当前历史消息已达 ' . $current_count . ' 条（上限 ' . $max_history . '）。请自动完成：' .
-                                    '1. 总结关键信息（需求、回复、工具结果）保存到记忆（daily/important/system，临时存 ram）。' .
-                                    '2. 调用清理工具删除旧工具调用对，精简历史。' .
-                                    '3. 完成后告知用户：保存内容概要、存储层级、剩余消息数。' .
-                                    '【特别提醒】历史超过 ' . $limit_count . ' 条时系统会强制清理，请及时保存重要信息。';
+                                $system_prompt = '[历史 ' . $current_count . '/' . $max_history . '] 自动：①总结关键信息(需求/回复/工具结果)→存记忆(daily/important/system,临时ram)；②调用清理工具删旧工具对；③告知用户(概要/层级/剩余数)。| 超 ' . $limit_count . ' 条强制清理，及时保存。';
 
                                 $this->core->addSessionHistory(['role' => 'user', 'content' => $system_prompt]);
 
@@ -277,11 +273,7 @@ class go extends Factory
 
         $task_json = json_encode($task_jobs, JSON_FORMAT);
 
-        $task_content = '【定时任务】JSON 列表：' . PHP_EOL . $task_json . PHP_EOL .
-            '按顺序执行：' . PHP_EOL .
-            '1. 按任务要求执行操作（提醒、工具、问答等）。' . PHP_EOL .
-            '2. 仅重要的任务结果存入 daily（重要可额外存 important），琐碎任务不存记忆。' . PHP_EOL .
-            '3. 完成后向用户简述概要、结果及存储层级，语气自然。';
+        $task_content = '[定时任务] JSON:' . PHP_EOL . $task_json . PHP_EOL . '按序:①按任务要求执行(提醒/工具/问答) ②仅重要结果存daily(重要可+important),琐碎不存 ③完成后简述概要/结果/存储层级,语气自然。';
 
         $this->core->addSessionHistory(['role' => 'user', 'content' => $task_content]);
 

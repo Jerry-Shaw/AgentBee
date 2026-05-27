@@ -73,13 +73,13 @@ class go extends Factory
         try {
             $this->core->socketMgr
                 ->setDebugMode($this->core->agent_config['debug'])
-                ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'] * 2)
+                ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'])
                 ->setEventListener('onHandshake', [$this, 'onHandshake'])
                 ->setEventListener('onHeartbeat', [$this, 'onHeartbeat'])
                 ->setEventListener('onMessage', [$this, 'onMessage'])
                 ->setEventListener('onSendString', [$this, 'onSendString'])
                 ->setEventListener('onClose', [$this, 'onClose'])
-                ->listenTo('tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'], $this->core->agent_config['agent_server']['websocket']);
+                ->listenTo('tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'], true);
         } catch (\Throwable) {
         }
     }
@@ -203,11 +203,11 @@ class go extends Factory
                             } elseif (!$this->clean_warning) {
                                 $this->clean_warning = true;
 
-                                $system_prompt = '【系统提醒】当前对话历史较长（已有 ' . $current_count . ' 条，上限 ' . $max_history . ' 条）。请自动完成以下操作，并以自然语气告知用户：' . "\n\n" .
-                                    '1. 总结关键信息（用户需求、助手回复、重要工具结果等），保存到对应记忆（daily/important/system，临时内容可存 ram）。' . "\n" .
-                                    '2. 调用清理工具删除旧工具调用对，精简历史。' . "\n" .
-                                    '3. 完成后，向用户说明保存的内容概要、存储层级及剩余消息数，语气自然。' . "\n\n" .
-                                    '【特别提醒】对话历史超过 ' . $limit_count . ' 条时，系统将强制清理上下文，重要信息可能丢失，请及时保存。';
+                                $system_prompt = '【系统提醒】当前历史消息已达 ' . $current_count . ' 条（上限 ' . $max_history . '）。请自动完成：' .
+                                    '1. 总结关键信息（需求、回复、工具结果）保存到记忆（daily/important/system，临时存 ram）。' .
+                                    '2. 调用清理工具删除旧工具调用对，精简历史。' .
+                                    '3. 完成后告知用户：保存内容概要、存储层级、剩余消息数。' .
+                                    '【特别提醒】历史超过 ' . $limit_count . ' 条时系统会强制清理，请及时保存重要信息。';
 
                                 $this->core->addSessionHistory(['role' => 'user', 'content' => $system_prompt]);
 
@@ -277,12 +277,11 @@ class go extends Factory
 
         $task_json = json_encode($task_jobs, JSON_FORMAT);
 
-        $task_content = '【定时任务】以下是待执行的定时任务列表（JSON 格式）：' . PHP_EOL .
-            $task_json . PHP_EOL . PHP_EOL .
-            '请按顺序处理每个任务：' . PHP_EOL .
-            '1. 根据 task_prompt 执行相应操作（发送提醒、调用工具、回答问题等）。' . PHP_EOL .
-            '2. 执行后将任务摘要和执行结果按需存入 daily 记忆层。重要事件可额外存入 important 层。' . PHP_EOL .
-            '3. 全部处理完毕后，向用户说明任务概要、处理结果、存储层级，语气自然。';
+        $task_content = '【定时任务】JSON 列表：' . PHP_EOL . $task_json . PHP_EOL .
+            '按顺序执行：' . PHP_EOL .
+            '1. 按任务要求执行操作（提醒、工具、问答等）。' . PHP_EOL .
+            '2. 仅重要的任务结果存入 daily（重要可额外存 important），琐碎任务不存记忆。' . PHP_EOL .
+            '3. 完成后向用户简述概要、结果及存储层级，语气自然。';
 
         $this->core->addSessionHistory(['role' => 'user', 'content' => $task_content]);
 

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * PPTX Handler - Complete Native PHP Implementation
+ * PPTX Handler - Complete Native PHP Implementation (Read + Write)
  *
  * This module provides high-efficiency web data acquisition tools for Agents,
  * focusing on noise reduction and structural extraction to optimize LLM token usage.
@@ -45,7 +45,6 @@ class pptxHandler extends Factory
             return ['error' => 'Failed to open PPTX file as a zip archive.'];
         }
 
-        // Get presentation.xml
         $presContent = $zip->getFromName('ppt/presentation.xml');
         if ($presContent === false) {
             $zip->close();
@@ -63,7 +62,6 @@ class pptxHandler extends Factory
         $xp->registerNamespace('p', 'http://schemas.openxmlformats.org/presentationml/2006/main');
         $xp->registerNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
 
-        // Get slide relationships
         $slideRels = [];
         $sldNodes  = $xp->query('//p:sldIdLst/p:sldId');
         if ($sldNodes === false) {
@@ -83,7 +81,6 @@ class pptxHandler extends Factory
             }
         }
 
-        // Parse presentation.xml.rels
         $relsContent = $zip->getFromName('ppt/_rels/presentation.xml.rels');
         $relMap      = [];
         if ($relsContent !== false) {
@@ -108,7 +105,6 @@ class pptxHandler extends Factory
             }
         }
 
-        // Build slide file list
         $slideFiles = [];
         foreach ($slideRels as $sr) {
             if (isset($relMap[$sr['rel_id']])) {
@@ -130,7 +126,6 @@ class pptxHandler extends Factory
             }
         }
 
-        // Fallback brute-force
         if (empty($slideFiles)) {
             for ($i = 1; $i <= 100; $i++) {
                 $file = "ppt/slides/slide{$i}.xml";
@@ -140,7 +135,6 @@ class pptxHandler extends Factory
             }
         }
 
-        // Read each slide
         $slides = [];
         foreach ($slideFiles as $idx => $sf) {
             $xmlContent = $zip->getFromName($sf);
@@ -158,11 +152,9 @@ class pptxHandler extends Factory
             $titleTexts   = [];
             $contentTexts = [];
 
-            // Find all shapes
             $shapes = $xpS->query('//p:sp');
             if ($shapes !== false) {
                 foreach ($shapes as $shape) {
-                    // Detect if shape is a title placeholder
                     $isTitle  = false;
                     $nvPrList = $xpS->query('./p:nvSpPr/p:nvPr', $shape);
                     if ($nvPrList !== false && $nvPrList->length > 0) {
@@ -171,13 +163,12 @@ class pptxHandler extends Factory
                         if ($phNodes !== false && $phNodes->length > 0) {
                             $ph     = $phNodes->item(0);
                             $phType = $ph->getAttribute('type');
-                            if ($phType === 'title' || ($ph->getAttribute('idx') === '0')) {
+                            if ($phType === 'title' || $ph->getAttribute('idx') === '0') {
                                 $isTitle = true;
                             }
                         }
                     }
 
-                    // Extract text nodes
                     $textNodes = $xpS->query('.//a:t', $shape);
                     if ($textNodes !== false) {
                         foreach ($textNodes as $tNode) {
@@ -197,7 +188,6 @@ class pptxHandler extends Factory
             $title   = implode(' ', array_unique($titleTexts));
             $content = implode("\n", array_filter(array_map('trim', $contentTexts)));
 
-            // Fallback: if no title detected but content has multiple lines, assume first line is title
             if ($title === '' && !empty($content)) {
                 $lines = explode("\n", $content);
                 if (count($lines) > 1 && strlen($lines[0]) < 200) {
@@ -228,6 +218,14 @@ class pptxHandler extends Factory
 
     /**
      * Write a .pptx file from an array of slides.
+     * Each slide can have:
+     *   - title (string)
+     *   - content (string or array of lines)
+     *   - image (string, path to image file)
+     *   - image_x (int, EMU, default 8000000)
+     *   - image_y (int, EMU, default 500000)
+     *   - image_width (int, EMU, default 2540000)
+     *   - image_height (int, EMU, default 1905000)
      *
      * @param string $path
      * @param array  $data
@@ -252,13 +250,43 @@ class pptxHandler extends Factory
                     if ($title !== '' && $content === '') {
                         $content = $title;
                     }
-                    $slides[] = ['title' => $title, 'content' => $content];
+                    $image = $item['image'] ?? null;
+                    // 图片位置和大小（EMU），如果未提供则使用默认值（右上角，200x150pt）
+                    $image_x      = isset($item['image_x']) ? (int)$item['image_x'] : 8000000;
+                    $image_y      = isset($item['image_y']) ? (int)$item['image_y'] : 500000;
+                    $image_width  = isset($item['image_width']) ? (int)$item['image_width'] : 2540000;
+                    $image_height = isset($item['image_height']) ? (int)$item['image_height'] : 1905000;
+                    $slides[]     = [
+                        'title'        => $title,
+                        'content'      => $content,
+                        'image'        => $image,
+                        'image_x'      => $image_x,
+                        'image_y'      => $image_y,
+                        'image_width'  => $image_width,
+                        'image_height' => $image_height,
+                    ];
                 } else {
-                    $slides[] = ['title' => '', 'content' => trim((string)$item)];
+                    $slides[] = [
+                        'title'        => '',
+                        'content'      => trim((string)$item),
+                        'image'        => null,
+                        'image_x'      => 8000000,
+                        'image_y'      => 500000,
+                        'image_width'  => 2540000,
+                        'image_height' => 1905000,
+                    ];
                 }
             }
             if (empty($slides)) {
-                $slides[] = ['title' => '', 'content' => ''];
+                $slides[] = [
+                    'title'        => '',
+                    'content'      => '',
+                    'image'        => null,
+                    'image_x'      => 8000000,
+                    'image_y'      => 500000,
+                    'image_width'  => 2540000,
+                    'image_height' => 1905000,
+                ];
             }
 
             $tempDir = sys_get_temp_dir() . '/pptx_' . uniqid('pptx_', true);
@@ -268,18 +296,36 @@ class pptxHandler extends Factory
 
             $dirs = [
                 '/_rels', '/ppt/_rels', '/ppt/slides', '/ppt/slideMasters',
-                '/ppt/slideLayouts', '/ppt/theme',
+                '/ppt/slideLayouts', '/ppt/theme', '/ppt/media'
             ];
             foreach ($dirs as $sub) {
                 mkdir($tempDir . $sub, 0755, true);
             }
             mkdir($tempDir . '/docProps', 0755, true);
 
-            // [Content_Types].xml
+            // ========== [Content_Types].xml ==========
             $ct = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $ct .= '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' . "\n";
             $ct .= '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' . "\n";
             $ct .= '  <Default Extension="xml" ContentType="application/xml"/>' . "\n";
+            // 收集图片扩展名
+            $imageTypes = [];
+            foreach ($slides as $slide) {
+                if ($slide['image'] && file_exists($slide['image'])) {
+                    $ext = strtolower(pathinfo($slide['image'], PATHINFO_EXTENSION));
+                    if ($ext === 'png') {
+                        $imageTypes['png'] = 'image/png';
+                    } elseif ($ext === 'jpg' || $ext === 'jpeg') {
+                        $imageTypes['jpg'] = 'image/jpeg';
+                        if ($ext === 'jpeg') $imageTypes['jpeg'] = 'image/jpeg';
+                    } elseif ($ext === 'gif') {
+                        $imageTypes['gif'] = 'image/gif';
+                    }
+                }
+            }
+            foreach ($imageTypes as $ext => $mime) {
+                $ct .= '  <Default Extension="' . $ext . '" ContentType="' . $mime . '"/>' . "\n";
+            }
             $ct .= '  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>' . "\n";
             foreach ($slides as $i => $s) {
                 $num = $i + 1;
@@ -297,15 +343,17 @@ class pptxHandler extends Factory
             file_put_contents($tempDir . '/[Content_Types].xml', $ct);
             unset($ct);
 
-            // _rels/.rels
+            // ========== _rels/.rels ==========
             $rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $rootRels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
             $rootRels .= '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>' . "\n";
+            $rootRels .= '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' . "\n";
+            $rootRels .= '  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>' . "\n";
             $rootRels .= '</Relationships>';
             file_put_contents($tempDir . '/_rels/.rels', $rootRels);
             unset($rootRels);
 
-            // ppt/presentation.xml
+            // ========== ppt/presentation.xml ==========
             $pres = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $pres .= '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' . "\n";
             $pres .= '  <p:sldMasterIdLst>' . "\n";
@@ -317,13 +365,13 @@ class pptxHandler extends Factory
                 $pres .= '    <p:sldId id="' . (256 + $num) . '" r:id="rId' . ($num + 2) . '"/>' . "\n";
             }
             $pres .= '  </p:sldIdLst>' . "\n";
-            $pres .= '  <p:sldSz cx="9144000" cy="6858000"/>' . "\n";
+            $pres .= '  <p:sldSz cx="12192000" cy="6858000"/>' . "\n";
             $pres .= '  <p:notesSz cx="6858000" cy="9144000"/>' . "\n";
             $pres .= '</p:presentation>';
             file_put_contents($tempDir . '/ppt/presentation.xml', $pres);
             unset($pres);
 
-            // ppt/_rels/presentation.xml.rels
+            // ========== ppt/_rels/presentation.xml.rels ==========
             $presRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $presRels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
             $presRels .= '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>' . "\n";
@@ -332,29 +380,34 @@ class pptxHandler extends Factory
                 $num      = $i + 1;
                 $presRels .= '  <Relationship Id="rId' . ($num + 2) . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide' . $num . '.xml"/>' . "\n";
             }
+            $presRels .= '  <Relationship Id="rId' . (count($slides) + 3) . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps" Target="presProps.xml"/>' . "\n";
+            $presRels .= '  <Relationship Id="rId' . (count($slides) + 4) . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps" Target="viewProps.xml"/>' . "\n";
+            $presRels .= '  <Relationship Id="rId' . (count($slides) + 5) . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles" Target="tableStyles.xml"/>' . "\n";
             $presRels .= '</Relationships>';
             file_put_contents($tempDir . '/ppt/_rels/presentation.xml.rels', $presRels);
             unset($presRels);
 
-            // ppt/theme/theme1.xml
+            // ========== ppt/theme/theme1.xml ==========
             $theme = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $theme .= '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">' . "\n";
             $theme .= '  <a:themeElements>' . "\n";
             $theme .= '    <a:clrScheme name="Office">' . "\n";
-            $theme .= '      <a:dk1><a:srgbClr val="000000"/></a:dk1>' . "\n";
-            $theme .= '      <a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>' . "\n";
-            $theme .= '      <a:dk2><a:srgbClr val="44546A"/></a:dk2>' . "\n";
-            $theme .= '      <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>' . "\n";
-            $theme .= '      <a:accent1><a:srgbClr val="5B9BD5"/></a:accent1>' . "\n";
-            $theme .= '      <a:accent2><a:srgbClr val="ED7D31"/></a:accent2>' . "\n";
-            $theme .= '      <a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>' . "\n";
-            $theme .= '      <a:accent4><a:srgbClr val="FFC000"/></a:accent4>' . "\n";
-            $theme .= '      <a:accent5><a:srgbClr val="70AD47"/></a:accent5>' . "\n";
-            $theme .= '      <a:accent6><a:srgbClr val="2859A3"/></a:accent6>' . "\n";
+            $theme .= '      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>' . "\n";
+            $theme .= '      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>' . "\n";
+            $theme .= '      <a:dk2><a:srgbClr val="0E2841"/></a:dk2>' . "\n";
+            $theme .= '      <a:lt2><a:srgbClr val="E8E8E8"/></a:lt2>' . "\n";
+            $theme .= '      <a:accent1><a:srgbClr val="156082"/></a:accent1>' . "\n";
+            $theme .= '      <a:accent2><a:srgbClr val="E97132"/></a:accent2>' . "\n";
+            $theme .= '      <a:accent3><a:srgbClr val="196B24"/></a:accent3>' . "\n";
+            $theme .= '      <a:accent4><a:srgbClr val="0F9ED5"/></a:accent4>' . "\n";
+            $theme .= '      <a:accent5><a:srgbClr val="A02B93"/></a:accent5>' . "\n";
+            $theme .= '      <a:accent6><a:srgbClr val="4EA72E"/></a:accent6>' . "\n";
+            $theme .= '      <a:hlink><a:srgbClr val="467886"/></a:hlink>' . "\n";
+            $theme .= '      <a:folHlink><a:srgbClr val="96607D"/></a:folHlink>' . "\n";
             $theme .= '    </a:clrScheme>' . "\n";
             $theme .= '    <a:fontScheme name="Office">' . "\n";
-            $theme .= '      <a:majorFont><a:latin typeface="Arial"/><a:ea typeface="Arial"/></a:majorFont>' . "\n";
-            $theme .= '      <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface="Calibri"/></a:minorFont>' . "\n";
+            $theme .= '      <a:majorFont><a:latin typeface="等线 Light"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>' . "\n";
+            $theme .= '      <a:minorFont><a:latin typeface="等线"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>' . "\n";
             $theme .= '    </a:fontScheme>' . "\n";
             $theme .= '    <a:fmtScheme name="Office"/>' . "\n";
             $theme .= '  </a:themeElements>' . "\n";
@@ -362,31 +415,38 @@ class pptxHandler extends Factory
             file_put_contents($tempDir . '/ppt/theme/theme1.xml', $theme);
             unset($theme);
 
-            // === ppt/tableStyles.xml ===
+            // ========== ppt/tableStyles.xml ==========
             $tableStyles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $tableStyles .= '<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"/>';
             file_put_contents($tempDir . '/ppt/tableStyles.xml', $tableStyles);
             unset($tableStyles);
 
-            // === ppt/presProps.xml ===
+            // ========== ppt/presProps.xml ==========
             $presProps = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
-            $presProps .= '<p:presentationPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' . "\n";
-            $presProps .= '  <p:extLst/>' . "\n";
+            $presProps .= '<p:presentationPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' . "\n";
+            $presProps .= '  <p:extLst>' . "\n";
+            $presProps .= '    <p:ext uri="{E76CE94A-603C-4142-B9EB-6D1370010A27}"><p14:discardImageEditData xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" val="0"/></p:ext>' . "\n";
+            $presProps .= '    <p:ext uri="{D31A062A-798A-4329-ABDD-BBA856620510}"><p14:defaultImageDpi xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" val="32767"/></p:ext>' . "\n";
+            $presProps .= '    <p:ext uri="{FD5EFAAD-0ECE-453E-9831-46B23BE46B34}"><p15:chartTrackingRefBased xmlns:p15="http://schemas.microsoft.com/office/powerpoint/2012/main" val="1"/></p:ext>' . "\n";
+            $presProps .= '  </p:extLst>' . "\n";
             $presProps .= '</p:presentationPr>';
             file_put_contents($tempDir . '/ppt/presProps.xml', $presProps);
             unset($presProps);
 
-            // === ppt/viewProps.xml ===
+            // ========== ppt/viewProps.xml ==========
             $viewProps = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
-            $viewProps .= '<p:viewPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' . "\n";
-            $viewProps .= '  <p:commonViewPr>' . "\n";
-            $viewProps .= '    <p:viewType>normal</p:viewType>' . "\n";
-            $viewProps .= '  </p:commonViewPr>' . "\n";
+            $viewProps .= '<p:viewPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' . "\n";
+            $viewProps .= '  <p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr>' . "\n";
+            $viewProps .= '  <p:slideViewPr>' . "\n";
+            $viewProps .= '    <p:cSldViewPr snapToGrid="0"><p:cViewPr varScale="1"><p:scale><a:sx n="104" d="100"/><a:sy n="104" d="100"/></p:scale><p:origin x="284" y="76"/></p:cViewPr><p:guideLst/></p:cSldViewPr>' . "\n";
+            $viewProps .= '  </p:slideViewPr>' . "\n";
+            $viewProps .= '  <p:notesTextViewPr><p:cViewPr><p:scale><a:sx n="1" d="1"/><a:sy n="1" d="1"/></p:scale><p:origin x="0" y="0"/></p:cViewPr></p:notesTextViewPr>' . "\n";
+            $viewProps .= '  <p:gridSpacing cx="72008" cy="72008"/>' . "\n";
             $viewProps .= '</p:viewPr>';
             file_put_contents($tempDir . '/ppt/viewProps.xml', $viewProps);
             unset($viewProps);
 
-            // === docProps/app.xml ===
+            // ========== docProps/app.xml ==========
             $appXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $appXml .= '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">' . "\n";
             $appXml .= '  <Application>AgentDocEngine</Application>' . "\n";
@@ -401,7 +461,7 @@ class pptxHandler extends Factory
             file_put_contents($tempDir . '/docProps/app.xml', $appXml);
             unset($appXml);
 
-            // === docProps/core.xml ===
+            // ========== docProps/core.xml ==========
             $coreXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $coreXml .= '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' . "\n";
             $coreXml .= '  <dc:creator>AgentDocEngine</dc:creator>' . "\n";
@@ -412,40 +472,71 @@ class pptxHandler extends Factory
             file_put_contents($tempDir . '/docProps/core.xml', $coreXml);
             unset($coreXml);
 
-            // ppt/slideMasters/slideMaster1.xml
+            // ========== ppt/slideMasters/slideMaster1.xml ==========
             $master = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $master .= '<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' . "\n";
-            $master .= '  <p:cSld name="Master">' . "\n";
-            $master .= '    <p:bg><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></p:bg>' . "\n";
+            $master .= '  <p:cSld>' . "\n";
+            $master .= '    <p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>' . "\n";
             $master .= '    <p:spTree>' . "\n";
             $master .= '      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' . "\n";
-            $master .= '      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="9144000" cy="6858000"/></a:xfrm></p:grpSpPr>' . "\n";
+            $master .= '      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' . "\n";
+            $master .= '      <p:sp>' . "\n";
+            $master .= '        <p:nvSpPr><p:cNvPr id="2" name="Title Placeholder"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>' . "\n";
+            $master .= '        <p:spPr><a:xfrm><a:off x="838200" y="365125"/><a:ext cx="10515600" cy="1325563"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>' . "\n";
+            $master .= '        <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>单击此处编辑母版标题样式</a:t></a:r></a:p></p:txBody>' . "\n";
+            $master .= '      </p:sp>' . "\n";
+            $master .= '      <p:sp>' . "\n";
+            $master .= '        <p:nvSpPr><p:cNvPr id="3" name="Body Placeholder"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>' . "\n";
+            $master .= '        <p:spPr><a:xfrm><a:off x="838200" y="1825625"/><a:ext cx="10515600" cy="4351338"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>' . "\n";
+            $master .= '        <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr lvl="0"/><a:r><a:t>单击此处编辑母版文本样式</a:t></a:r></a:p></p:txBody>' . "\n";
+            $master .= '      </p:sp>' . "\n";
+            $master .= '      <p:sp><p:nvSpPr><p:cNvPr id="4" name="Date"/><p:cNvSpPr/><p:nvPr><p:ph type="dt" sz="half" idx="2"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="838200" y="6356350"/><a:ext cx="2743200" cy="365125"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:fld type="datetimeFigureOut"><a:t>2026/5/28</a:t></a:fld></a:p></p:txBody></p:sp>' . "\n";
+            $master .= '      <p:sp><p:nvSpPr><p:cNvPr id="5" name="Footer"/><p:cNvSpPr/><p:nvPr><p:ph type="ftr" sz="quarter" idx="3"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="4038600" y="6356350"/><a:ext cx="4114800" cy="365125"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr/></a:p></p:txBody></p:sp>' . "\n";
+            $master .= '      <p:sp><p:nvSpPr><p:cNvPr id="6" name="Slide Number"/><p:cNvSpPr/><p:nvPr><p:ph type="sldNum" sz="quarter" idx="4"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="8610600" y="6356350"/><a:ext cx="2743200" cy="365125"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:fld type="slidenum"><a:t>‹#›</a:t></a:fld></a:p></p:txBody></p:sp>' . "\n";
             $master .= '    </p:spTree>' . "\n";
             $master .= '  </p:cSld>' . "\n";
-            $master .= '  <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2"/>' . "\n";
+            $master .= '  <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>' . "\n";
             $master .= '</p:sldMaster>';
             file_put_contents($tempDir . '/ppt/slideMasters/slideMaster1.xml', $master);
             unset($master);
 
-            // ppt/slideLayouts/slideLayout1.xml
+            // ========== ppt/slideMasters/_rels/slideMaster1.xml.rels ==========
+            $masterRelsDir = $tempDir . '/ppt/slideMasters/_rels';
+            if (!is_dir($masterRelsDir)) mkdir($masterRelsDir, 0755, true);
+            $masterRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $masterRels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
+            $masterRels .= '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>' . "\n";
+            $masterRels .= '</Relationships>';
+            file_put_contents($masterRelsDir . '/slideMaster1.xml.rels', $masterRels);
+            unset($masterRels);
+
+            // ========== ppt/slideLayouts/slideLayout1.xml ==========
             $layout = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
-            $layout .= '<p:sldLayout type="blank" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' . "\n";
+            $layout .= '<p:sldLayout type="blank" preserve="1" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' . "\n";
             $layout .= '  <p:cSld name="Blank Layout">' . "\n";
-            $layout .= '    <p:bg><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></p:bg>' . "\n";
-            $layout .= '    <p:spTree>' . "\n";
-            $layout .= '      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' . "\n";
-            $layout .= '      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="9144000" cy="6858000"/></a:xfrm></p:grpSpPr>' . "\n";
-            $layout .= '    </p:spTree>' . "\n";
+            $layout .= '    <p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree>' . "\n";
             $layout .= '  </p:cSld>' . "\n";
             $layout .= '</p:sldLayout>';
             file_put_contents($tempDir . '/ppt/slideLayouts/slideLayout1.xml', $layout);
             unset($layout);
 
-            // Generate each slide
+            // ========== ppt/slideLayouts/_rels/slideLayout1.xml.rels ==========
+            $layoutRelsDir = $tempDir . '/ppt/slideLayouts/_rels';
+            if (!is_dir($layoutRelsDir)) mkdir($layoutRelsDir, 0755, true);
+            $layoutRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $layoutRels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
+            $layoutRels .= '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>' . "\n";
+            $layoutRels .= '</Relationships>';
+            file_put_contents($layoutRelsDir . '/slideLayout1.xml.rels', $layoutRels);
+            unset($layoutRels);
+
+            // ========== Generate each slide (with image support) ==========
+            $imageCounter = 1;
             foreach ($slides as $idx => $slide) {
-                $num     = $idx + 1;
-                $title   = $slide['title'];
-                $content = $slide['content'];
+                $num       = $idx + 1;
+                $title     = $slide['title'];
+                $content   = $slide['content'];
+                $imagePath = $slide['image'];
 
                 $slideXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
                 $slideXml .= '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' . "\n";
@@ -462,6 +553,54 @@ class pptxHandler extends Factory
                     $slideXml .= '        <p:spPr><a:xfrm><a:off x="508000" y="508000"/><a:ext cx="7924860" cy="300000"/></a:xfrm></p:spPr>' . "\n";
                     $slideXml .= '        <p:txBody><a:bodyPr/><a:p><a:r><a:t>' . $escTitle . '</a:t></a:r></a:p></p:txBody>' . "\n";
                     $slideXml .= '      </p:sp>' . "\n";
+                }
+
+                // Add image if provided
+                if ($imagePath && file_exists($imagePath)) {
+                    $ext           = strtolower(pathinfo($imagePath, PATHINFO_EXTENSION));
+                    $imageFileName = 'image' . $imageCounter . '.' . $ext;
+                    $targetImage   = $tempDir . '/ppt/media/' . $imageFileName;
+                    copy($imagePath, $targetImage);
+                    $imageRid = 'rId' . ($imageCounter + 100); // ensure unique
+
+                    $imgX = $slide['image_x'];
+                    $imgY = $slide['image_y'];
+                    $imgW = $slide['image_width'];
+                    $imgH = $slide['image_height'];
+
+                    $slideXml .= '      <p:pic>' . "\n";
+                    $slideXml .= '        <p:nvPicPr>' . "\n";
+                    $slideXml .= '          <p:cNvPr id="' . (100 + $idx) . '" name="Picture ' . $imageCounter . '"/>' . "\n";
+                    $slideXml .= '          <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>' . "\n";
+                    $slideXml .= '          <p:nvPr/>' . "\n";
+                    $slideXml .= '        </p:nvPicPr>' . "\n";
+                    $slideXml .= '        <p:blipFill>' . "\n";
+                    $slideXml .= '          <a:blip r:embed="' . $imageRid . '"/>' . "\n";
+                    $slideXml .= '          <a:stretch><a:fillRect/></a:stretch>' . "\n";
+                    $slideXml .= '        </p:blipFill>' . "\n";
+                    $slideXml .= '        <p:spPr>' . "\n";
+                    $slideXml .= '          <a:xfrm><a:off x="' . $imgX . '" y="' . $imgY . '"/><a:ext cx="' . $imgW . '" cy="' . $imgH . '"/></a:xfrm>' . "\n";
+                    $slideXml .= '          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' . "\n";
+                    $slideXml .= '        </p:spPr>' . "\n";
+                    $slideXml .= '      </p:pic>' . "\n";
+
+                    // Add relationship for this image in slide's rels file
+                    $relsDir = $tempDir . '/ppt/slides/_rels';
+                    if (!is_dir($relsDir)) mkdir($relsDir, 0755, true);
+                    $relsFile    = $relsDir . '/slide' . $num . '.xml.rels';
+                    $relsContent = '';
+                    if (file_exists($relsFile)) {
+                        $relsContent = file_get_contents($relsFile);
+                        // Remove trailing </Relationships> if present, we'll add it back after appending
+                        $relsContent = preg_replace('/<\/Relationships>\s*$/s', '', $relsContent);
+                    } else {
+                        $relsContent = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+                        $relsContent .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
+                    }
+                    $relsContent .= '  <Relationship Id="' . $imageRid . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/' . $imageFileName . '"/>' . "\n";
+                    $relsContent .= '</Relationships>';
+                    file_put_contents($relsFile, $relsContent);
+                    $imageCounter++;
                 }
 
                 // Content paragraphs
@@ -485,22 +624,22 @@ class pptxHandler extends Factory
                 file_put_contents($tempDir . '/ppt/slides/slide' . $num . '.xml', $slideXml);
                 unset($slideXml);
 
+                // Ensure slide has at least a basic relationship to slideLayout (if not already present)
                 $relsDir = $tempDir . '/ppt/slides/_rels';
-                if (!is_dir($relsDir)) {
-                    mkdir($relsDir, 0755, true);
+                if (!is_dir($relsDir)) mkdir($relsDir, 0755, true);
+                $relsFile = $relsDir . '/slide' . $num . '.xml.rels';
+                if (!file_exists($relsFile)) {
+                    $slideRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+                    $slideRels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
+                    $slideRels .= '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' . "\n";
+                    $slideRels .= '</Relationships>';
+                    file_put_contents($relsFile, $slideRels);
+                    unset($slideRels);
                 }
-                $slideRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
-                $slideRels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
-                $slideRels .= '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' . "\n";
-                $slideRels .= '</Relationships>';
-                file_put_contents($relsDir . '/slide' . $num . '.xml.rels', $slideRels);
-                unset($slideRels);
             }
 
             // Create ZIP
-            if (!file_exists(dirname($path))) {
-                mkdir(dirname($path), 0755, true);
-            }
+            if (!file_exists(dirname($path))) mkdir(dirname($path), 0755, true);
             $zip = new \ZipArchive();
             if ($zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
                 self::rrmdir($tempDir);
@@ -517,12 +656,10 @@ class pptxHandler extends Factory
                 'status'       => 'success',
                 'path'         => $path,
                 'slides_count' => count($slides),
-                'message'      => 'PPTX written successfully.',
+                'message'      => 'PPTX written successfully with image support.',
             ];
         } catch (\Exception $e) {
-            if ($tempDir !== null && is_dir($tempDir)) {
-                self::rrmdir($tempDir);
-            }
+            if ($tempDir !== null && is_dir($tempDir)) self::rrmdir($tempDir);
             return ['error' => 'Failed to write PPTX: ' . $e->getMessage()];
         }
     }
@@ -554,14 +691,16 @@ class pptxHandler extends Factory
             } else {
                 try {
                     unlink($full);
-                } catch (\Exception) {
+                } catch (\Exception $e) {
+                    // ignore
                 }
             }
             unset($file, $full);
         }
         try {
             rmdir($dir);
-        } catch (\Exception) {
+        } catch (\Exception $e) {
+            // ignore
         }
     }
 }

@@ -25,7 +25,7 @@ namespace modules\agent_doc;
 
 class tools
 {
-    const META = [
+    public const META = [
         // readDocx
         [
             'type'     => 'function',
@@ -115,7 +115,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'writePptx',
-                'description' => '写入 PPTX 演示文稿。参数：path(string, 必填), data(array, 必填, 每项为幻灯片，可含 title 和 content 字段或纯文本)。返回：{"status":"success","path":"..."} 或 {"error":"..."}',
+                'description' => '写入 PPTX 演示文稿。参数：path(string, 必填), data(array, 必填, 每项为幻灯片，可含 title(string)、content(string) 和可选 image(string)、image_x(int)、image_y(int)、image_width(int)、image_height(int) 字段，坐标和尺寸单位为 EMU（1英寸=914400，1cm=360000，1pt=12700）)。返回：{"status":"success","path":"..."} 或 {"error":"..."}',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -125,8 +125,13 @@ class tools
                             'items'       => [
                                 'type'       => 'object',
                                 'properties' => [
-                                    'title'   => ['type' => 'string'],
-                                    'content' => ['type' => 'string']
+                                    'title'        => ['type' => 'string'],
+                                    'content'      => ['type' => 'string'],
+                                    'image'        => ['type' => 'string'],
+                                    'image_x'      => ['type' => 'integer', 'description' => '图片左上角X坐标(EMU)'],
+                                    'image_y'      => ['type' => 'integer', 'description' => '图片左上角Y坐标(EMU)'],
+                                    'image_width'  => ['type' => 'integer', 'description' => '图片宽度(EMU)'],
+                                    'image_height' => ['type' => 'integer', 'description' => '图片高度(EMU)'],
                                 ]
                             ],
                             'description' => '幻灯片列表'

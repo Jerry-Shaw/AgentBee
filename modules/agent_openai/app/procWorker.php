@@ -111,6 +111,21 @@ class procWorker extends Factory
                         }
 
                         foreach ($execution_results as $result) {
+                            if ('agent_tools/readImage' === $result['function_name']) {
+                                $result_data = json_decode($result['content'], true);
+
+                                if (is_array($result_data) && 'success' === $result_data['status']) {
+                                    $context = [
+                                        ['type' => 'text', 'text' => $result_data['data']['filename'] . ' (按需使用)'],
+                                        ['type' => 'image_url', 'image_url' => ['url' => $result_data['data']['content']]]
+                                    ];
+
+                                    $result['content'] = '图片已加载（按需使用，无需分析）';
+
+                                    $this->sendMsg($socket_id, 'context', 'readImage', $message_metadata, $context);
+                                }
+                            }
+
                             $tool_history = [
                                 'role'         => 'tool',
                                 'tool_call_id' => $result['tool_call_id'],

@@ -302,6 +302,55 @@ class go extends Factory
     }
 
     /**
+     * @param string $path
+     *
+     * @return array|string[]
+     */
+    public function readImage(string $path): array
+    {
+        $full_path = $this->core->securePath($path);
+
+        if (!is_file($full_path)) {
+            return ['error' => 'File not found: ' . $path];
+        }
+
+        if (!is_readable($full_path)) {
+            return ['error' => 'File not readable: ' . $path];
+        }
+
+        $info = getimagesize($full_path);
+
+        if (false === $info || empty($info['mime'])) {
+            return ['error' => 'Cannot identify image type or unsupported format'];
+        }
+
+        $mime_type = $info['mime'];
+        $allowed   = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
+
+        if (!in_array($mime_type, $allowed, true)) {
+            return ['error' => 'Unsupported image type: ' . $mime_type];
+        }
+
+        $data = file_get_contents($full_path);
+
+        if (false === $data) {
+            return ['error' => 'Failed to read image data: ' . $path];
+        }
+
+        $base64    = base64_encode($data);
+        $image_url = 'data:' . $mime_type . ';base64,' . $base64;
+
+        $result = [
+            'content'   => $image_url,
+            'filename'  => basename($full_path),
+            'mime_type' => $mime_type
+        ];
+
+        unset($path, $full_path, $info, $mime_type, $allowed, $data, $base64, $image_url);
+        return $result;
+    }
+
+    /**
      * Read file content
      *
      * @param string $path

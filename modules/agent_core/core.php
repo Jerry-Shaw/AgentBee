@@ -289,6 +289,7 @@ final class core extends Factory
             }
 
             [$module_name, $method_name] = explode('/', $fn_name);
+
             try {
                 $params         = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();
                 $args           = Factory::buildArgs($params, (array)$fn_args);

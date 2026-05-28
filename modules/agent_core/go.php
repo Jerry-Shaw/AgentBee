@@ -183,6 +183,10 @@ class go extends Factory
                     }
                     break;
 
+                case 'context':
+                    $this->coming_messages = array_merge($this->coming_messages, $payload['data']);
+                    break;
+
                 case 'end':
                     $current_history = $this->core->getSessionHistory();
 

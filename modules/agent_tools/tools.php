@@ -49,6 +49,14 @@ class tools
         [
             'type'     => 'function',
             'function' => [
+                'name'        => 'readImage',
+                'description' => '读取图片返回 Data URL。参数: path(必填)。支持 jpeg/png/gif/webp/bmp。返回 {"content":"data:image/...;base64,...","filename":"...","mime_type":"..."} 或 {"error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
                 'name'        => 'readFile',
                 'description' => '读取文件。参数:path(必填),offset(默认0),limit(默认8192,0=全部)。返回 {"content":"..."} 或 {"error":"..."}',
                 'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string'], 'offset' => ['type' => 'integer', 'default' => 0], 'limit' => ['type' => 'integer', 'default' => 8192]], 'required' => ['path']],

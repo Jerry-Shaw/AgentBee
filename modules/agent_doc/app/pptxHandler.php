@@ -171,7 +171,7 @@ class pptxHandler extends Factory
                         if ($phNodes !== false && $phNodes->length > 0) {
                             $ph     = $phNodes->item(0);
                             $phType = $ph->getAttribute('type');
-                            if ($phType === 'title') {
+                            if ($phType === 'title' || ($ph->getAttribute('idx') === '0')) {
                                 $isTitle = true;
                             }
                         }
@@ -273,6 +273,7 @@ class pptxHandler extends Factory
             foreach ($dirs as $sub) {
                 mkdir($tempDir . $sub, 0755, true);
             }
+            mkdir($tempDir . '/docProps', 0755, true);
 
             // [Content_Types].xml
             $ct = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
@@ -287,6 +288,11 @@ class pptxHandler extends Factory
             $ct .= '  <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>' . "\n";
             $ct .= '  <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>' . "\n";
             $ct .= '  <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>' . "\n";
+            $ct .= '  <Override PartName="/ppt/tableStyles.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml"/>' . "\n";
+            $ct .= '  <Override PartName="/ppt/presProps.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presProps+xml"/>' . "\n";
+            $ct .= '  <Override PartName="/ppt/viewProps.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml"/>' . "\n";
+            $ct .= '  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' . "\n";
+            $ct .= '  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' . "\n";
             $ct .= '</Types>';
             file_put_contents($tempDir . '/[Content_Types].xml', $ct);
             unset($ct);
@@ -355,6 +361,56 @@ class pptxHandler extends Factory
             $theme .= '</a:theme>';
             file_put_contents($tempDir . '/ppt/theme/theme1.xml', $theme);
             unset($theme);
+
+            // === ppt/tableStyles.xml ===
+            $tableStyles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $tableStyles .= '<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"/>';
+            file_put_contents($tempDir . '/ppt/tableStyles.xml', $tableStyles);
+            unset($tableStyles);
+
+            // === ppt/presProps.xml ===
+            $presProps = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $presProps .= '<p:presentationPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' . "\n";
+            $presProps .= '  <p:extLst/>' . "\n";
+            $presProps .= '</p:presentationPr>';
+            file_put_contents($tempDir . '/ppt/presProps.xml', $presProps);
+            unset($presProps);
+
+            // === ppt/viewProps.xml ===
+            $viewProps = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $viewProps .= '<p:viewPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' . "\n";
+            $viewProps .= '  <p:commonViewPr>' . "\n";
+            $viewProps .= '    <p:viewType>normal</p:viewType>' . "\n";
+            $viewProps .= '  </p:commonViewPr>' . "\n";
+            $viewProps .= '</p:viewPr>';
+            file_put_contents($tempDir . '/ppt/viewProps.xml', $viewProps);
+            unset($viewProps);
+
+            // === docProps/app.xml ===
+            $appXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $appXml .= '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">' . "\n";
+            $appXml .= '  <Application>AgentDocEngine</Application>' . "\n";
+            $appXml .= '  <Slides>' . count($slides) . '</Slides>' . "\n";
+            $appXml .= '  <TotalTime>0</TotalTime>' . "\n";
+            $appXml .= '  <ScaleCrop>false</ScaleCrop>' . "\n";
+            $appXml .= '  <LinksUpToDate>false</LinksUpToDate>' . "\n";
+            $appXml .= '  <SharedDoc>false</SharedDoc>' . "\n";
+            $appXml .= '  <HyperlinksChanged>false</HyperlinksChanged>' . "\n";
+            $appXml .= '  <AppVersion>16.0000</AppVersion>' . "\n";
+            $appXml .= '</Properties>';
+            file_put_contents($tempDir . '/docProps/app.xml', $appXml);
+            unset($appXml);
+
+            // === docProps/core.xml ===
+            $coreXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $coreXml .= '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' . "\n";
+            $coreXml .= '  <dc:creator>AgentDocEngine</dc:creator>' . "\n";
+            $coreXml .= '  <cp:lastModifiedBy>AgentDocEngine</cp:lastModifiedBy>' . "\n";
+            $coreXml .= '  <dcterms:created xsi:type="dcterms:W3CDTF">' . date('Y-m-d\TH:i:s\Z') . '</dcterms:created>' . "\n";
+            $coreXml .= '  <dcterms:modified xsi:type="dcterms:W3CDTF">' . date('Y-m-d\TH:i:s\Z') . '</dcterms:modified>' . "\n";
+            $coreXml .= '</cp:coreProperties>';
+            file_put_contents($tempDir . '/docProps/core.xml', $coreXml);
+            unset($coreXml);
 
             // ppt/slideMasters/slideMaster1.xml
             $master = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
@@ -428,6 +484,17 @@ class pptxHandler extends Factory
                 $slideXml .= '</p:sld>';
                 file_put_contents($tempDir . '/ppt/slides/slide' . $num . '.xml', $slideXml);
                 unset($slideXml);
+
+                $relsDir = $tempDir . '/ppt/slides/_rels';
+                if (!is_dir($relsDir)) {
+                    mkdir($relsDir, 0755, true);
+                }
+                $slideRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+                $slideRels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
+                $slideRels .= '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' . "\n";
+                $slideRels .= '</Relationships>';
+                file_put_contents($relsDir . '/slide' . $num . '.xml.rels', $slideRels);
+                unset($slideRels);
             }
 
             // Create ZIP

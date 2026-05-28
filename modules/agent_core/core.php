@@ -141,8 +141,9 @@ final class core extends Factory
         }
 
         if (!empty($agent_tools)) {
-            $this->llm_tools['tools']       = $agent_tools;
-            $this->llm_tools['tool_choice'] = 'auto';
+            $this->llm_tools['tools']               = $agent_tools;
+            $this->llm_tools['tool_choice']         = 'auto';
+            $this->llm_tools['parallel_tool_calls'] = true;
         }
 
         unset($agent_tools, $tool_list, $tool, $tool_class, $tool_meta, $metadata, $index, $meta_item);

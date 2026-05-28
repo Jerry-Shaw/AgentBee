@@ -50,7 +50,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'readImage',
-                'description' => '读取图片返回 Data URL。参数: path(必填)。支持 jpeg/png/gif/webp/bmp。返回 {"content":"data:image/...;base64,...","filename":"...","mime_type":"..."} 或 {"error":"..."}',
+                'description' => '获取图片 Data URL（仅存储，不附加到对话）。调用后请勿分析，等待用户明确要求时再处理。参数: path(必填)。返回 {"content":"data:image/...;base64,...","filename":"...","mime_type":"..."}',
                 'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
             ],
         ],

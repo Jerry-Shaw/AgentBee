@@ -153,10 +153,10 @@ final class core extends Factory
      *
      * @param array $content
      *
-     * @return void
+     * @return int
      * @throws \Exception
      */
-    public function addSessionHistory(array $content): void
+    public function addSessionHistory(array $content): int
     {
         if (empty($this->session_history)) {
             $this->session_history[] = $this->getSystemMemory();
@@ -166,33 +166,8 @@ final class core extends Factory
 
         $message_count = count($this->session_history);
 
-        if ($message_count > $this->session_history_limit) {
-            $role_list = array_column($this->session_history, 'role');
-            $user_keys = array_keys($role_list, 'user');
-
-            $target_id = 0;
-            $min_diff  = INF;
-            $drop_num  = $message_count - $this->session_history_limit;
-
-            foreach ($user_keys as $id) {
-                $diff = abs($drop_num - $id);
-                if ($diff < $min_diff) {
-                    $min_diff  = $diff;
-                    $target_id = $id;
-                } elseif ($diff === $min_diff && $id < $target_id) {
-                    $target_id = $id;
-                }
-            }
-
-            if ($target_id > 1) {
-                array_unshift($this->session_history, $this->getSystemMemory());
-                array_splice($this->session_history, 1, $target_id);
-            }
-
-            unset($role_list, $user_keys, $target_id, $min_diff, $drop_num, $id, $diff);
-        }
-
-        unset($content, $message_count);
+        unset($content);
+        return $message_count;
     }
 
     /**

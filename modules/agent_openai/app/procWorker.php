@@ -132,7 +132,6 @@ class procWorker extends Factory
 
         try {
             $libOpenAI->completions($session_history, $this->core->agent_config['agent_llm']['model'], [], $stream_callback);
-            $this->sendMsg($socket_id, 'end', $run_tools ? 'tools' : 'end', $message_metadata, ['tool_calls' => $run_tools]);
         } catch (\Throwable $exception) {
             if ($exception->getMessage() !== 'Interrupted by user') {
                 $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, ['message' => $exception->getMessage()]);
@@ -140,6 +139,7 @@ class procWorker extends Factory
         }
 
         $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
+        $this->sendMsg($socket_id, 'end', $run_tools ? 'tools' : 'end', $message_metadata, ['tool_calls' => $run_tools]);
 
         unset($socket_id, $message_metadata, $session_history, $libOpenAI, $reasons_content, $assistant_content, $tool_calls, $run_tools);
     }

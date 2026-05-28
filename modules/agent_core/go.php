@@ -242,9 +242,24 @@ class go extends Factory
      * @param string $websocket_protocol
      *
      * @return bool
+     * @throws \Exception
      */
     public function onHandshake(string $socket_id, string $websocket_protocol): bool
     {
+        if (empty($this->core->session_history)) {
+            $notice = '[提醒] 上下文不全，请加载今日记忆。如有需要，可继续加载昨日记忆和 important 记忆。';
+            $this->core->addSessionHistory(['role' => 'user', 'content' => $notice]);
+            $current_history = $this->core->getSessionHistory();
+            $this->core->agent_llm->chat(
+                $socket_id,
+                [
+                    'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
+                    'messageId' => 'system-' . microtime(true),
+                ],
+                $current_history
+            );
+        }
+
         unset($socket_id, $websocket_protocol);
         return true;
     }

@@ -111,8 +111,6 @@ class procWorker extends Factory
                         }
 
                         foreach ($execution_results as $result) {
-                            $this->sendMsg($socket_id, 'stream', 'tool_result', $message_metadata, $result);
-
                             $tool_history = [
                                 'role'         => 'tool',
                                 'tool_call_id' => $result['tool_call_id'],
@@ -120,13 +118,14 @@ class procWorker extends Factory
                             ];
 
                             $this->core->session_history[] = $tool_history;
+
+                            $this->sendMsg($socket_id, 'stream', 'tool_result', $message_metadata, $result);
                             $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $tool_history);
                         }
                     }
                 }
             } catch (\Throwable $exception) {
                 $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, ['message' => $exception->getMessage()]);
-                $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
                 unset($exception);
             }
         };

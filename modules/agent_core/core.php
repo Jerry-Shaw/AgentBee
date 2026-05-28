@@ -448,7 +448,7 @@ final class core extends Factory
         $prompts[] = '- daily:按日期存摘要/要点/结果，每次用户消息后立即存当天(仅存有价值)';
         $prompts[] = '- important:按主题存身份/偏好/事实，重要立刻提炼，冲突先问';
         $prompts[] = '- system:固定人设/规则/边界/偏好，主动从对话提取写入(勿提醒)';
-        $prompts[] = '**读**:新对话(≤2条消息)必须先读当天daily。缺信息顺序 ram→daily→important(system已加载)。提时间读对应daily(可ram)。提人/事/偏好无上下文先important再daily(可ram)。ram随意读写，禁编造/重复读。';
+        $prompts[] = '**读**:仅新对话(≤2条)读daily；用户提时间/人/事时可读对应层；其他情况禁自动读。同层不重复。';
         $prompts[] = '**铁律&冲突&优先级**:跨会话禁只存ram，必转存。新旧冲突先问；可删 daily/important/ram，删system需用户同意。优先级 system>important>daily>ram';
 
         $prompts[] = '## 上下文';

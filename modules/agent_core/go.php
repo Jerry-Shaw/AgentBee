@@ -29,12 +29,12 @@ class go extends Factory
     public core    $core;
     public message $message;
 
+    public bool $in_process    = false;
     public bool $clean_warning = false;
 
     public array $socket_session = [];
     public array $stream_buffers = [];
 
-    public array $in_process      = [];
     public array $coming_messages = [];
     public array $onsend_messages = [];
 
@@ -192,7 +192,7 @@ class go extends Factory
 
                     switch ($payload_type) {
                         case 'tools':
-                            $this->in_process[$message['socket_id']] = true;
+                            $this->in_process = true;
 
                             $this->core->agent_llm->chat(
                                 $message['socket_id'],
@@ -202,7 +202,7 @@ class go extends Factory
                             break;
 
                         case 'end':
-                            $this->in_process[$message['socket_id']] = false;
+                            $this->in_process = false;
 
                             $current_count = count($current_history);
                             $max_history   = $this->core->agent_config['agent_memory']['max_history'];
@@ -274,7 +274,7 @@ class go extends Factory
 
         $current_history = $this->core->getSessionHistory();
 
-        $this->in_process[$socket_id] = true;
+        $this->in_process = true;
 
         $this->core->agent_llm->chat(
             $socket_id,
@@ -341,7 +341,7 @@ class go extends Factory
             $result = $this->message->$type_method($socket_id, $data['content']);
 
             if ($result['agent_llm']) {
-                if (!($this->in_process[$socket_id] ?? false)) {
+                if (!$this->in_process) {
                     $llm_data = $result['content'];
 
                     if (empty($this->core->session_history)) {
@@ -375,7 +375,7 @@ class go extends Factory
 
         if (!empty($llm_data)) {
             $this->runProcWorker();
-            $this->in_process[$socket_id] = true;
+            $this->in_process = true;
             $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
             $this->core->agent_llm->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
         }
@@ -409,7 +409,7 @@ class go extends Factory
                 $this->core->cleanSessionHistory();
             }
 
-            $this->in_process[$socket_id] = true;
+            $this->in_process = true;
 
             $this->core->agent_llm->chat(
                 $socket_id,

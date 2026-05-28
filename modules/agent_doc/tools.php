@@ -31,30 +31,41 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'readDocx',
-                'description' => '读取 DOCX 文档内容。参数：path(string, 必填, 绝对路径)。返回：{"status":"success","content":"文本内容"} 或 {"error":"..."}',
+                'description' => '读取 DOCX。参数：path(string,必填,绝对路径)。返回：{"status":"success","content":"文本"}',
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => [
-                        'path' => ['type' => 'string']
-                    ],
+                    'properties' => ['path' => ['type' => 'string']],
                     'required'   => ['path']
                 ]
             ]
         ],
-        // writeDocx
+        // writeDocx (text + image)
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeDocx',
-                'description' => '写入 DOCX 文档。参数：path(string, 必填), data(array, 必填, 每项为一段文字)。返回：{"status":"success","path":"..."} 或 {"error":"..."}',
+                'description' => '写入 DOCX。参数：path(string,必填), data(array,必填)。data每项：string(段落) 或 {"type":"image","content":"路径","width":px(默认200),"height":px(可选,自动)}。返回：{"status":"success","path":"..."}',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'path' => ['type' => 'string'],
                         'data' => [
-                            'type'        => 'array',
-                            'items'       => ['type' => 'string'],
-                            'description' => '段落文本列表'
+                            'type'  => 'array',
+                            'items' => [
+                                'anyOf' => [
+                                    ['type' => 'string'],
+                                    [
+                                        'type'       => 'object',
+                                        'properties' => [
+                                            'type'    => ['type' => 'string', 'enum' => ['image']],
+                                            'content' => ['type' => 'string'],
+                                            'width'   => ['type' => 'integer'],
+                                            'height'  => ['type' => 'integer']
+                                        ],
+                                        'required'   => ['type', 'content']
+                                    ]
+                                ]
+                            ]
                         ]
                     ],
                     'required'   => ['path', 'data']
@@ -66,12 +77,10 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'readXlsx',
-                'description' => '读取 XLSX 表格内容。参数：path(string, 必填)。返回：{"status":"success","sheets":{"Sheet1":[[row1],[row2],...]}} 或 {"error":"..."}',
+                'description' => '读取 XLSX。参数：path(string,必填)。返回：{"status":"success","sheets":{"Sheet1":[[行]]}}',
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => [
-                        'path' => ['type' => 'string']
-                    ],
+                    'properties' => ['path' => ['type' => 'string']],
                     'required'   => ['path']
                 ]
             ]
@@ -81,15 +90,12 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeXlsx',
-                'description' => '写入 XLSX 表格。参数：path(string, 必填), data(array, 必填, 可接受简单二维数组或带 name/rows 的多工作表格式)。返回：{"status":"success","path":"..."} 或 {"error":"..."}',
+                'description' => '写入 XLSX。参数：path(string,必填), data(array,必填)。data：二维数组(单表) 或 [{"name":"Sheet1","rows":[[行]]}] (多表)。返回：{"status":"success","path":"..."}',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'path' => ['type' => 'string'],
-                        'data' => [
-                            'type'        => 'array',
-                            'description' => '数据，可单工作表二维数组或多工作表 [["name"=>"Sheet1","rows"=>[...]]]'
-                        ]
+                        'data' => ['type' => 'array']
                     ],
                     'required'   => ['path', 'data']
                 ]
@@ -100,41 +106,38 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'readPptx',
-                'description' => '读取 PPTX 演示文稿内容。参数：path(string, 必填)。返回：{"status":"success","slides":[{"number":1,"title":"...","content":"..."}]} 或 {"error":"..."}',
+                'description' => '读取 PPTX。参数：path(string,必填)。返回：{"status":"success","slides":[{"number":1,"title":"...","content":"..."}]}',
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => [
-                        'path' => ['type' => 'string']
-                    ],
+                    'properties' => ['path' => ['type' => 'string']],
                     'required'   => ['path']
                 ]
             ]
         ],
-        // writePptx
+        // writePptx (supports image, EMU units)
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'writePptx',
-                'description' => '写入 PPTX 演示文稿。参数：path(string, 必填), data(array, 必填, 每项为幻灯片，可含 title(string)、content(string) 和可选 image(string)、image_x(int)、image_y(int)、image_width(int)、image_height(int) 字段，坐标和尺寸单位为 EMU（1英寸=914400，1cm=360000，1pt=12700）)。返回：{"status":"success","path":"..."} 或 {"error":"..."}',
+                'description' => '写入 PPTX。参数：path(string,必填), data(array,必填)。每张幻灯片：{"title":"(可选)","content":"(可选)","image":"路径(可选)","image_x":整数(默认8000000),"image_y":整数(默认500000),"image_width":整数(默认2540000),"image_height":整数(默认1905000)}。单位EMU：1英寸=914400，1厘米=360000。返回：{"status":"success","path":"..."}',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'path' => ['type' => 'string'],
                         'data' => [
-                            'type'        => 'array',
-                            'items'       => [
+                            'type'  => 'array',
+                            'items' => [
                                 'type'       => 'object',
                                 'properties' => [
                                     'title'        => ['type' => 'string'],
                                     'content'      => ['type' => 'string'],
                                     'image'        => ['type' => 'string'],
-                                    'image_x'      => ['type' => 'integer', 'description' => '图片左上角X坐标(EMU)'],
-                                    'image_y'      => ['type' => 'integer', 'description' => '图片左上角Y坐标(EMU)'],
-                                    'image_width'  => ['type' => 'integer', 'description' => '图片宽度(EMU)'],
-                                    'image_height' => ['type' => 'integer', 'description' => '图片高度(EMU)'],
+                                    'image_x'      => ['type' => 'integer'],
+                                    'image_y'      => ['type' => 'integer'],
+                                    'image_width'  => ['type' => 'integer'],
+                                    'image_height' => ['type' => 'integer']
                                 ]
-                            ],
-                            'description' => '幻灯片列表'
+                            ]
                         ]
                     ],
                     'required'   => ['path', 'data']

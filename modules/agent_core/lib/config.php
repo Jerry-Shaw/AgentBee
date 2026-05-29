@@ -133,7 +133,7 @@ class config extends Factory
                 ],
             ],
             'memory_limit' => '4G',
-            'agent_debug'  => true,
+            'agent_debug'  => 'trace',
             'socket_debug' => false,
         ];
     }

@@ -182,10 +182,10 @@ final class core extends Factory
     }
 
     /**
-     * @return void
+     * @return int
      * @throws \Exception
      */
-    public function cleanSessionHistory(): void
+    public function cleanSessionHistory(): int
     {
         $keep_user_assistant = 8;
         $keep_tool_calls     = 2;
@@ -237,6 +237,9 @@ final class core extends Factory
         ksort($new_history, SORT_NUMERIC);
         array_unshift($new_history, $this->getSystemMemory());
         $this->session_history = array_values($new_history);
+
+        unset($keep_user_assistant, $keep_tool_calls, $keep_tool_results, $new_history, $last_role, $last_key, $i, $message_role, $is_tool_calls);
+        return count($this->session_history);
     }
 
     /**

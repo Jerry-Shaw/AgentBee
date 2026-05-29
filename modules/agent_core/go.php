@@ -21,12 +21,14 @@
 namespace modules\agent_core;
 
 use modules\agent_core\lib\message;
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\SocketMgr;
 
 class go extends Factory
 {
     public core    $core;
+    public utils   $utils;
     public message $message;
 
     public bool $in_process    = false;
@@ -44,15 +46,21 @@ class go extends Factory
      */
     public function __construct()
     {
-        $this->core = core::new();
+        $this->core  = core::new();
+        $this->utils = utils::new();
 
+        $this->utils->debug('Initializing...', 'trace');
         $this->core->initCore();
+        $this->utils->debug('Initializing Tools...', 'debug');
         $this->core->initTools();
+        $this->utils->debug('Initializing Modules...', 'debug');
         $this->core->initModules();
 
         $workspace_path = $this->core->agent_config['agent_tools']['workspace_path'] ?? '';
+        $this->utils->debug('Checking workspace: ' . $workspace_path, 'trace');
         if ('' !== $workspace_path && !is_dir($workspace_path)) {
             try {
+                $this->utils->debug('Creating workspace: ' . $workspace_path, 'trace');
                 mkdir($workspace_path, 0777, true);
             } catch (\Throwable) {
             }
@@ -70,11 +78,17 @@ class go extends Factory
      */
     public function start(): void
     {
-        ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
+        $memory_limit = $this->core->agent_config['memory_limit'] ?? '4G';
+
+        $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
+        ini_set('memory_limit', $memory_limit);
 
         $this->runProcWorker();
 
         try {
+            $server_host = 'tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'];
+            $this->utils->debug('Local IP address: ' . implode(', ', $this->core->OSMgr->getIPv4()), 'trace');
+            $this->utils->debug('Ready to start server: ' . $server_host, 'trace');
             $this->core->socketMgr
                 ->setDebugMode($this->core->agent_config['socket_debug'])
                 ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'])
@@ -83,7 +97,7 @@ class go extends Factory
                 ->setEventListener('onMessage', [$this, 'onMessage'])
                 ->setEventListener('onSendString', [$this, 'onSendString'])
                 ->setEventListener('onClose', [$this, 'onClose'])
-                ->listenTo('tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'], true);
+                ->listenTo($server_host, true);
         } catch (\Throwable) {
         }
     }
@@ -109,13 +123,16 @@ class go extends Factory
         ])->run(core::PROC_IDX_OPENAI);
 
         $worker_pid = $this->core->procMgr->getPid(core::PROC_IDX_OPENAI);
+        $this->utils->debug('ProcWorker started with pid: ' . $worker_pid, 'trace');
 
+        $this->utils->debug('Register streamWorkerHandler', 'debug');
         $this->core->socketMgr->addExternalProc(
             $this->core->procMgr->getProc(core::PROC_IDX_OPENAI),
             [$this, 'streamWorkerHandler'],
             [$this, 'streamWorkerHandler']
         );
 
+        $this->utils->debug('Build Shmop for libOpenAI', 'debug');
         $this->core->agent_llm->buildShmop($worker_pid);
     }
 
@@ -133,6 +150,8 @@ class go extends Factory
     {
         $stdout_stream = $context['stdout'];
         $data_chunk    = fread($stdout_stream, 8192);
+
+        $this->utils->debug('streamWorkerHandler: Data chunk received', 'debug');
 
         if (false === $data_chunk || '' === $data_chunk) {
             unset($this->stream_buffers[$external_stream_id]);
@@ -159,6 +178,8 @@ class go extends Factory
 
             $payload      = $message['payload'];
             $payload_type = $payload['type'];
+
+            $this->utils->debug('streamWorkerHandler: ' . $message['type'] . '->' . $payload_type, 'debug');
 
             switch ($message['type']) {
                 case 'stream':
@@ -193,6 +214,7 @@ class go extends Factory
                     switch ($payload_type) {
                         case 'tools':
                             $this->in_process = true;
+                            $this->utils->debug('streamWorkerHandler: LLM Tool calls', 'debug');
 
                             $this->core->agent_llm->chat(
                                 $message['socket_id'],
@@ -215,6 +237,8 @@ class go extends Factory
                             } elseif (!$this->clean_warning) {
                                 $this->clean_warning     = true;
                                 $this->onsend_messages[] = '[历史 ' . $current_count . '/' . $max_history . '] 自动：①总结关键信息(需求/回复/工具结果)→存记忆(daily/important/system,临时ram)；②调用清理工具删旧工具对；③告知用户(概要/层级/剩余数)。| 超 ' . $limit_count . ' 条强制清理，及时保存。';
+
+                                $this->utils->debug('streamWorkerHandler: History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_history . ')', 'trace');
                             }
                             break;
                     }
@@ -240,6 +264,7 @@ class go extends Factory
      */
     public function onHandshake(string $socket_id, string $websocket_protocol): bool
     {
+        $this->utils->debug('Socket: New client: ' . $socket_id, 'trace');
         unset($socket_id, $websocket_protocol);
         return true;
     }
@@ -260,6 +285,8 @@ class go extends Factory
             unset($socket_id, $task_list);
             return '';
         }
+
+        $this->utils->debug('ScheduledTask: Running task jobs (' . count($task_list) . ')', 'trace');
 
         $task_jobs = [
             'time' => date('Y-m-d H:i:s'),
@@ -306,6 +333,8 @@ class go extends Factory
             return;
         }
 
+        $this->utils->debug('UserMessage: receiving [' . (!$is_binary ? 'TEXT' : 'BINARY') . '] message', 'debug');
+
         if ($is_binary) {
             $message = $this->message->process_binary($socket_id, $message);
         }
@@ -321,12 +350,14 @@ class go extends Factory
 
             if ('stop' === $data['type']) {
                 $this->core->agent_llm->abort($socket_id);
+                $this->utils->debug('UserMessage: Send abort to LLM', 'debug');
                 continue;
             }
 
             $type_method = 'process_' . $data['type'];
 
             if (!method_exists($this->message, $type_method)) {
+                $this->utils->debug('UserMessage: Incorrect message type: ' . $data['type'], 'debug');
                 continue;
             }
 
@@ -334,6 +365,8 @@ class go extends Factory
 
             if (!$result['need_llm']) {
                 // Other actions
+                $this->utils->debug('UserMessage: ' . $data['type'] . '->' . ($result['data']['act'] ?? 'Unsupported'), 'debug');
+
                 $response = ['type' => $data['type']] + $result['data'];
                 $this->core->sendMessage($socket_id, json_encode($response, JSON_FORMAT));
 
@@ -384,6 +417,7 @@ class go extends Factory
         if (!empty($llm_data)) {
             $this->runProcWorker();
             $this->in_process = true;
+            $this->utils->debug('UserMessage: Send message to LLM', 'debug');
             $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
             $this->core->agent_llm->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
         }
@@ -401,10 +435,10 @@ class go extends Factory
      */
     public function onSendString(string $socket_id): array
     {
-        if (!empty($this->onsend_messages[$socket_id])) {
+        if (!empty($this->onsend_messages)) {
             $llm_data = [];
 
-            while (is_null($message = array_shift($this->onsend_messages[$socket_id]))) {
+            while (!is_null($message = array_shift($this->onsend_messages))) {
                 $llm_data[] = [
                     'type' => 'text',
                     'text' => $message
@@ -414,10 +448,13 @@ class go extends Factory
             $current_count = $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
 
             if ($current_count > $this->core->agent_config['agent_memory']['max_history'] * 3) {
-                $this->core->cleanSessionHistory();
+                $new_count = $this->core->cleanSessionHistory();
+                $this->utils->debug('System: History truncated (' . $current_count . '->' . $new_count . ', config: ' . $this->core->agent_config['agent_memory']['max_history'] . ')', 'trace');
             }
 
             $this->in_process = true;
+
+            $this->utils->debug('System: Send message to LLM', 'debug');
 
             $this->core->agent_llm->chat(
                 $socket_id,
@@ -444,6 +481,7 @@ class go extends Factory
      */
     public function onClose(string $socket_id): void
     {
+        $this->utils->debug('Socket: Client closed: ' . $socket_id, 'trace');
         unset($this->socket_session[$socket_id], $socket_id);
     }
 }

@@ -102,16 +102,27 @@ class procWorker extends Factory
                     $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
 
                     if (!empty($tool_calls)) {
-                        $session_history   = $this->core->session_history;
-                        $execution_results = $this->core->execTools($tool_calls);
-                        $current_history   = $this->core->session_history;
+                        $session_history = $this->core->session_history;
+                        $tool_results    = $this->core->execTools($tool_calls);
+                        $current_history = $this->core->session_history;
 
                         if (count($current_history) < count($session_history)) {
                             $this->sendMsg($socket_id, 'history', 'sync', $message_metadata, $current_history);
                         }
 
-                        foreach ($execution_results as $result) {
-                            $this->sendMsg($socket_id, 'stream', 'tool_result', $message_metadata, $result);
+                        $image_loader = [];
+
+                        foreach ($tool_results as $result) {
+                            if ('agent_tools/readImage' === $result['function_name']) {
+                                $result_data = json_decode($result['content'], true);
+
+                                if (is_array($result_data) && 'success' === $result_data['status']) {
+                                    $image_loader[] = ['type' => 'text', 'text' => $result_data['data']['filename'] . ' (按需使用)'];
+                                    $image_loader[] = ['type' => 'image_url', 'image_url' => ['url' => $result_data['data']['content']]];
+
+                                    $result['content'] = '图片已加载（按需使用，禁止分析）';
+                                }
+                            }
 
                             $tool_history = [
                                 'role'         => 'tool',
@@ -120,20 +131,28 @@ class procWorker extends Factory
                             ];
 
                             $this->core->session_history[] = $tool_history;
+
+                            $this->sendMsg($socket_id, 'stream', 'tool_result', $message_metadata, $result);
                             $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $tool_history);
                         }
+
+                        if (!empty($image_loader)) {
+                            $this->sendMsg($socket_id, 'context', 'readImage', $message_metadata, $image_loader);
+                        }
                     }
+
+                    unset($assistant_message, $session_history, $tool_results, $current_history, $image_loader, $result, $tool_history);
                 }
             } catch (\Throwable $exception) {
                 $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, ['message' => $exception->getMessage()]);
-                $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
                 unset($exception);
             }
+
+            unset($key, $data, $finished);
         };
 
         try {
             $libOpenAI->completions($session_history, $this->core->agent_config['agent_llm']['model'], [], $stream_callback);
-            $this->sendMsg($socket_id, 'end', $run_tools ? 'tools' : 'end', $message_metadata, ['tool_calls' => $run_tools]);
         } catch (\Throwable $exception) {
             if ($exception->getMessage() !== 'Interrupted by user') {
                 $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, ['message' => $exception->getMessage()]);
@@ -141,8 +160,9 @@ class procWorker extends Factory
         }
 
         $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
+        $this->sendMsg($socket_id, 'end', $run_tools ? 'tools' : 'end', $message_metadata, ['tool_calls' => $run_tools]);
 
-        unset($socket_id, $message_metadata, $session_history, $libOpenAI, $reasons_content, $assistant_content, $tool_calls, $run_tools);
+        unset($socket_id, $message_metadata, $session_history, $libOpenAI);
     }
 
     /**

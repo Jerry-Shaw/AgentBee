@@ -1,0 +1,13 @@
+{
+  "name": "agent_doc",
+  "version": "1.0.0",
+  "description": "Document processing module for reading and writing DOCX, XLSX, and PPTX files using native PHP (no external dependencies).",
+  "author": "AgentBee self developed",
+  "email": "",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  }
+}

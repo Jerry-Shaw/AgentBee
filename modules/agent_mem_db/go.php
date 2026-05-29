@@ -195,7 +195,7 @@ class go extends Factory
         }
 
         try {
-            $this->db->setTableOnce('tasks')
+            $this->db->table('tasks')
                 ->replace([
                     'task_id'         => $task_id,
                     'task_prompt'     => $task_prompt,
@@ -216,7 +216,7 @@ class go extends Factory
     public function removeTask(string $task_id): array
     {
         try {
-            $exists = $this->db->setTableOnce('tasks')
+            $exists = $this->db->table('tasks')
                 ->select('task_id')
                 ->where(['task_id', '=', $task_id])
                 ->fetch();
@@ -226,7 +226,7 @@ class go extends Factory
                 return ['success' => false, 'message' => 'Task not found.'];
             }
 
-            $this->db->setTableOnce('tasks')
+            $this->db->table('tasks')
                 ->where(['task_id', '=', $task_id])
                 ->delete()
                 ->execute();
@@ -241,7 +241,7 @@ class go extends Factory
 
     public function listTasks(): array
     {
-        $tasks = $this->db->setTableOnce('tasks')
+        $tasks = $this->db->table('tasks')
             ->select('task_id', 'task_prompt', 'run_at', 'repeat', 'repeat_interval', 'created_at')
             ->fetchAll();
 
@@ -256,7 +256,7 @@ class go extends Factory
     {
         $now = time();
 
-        $due_tasks = $this->db->setTableOnce('tasks')
+        $due_tasks = $this->db->table('tasks')
             ->select('task_id', 'task_prompt', 'run_at', 'repeat', 'repeat_interval', 'created_at')
             ->where(['run_at', '<=', $now])
             ->fetchAll();
@@ -283,7 +283,7 @@ class go extends Factory
                 $interval = (int)$task['repeat_interval'];
                 if ($interval <= 0) {
                     // Invalid interval, delete task
-                    $this->db->setTableOnce('tasks')
+                    $this->db->table('tasks')
                         ->where(['task_id', '=', $task['task_id']])
                         ->delete()
                         ->execute();
@@ -293,13 +293,13 @@ class go extends Factory
                 while ($now >= $new_run_at) {
                     $new_run_at += $interval;
                 }
-                $this->db->setTableOnce('tasks')
+                $this->db->table('tasks')
                     ->where(['task_id', '=', $task['task_id']])
                     ->update(['run_at' => $new_run_at])
                     ->execute();
                 unset($interval, $new_run_at);
             } else {
-                $this->db->setTableOnce('tasks')
+                $this->db->table('tasks')
                     ->where(['task_id', '=', $task['task_id']])
                     ->delete()
                     ->execute();
@@ -350,7 +350,7 @@ class go extends Factory
 
         $date_key = ('daily' === $level) ? date('Ymd') : '';
 
-        $this->db->setTableOnce('messages')
+        $this->db->table('messages')
             ->insert([
                 'level'    => $level,
                 'role'     => $role,
@@ -395,7 +395,7 @@ class go extends Factory
             unset($date_val);
         }
 
-        $total = (int)($this->db->setTableOnce('messages')
+        $total = (int)($this->db->table('messages')
             ->select($this->db->useSql('COUNT(*) AS cnt'))
             ->where(...$conditions)
             ->fetch()['cnt'] ?? 0);
@@ -403,7 +403,7 @@ class go extends Factory
         $messages = [];
         if (0 < $total) {
             $limit    = (0 === $length) ? $total : $length;
-            $messages = $this->db->setTableOnce('messages')
+            $messages = $this->db->table('messages')
                 ->select('role', 'content')
                 ->where(...$conditions)
                 ->order(['id' => 'ASC'])
@@ -752,14 +752,14 @@ class go extends Factory
 
         // If no keywords, delete using QueryBuilder
         if (empty($kw_list)) {
-            $count = (int)($this->db->setTableOnce('messages')
+            $count = (int)($this->db->table('messages')
                 ->select($this->db->useSql('COUNT(*) AS cnt'))
                 ->where(...$conditions)
                 ->fetch()['cnt'] ?? 0);
             if (0 === $count) {
                 return 0;
             }
-            $this->db->setTableOnce('messages')
+            $this->db->table('messages')
                 ->where(...$conditions)
                 ->delete()
                 ->execute();

@@ -98,6 +98,7 @@ class go extends Factory
             'history'   => $session_history,
         ];
 
+        $this->libOpenAI->resumeStream();
         $this->core->procMgr->writeProc(core::PROC_IDX_OPENAI, json_encode($task));
 
         unset($socket_id, $message_metadata, $session_history);
@@ -113,7 +114,7 @@ class go extends Factory
      */
     public function abort(string $socket_id): void
     {
-        shmop_write($this->shmop, "\x01", 0);
+        $this->libOpenAI->abortStream();
         unset($socket_id);
     }
 

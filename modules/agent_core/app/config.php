@@ -71,28 +71,29 @@ class config extends Factory
     {
         $config = [
             'agent_server' => [
-                'host'          => '0.0.0.0',
+                'host'          => '127.0.0.1',
                 'port'          => 8686,
-                'websocket'     => true,
-                'ping_interval' => 30,
+                'ping_interval' => 60,
             ],
             'agent_llm'    => [
                 'provider'     => 'agent_openai',
                 'work_name'    => 'procWorker',
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
-                'model'        => 'qwen3.6-27b-neo-code',
+                'model'        => 'qwen3.6-35b-a3b-mtp-apex',
                 'org_id'       => '',
                 'timeout'      => 7200,
                 'keep_reasons' => false,
                 'params'       => [
                     'max_tokens'        => 32768,
-                    'temperature'       => 0.3,
-                    'top_p'             => 0.85,
-                    'frequency_penalty' => 0.3,
-                    'presence_penalty'  => 0.2,
+                    'temperature'       => 0.8,
+                    'min_p'             => 0.05,
+                    'top_p'             => 0.9,
+                    'frequency_penalty' => 0,
+                    'presence_penalty'  => 0.5,
                     'stop'              => [],
                     'extra_body'        => [
+                        'thinking'             => false,
                         'chat_template_kwargs' => [
                             'enable_thinking' => false,
                         ],

@@ -29,10 +29,14 @@ class go extends Factory
     public core    $core;
     public message $message;
 
+    public bool $in_process    = false;
     public bool $clean_warning = false;
 
     public array $socket_session = [];
     public array $stream_buffers = [];
+
+    public array $coming_messages = [];
+    public array $onsend_messages = [];
 
     /**
      * @throws \ReflectionException
@@ -73,13 +77,13 @@ class go extends Factory
         try {
             $this->core->socketMgr
                 ->setDebugMode($this->core->agent_config['debug'])
-                ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'] * 2)
+                ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'])
                 ->setEventListener('onHandshake', [$this, 'onHandshake'])
                 ->setEventListener('onHeartbeat', [$this, 'onHeartbeat'])
                 ->setEventListener('onMessage', [$this, 'onMessage'])
                 ->setEventListener('onSendString', [$this, 'onSendString'])
                 ->setEventListener('onClose', [$this, 'onClose'])
-                ->listenTo('tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'], $this->core->agent_config['agent_server']['websocket']);
+                ->listenTo('tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'], true);
         } catch (\Throwable) {
         }
     }
@@ -179,11 +183,17 @@ class go extends Factory
                     }
                     break;
 
+                case 'context':
+                    $this->coming_messages = array_merge($this->coming_messages, $payload['data']);
+                    break;
+
                 case 'end':
                     $current_history = $this->core->getSessionHistory();
 
                     switch ($payload_type) {
                         case 'tools':
+                            $this->in_process = true;
+
                             $this->core->agent_llm->chat(
                                 $message['socket_id'],
                                 array_intersect_key($payload, $this->socket_session[$message['socket_id']]),
@@ -192,8 +202,10 @@ class go extends Factory
                             break;
 
                         case 'end':
+                            $this->in_process = false;
+
                             $current_count = count($current_history);
-                            $max_history   = $this->core->agent_config['agent_memory']['max_history'] ?? 20;
+                            $max_history   = $this->core->agent_config['agent_memory']['max_history'];
                             $warning_count = $max_history * 2;
                             $limit_count   = $max_history * 3;
 
@@ -201,30 +213,8 @@ class go extends Factory
                                 $this->clean_warning = false;
                                 break;
                             } elseif (!$this->clean_warning) {
-                                $this->clean_warning = true;
-
-                                $system_prompt = '【系统提醒】当前对话历史较长（已有 ' . $current_count . ' 条，上限 ' . $max_history . ' 条）。请自动完成以下操作，并以自然语气告知用户：' . "\n\n" .
-                                    '1. 总结关键信息（用户需求、助手回复、重要工具结果等），保存到对应记忆（daily/important/system，临时内容可存 ram）。' . "\n" .
-                                    '2. 调用清理工具删除旧工具调用对，精简历史。' . "\n" .
-                                    '3. 完成后，向用户说明保存的内容概要、存储层级及剩余消息数，语气自然。' . "\n\n" .
-                                    '【特别提醒】对话历史超过 ' . $limit_count . ' 条时，系统将强制清理上下文，重要信息可能丢失，请及时保存。';
-
-                                $this->core->addSessionHistory(['role' => 'user', 'content' => $system_prompt]);
-
-                                $current_history = $this->core->getSessionHistory();
-
-                                $this->core->agent_llm->chat(
-                                    $message['socket_id'],
-                                    [
-                                        'sessionId' => $this->socket_session[$message['socket_id']]['sessionId'] ?? 'default',
-                                        'messageId' => 'system-' . microtime(true),
-                                    ],
-                                    $current_history
-                                );
-                            }
-
-                            if ($current_count > $limit_count) {
-                                $this->core->cleanSessionHistory();
+                                $this->clean_warning     = true;
+                                $this->onsend_messages[] = '[历史 ' . $current_count . '/' . $max_history . '] 自动：①总结关键信息(需求/回复/工具结果)→存记忆(daily/important/system,临时ram)；②调用清理工具删旧工具对；③告知用户(概要/层级/剩余数)。| 超 ' . $limit_count . ' 条强制清理，及时保存。';
                             }
                             break;
                     }
@@ -246,6 +236,7 @@ class go extends Factory
      * @param string $websocket_protocol
      *
      * @return bool
+     * @throws \Exception
      */
     public function onHandshake(string $socket_id, string $websocket_protocol): bool
     {
@@ -277,16 +268,13 @@ class go extends Factory
 
         $task_json = json_encode($task_jobs, JSON_FORMAT);
 
-        $task_content = '【定时任务】以下是待执行的定时任务列表（JSON 格式）：' . PHP_EOL .
-            $task_json . PHP_EOL . PHP_EOL .
-            '请按顺序处理每个任务：' . PHP_EOL .
-            '1. 根据 task_prompt 执行相应操作（发送提醒、调用工具、回答问题等）。' . PHP_EOL .
-            '2. 执行后将任务摘要和执行结果按需存入 daily 记忆层。重要事件可额外存入 important 层。' . PHP_EOL .
-            '3. 全部处理完毕后，向用户说明任务概要、处理结果、存储层级，语气自然。';
+        $task_content = '[定时任务] JSON:' . PHP_EOL . $task_json . PHP_EOL . '按序:①按任务要求执行(提醒/工具/问答) ②仅重要结果存daily(重要可+important),琐碎不存 ③完成后简述概要/结果/存储层级,语气自然。';
 
         $this->core->addSessionHistory(['role' => 'user', 'content' => $task_content]);
 
         $current_history = $this->core->getSessionHistory();
+
+        $this->in_process = true;
 
         $this->core->agent_llm->chat(
             $socket_id,
@@ -353,7 +341,26 @@ class go extends Factory
             $result = $this->message->$type_method($socket_id, $data['content']);
 
             if ($result['agent_llm']) {
-                $llm_data = $result['content'];
+                if (!$this->in_process) {
+                    $llm_data = $result['content'];
+
+                    if (empty($this->core->session_history)) {
+                        array_unshift(
+                            $llm_data, [
+                                'type' => 'text',
+                                'text' => '[提醒] 上下文不全，请加载今日记忆。如有需要，可继续加载昨日记忆和 important 记忆。'
+                            ]
+                        );
+                    }
+
+                    if (!empty($this->coming_messages)) {
+                        while (!is_null($coming_message = array_shift($this->coming_messages))) {
+                            $llm_data[] = $coming_message;
+                        }
+                    }
+                } else {
+                    $this->coming_messages = array_merge($this->coming_messages, $result['content']);
+                }
             }
 
             unset($data['content']);
@@ -368,6 +375,7 @@ class go extends Factory
 
         if (!empty($llm_data)) {
             $this->runProcWorker();
+            $this->in_process = true;
             $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
             $this->core->agent_llm->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
         }
@@ -381,9 +389,40 @@ class go extends Factory
      * @param string $socket_id
      *
      * @return array
+     * @throws \Exception
      */
     public function onSendString(string $socket_id): array
     {
+        if (!empty($this->onsend_messages[$socket_id])) {
+            $llm_data = [];
+
+            while (is_null($message = array_shift($this->onsend_messages[$socket_id]))) {
+                $llm_data[] = [
+                    'type' => 'text',
+                    'text' => $message
+                ];
+            }
+
+            $current_count = $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
+
+            if ($current_count > $this->core->agent_config['agent_memory']['max_history'] * 3) {
+                $this->core->cleanSessionHistory();
+            }
+
+            $this->in_process = true;
+
+            $this->core->agent_llm->chat(
+                $socket_id,
+                [
+                    'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
+                    'messageId' => 'system-' . microtime(true),
+                ],
+                $this->core->getSessionHistory()
+            );
+
+            unset($llm_data, $message, $current_count);
+        }
+
         unset($socket_id);
         return [];
     }
@@ -397,6 +436,6 @@ class go extends Factory
      */
     public function onClose(string $socket_id): void
     {
-        unset($socket_id);
+        unset($this->socket_session[$socket_id], $socket_id);
     }
 }

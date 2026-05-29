@@ -302,293 +302,376 @@ class go extends Factory
     }
 
     /**
-     * @param string $path
+     * Read image file and return Data URL.
      *
-     * @return array|string[]
+     * @param string $file_path
+     *
+     * @return array
      */
-    public function readImage(string $path): array
+    public function readImage(string $file_path): array
     {
-        $full_path = $this->core->securePath($path);
+        $full_path = $this->core->securePath($file_path);
 
         if (!is_file($full_path)) {
-            return ['error' => 'File not found: ' . $path];
+            return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
         }
 
         if (!is_readable($full_path)) {
-            return ['error' => 'File not readable: ' . $path];
+            return ['status' => 'error', 'error' => 'File not readable: ' . $full_path];
         }
 
         $info = getimagesize($full_path);
 
         if (false === $info || empty($info['mime'])) {
-            return ['error' => 'Cannot identify image type or unsupported format'];
+            return ['status' => 'error', 'error' => 'Cannot identify image type or unsupported format'];
         }
 
         $mime_type = $info['mime'];
         $allowed   = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
 
         if (!in_array($mime_type, $allowed, true)) {
-            return ['error' => 'Unsupported image type: ' . $mime_type];
+            return ['status' => 'error', 'error' => 'Unsupported image type: ' . $mime_type];
         }
 
         $data = file_get_contents($full_path);
 
         if (false === $data) {
-            return ['error' => 'Failed to read image data: ' . $path];
+            return ['status' => 'error', 'error' => 'Failed to read image data: ' . $full_path];
         }
 
         $base64    = base64_encode($data);
         $image_url = 'data:' . $mime_type . ';base64,' . $base64;
 
         $result = [
+            'status'    => 'success',
             'content'   => $image_url,
             'filename'  => basename($full_path),
-            'mime_type' => $mime_type
+            'mime_type' => $mime_type,
+            'file_path' => $full_path
         ];
 
-        unset($path, $full_path, $info, $mime_type, $allowed, $data, $base64, $image_url);
+        unset($file_path, $full_path, $info, $mime_type, $allowed, $data, $base64, $image_url);
         return $result;
     }
 
     /**
-     * Read file content
+     * Read file content.
      *
-     * @param string $path
+     * @param string $file_path
      * @param int    $offset
      * @param int    $limit
      *
      * @return array
      */
-    public function readFile(string $path, int $offset = 0, int $limit = 8192): array
+    public function readFile(string $file_path, int $offset = 0, int $limit = 8192): array
     {
-        $full_path = $this->core->securePath($path);
+        $full_path = $this->core->securePath($file_path);
 
         if (!is_file($full_path)) {
-            return ['error' => "File not found: {$path}"];
+            return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
         }
 
         if (!is_readable($full_path)) {
-            return ['error' => "File not readable: {$path}"];
+            return ['status' => 'error', 'error' => 'File not readable: ' . $full_path];
         }
 
         $file_handle = fopen($full_path, 'rb');
 
         if (false === $file_handle) {
-            return ['error' => "Failed to open file: {$path}"];
+            return ['status' => 'error', 'error' => 'Failed to open file: ' . $full_path];
         }
 
         fseek($file_handle, $offset);
-        $content = fread($file_handle, 0 === $limit ? filesize($full_path) : $limit);
+        $content = fread($file_handle, (0 === $limit) ? filesize($full_path) : $limit);
         $content = (string)mb_convert_encoding($content, 'UTF-8', 'auto');
         fclose($file_handle);
 
-        unset($path, $offset, $limit, $full_path, $file_handle);
-        return ['content' => $content];
+        $result = [
+            'status'    => 'success',
+            'content'   => $content,
+            'file_path' => $full_path
+        ];
+
+        unset($file_path, $offset, $limit, $full_path, $file_handle, $content);
+        return $result;
     }
 
     /**
-     * Write content to file
+     * Write content to file.
      *
-     * @param string $path
+     * @param string $file_path
      * @param string $content
      * @param bool   $append
      *
      * @return array
      */
-    public function writeFile(string $path, string $content, bool $append = false): array
+    public function writeFile(string $file_path, string $content, bool $append = false): array
     {
-        $path = $this->core->securePath($path);
+        $full_path = $this->core->securePath($file_path);
 
-        $dir_path = dirname($path);
+        $dir_path = dirname($full_path);
         $dir_path = $this->mkPath($dir_path);
 
-        $file_handle = fopen($path, $append ? 'ab' : 'wb');
+        $file_handle = fopen($full_path, $append ? 'ab' : 'wb');
 
         if (false === $file_handle) {
-            return ['error' => 'Failed to open file for writing: ' . $path];
+            return ['status' => 'error', 'error' => 'Failed to open file for writing: ' . $full_path];
         }
 
         $bytes = fwrite($file_handle, $content);
         fclose($file_handle);
 
-        unset($path, $content, $append, $dir_path, $file_handle);
-        return ['bytes_written' => $bytes ?: 0];
+        $result = [
+            'status'        => 'success',
+            'file_path'     => $full_path,
+            'bytes_written' => $bytes ?: 0
+        ];
+
+        unset($file_path, $content, $append, $dir_path, $file_handle, $bytes);
+        return $result;
     }
 
     /**
-     * @param string $src
-     * @param string $dst
+     * Copy a file.
      *
-     * @return string[]
+     * @param string $src_file_path
+     * @param string $dst_file_path
+     *
+     * @return array
      */
-    public function copyFile(string $src, string $dst): array
+    public function copyFile(string $src_file_path, string $dst_file_path): array
     {
-        $src_path = $this->core->securePath($src);
-        $dst_path = $this->core->securePath($dst);
+        $src_full = $this->core->securePath($src_file_path);
+        $dst_full = $this->core->securePath($dst_file_path);
 
-        if (!is_file($src_path)) {
-            return ['error' => "File not found: {$src_path}"];
+        if (!is_file($src_full)) {
+            return ['status' => 'error', 'error' => 'File not found: ' . $src_full];
         }
 
-        $copy = copy($src_path, $dst_path);
+        $copy = copy($src_full, $dst_full);
 
         if (!$copy) {
-            return ['error' => "Failed to copy file: {$src_path}"];
+            return ['status' => 'error', 'error' => 'Failed to copy file: ' . $src_full];
         }
 
-        unset($src, $dst, $src_path, $copy);
-        return ['file_copied' => "File copied to: {$dst_path}"];
+        $result = [
+            'status'        => 'success',
+            'src_file_path' => $src_full,
+            'dst_file_path' => $dst_full
+        ];
+
+        unset($src_file_path, $dst_file_path, $src_full, $dst_full, $copy);
+        return $result;
     }
 
     /**
-     * Delete file
+     * Delete a file.
      *
-     * @param string $path
+     * @param string $file_path
      *
      * @return array
      */
-    public function deleteFile(string $path): array
+    public function deleteFile(string $file_path): array
     {
-        $full_path = $this->core->securePath($path);
+        $full_path = $this->core->securePath($file_path);
 
         if (!is_file($full_path)) {
-            return ['deleted' => false, 'message' => 'File does not exist'];
+            return [
+                'status' => 'error',
+                'error'  => 'File does not exist: ' . $full_path
+            ];
         }
 
-        $result = unlink($full_path);
+        $deleted = unlink($full_path);
 
-        unset($path, $full_path);
-        return ['deleted' => $result];
+        if ($deleted) {
+            $result = [
+                'status'    => 'success',
+                'file_path' => $full_path
+            ];
+        } else {
+            $result = [
+                'status' => 'error',
+                'error'  => 'Failed to delete file: ' . $full_path
+            ];
+        }
+
+        unset($file_path, $full_path, $deleted);
+        return $result;
     }
 
     /**
-     * Search files by glob pattern
+     * Get file size.
      *
-     * @param string $path
-     * @param string $pattern
-     * @param bool   $recursive
-     *
-     * @return array
-     */
-    public function searchFiles(string $path, string $pattern, bool $recursive = false): array
-    {
-        $full_path = $this->core->securePath($path);
-
-        if (!is_dir($full_path)) {
-            return ['error' => "Directory not found: {$path}"];
-        }
-
-        $files = $this->libFileIO->findFiles($full_path, $pattern, $recursive);
-
-        unset($path, $pattern, $recursive, $full_path);
-        return ['files' => $files];
-    }
-
-    /**
      * @param string $file_path
      *
      * @return array
      */
     public function getFileSize(string $file_path): array
     {
-        $file_path = $this->core->securePath($file_path);
+        $full_path = $this->core->securePath($file_path);
 
-        if (!is_file($file_path)) {
-            return ['error' => 'File not found: ' . $file_path];
+        if (!is_file($full_path)) {
+            return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
         }
 
-        return ['filesize' => filesize($file_path)];
+        $size = filesize($full_path);
+
+        $result = [
+            'status'    => 'success',
+            'file_path' => $full_path,
+            'filesize'  => $size
+        ];
+
+        unset($file_path, $full_path, $size);
+        return $result;
     }
 
     /**
-     * List directory contents
+     * Search files by glob pattern.
      *
-     * @param string $path
+     * @param string $dir_path
+     * @param string $pattern
+     * @param bool   $recursive
      *
      * @return array
      */
-    public function listDirectory(string $path): array
+    public function searchFiles(string $dir_path, string $pattern, bool $recursive = false): array
     {
-        $full_path = $this->core->securePath($path);
+        $full_path = $this->core->securePath($dir_path);
 
         if (!is_dir($full_path)) {
-            return ['error' => "Directory not found: {$path}"];
+            return ['status' => 'error', 'error' => 'Directory not found: ' . $full_path];
+        }
+
+        $files = $this->libFileIO->findFiles($full_path, $pattern, $recursive);
+
+        $result = [
+            'status'   => 'success',
+            'dir_path' => $full_path,
+            'files'    => $files
+        ];
+
+        unset($dir_path, $pattern, $recursive, $full_path, $files);
+        return $result;
+    }
+
+    /**
+     * List directory contents.
+     *
+     * @param string $dir_path
+     *
+     * @return array
+     */
+    public function listDirectory(string $dir_path): array
+    {
+        $full_path = $this->core->securePath($dir_path);
+
+        if (!is_dir($full_path)) {
+            return ['status' => 'error', 'error' => 'Directory not found: ' . $full_path];
         }
 
         $contents = $this->libFileIO->getDirContents($full_path);
 
-        unset($path, $full_path);
-        return ['contents' => $contents];
+        $result = [
+            'status'   => 'success',
+            'dir_path' => $full_path,
+            'contents' => $contents
+        ];
+
+        unset($dir_path, $full_path, $contents);
+        return $result;
     }
 
     /**
-     * Create directory
+     * Create directory.
      *
-     * @param string $path
+     * @param string $dir_path
      *
      * @return array
      */
-    public function createDirectory(string $path): array
+    public function createDirectory(string $dir_path): array
     {
-        return ['created_path' => $this->mkPath($this->core->securePath($path))];
+        $full_path = $this->core->securePath($dir_path);
+        $created   = $this->mkPath($full_path);
+
+        $result = [
+            'status'   => 'success',
+            'dir_path' => $created
+        ];
+
+        unset($dir_path, $full_path, $created);
+        return $result;
     }
 
     /**
-     * Copy directory recursively
+     * Copy directory recursively.
      *
-     * @param string $src
-     * @param string $dst
+     * @param string $src_dir_path
+     * @param string $dst_dir_path
+     * @param bool   $overwrite
      *
      * @return array
      */
-    public function copyDirectory(string $src, string $dst): array
+    public function copyDirectory(string $src_dir_path, string $dst_dir_path, bool $overwrite = false): array
     {
-        $full_src = $this->core->securePath($src);
-        $full_dst = $this->core->securePath($dst);
+        $src_full = $this->core->securePath($src_dir_path);
+        $dst_full = $this->core->securePath($dst_dir_path);
 
-        if (!is_dir($full_src)) {
-            return ['error' => "Source directory not found: {$src}"];
+        if (!is_dir($src_full)) {
+            return ['status' => 'error', 'error' => 'Source directory not found: ' . $src_full];
         }
 
-        if (is_dir($full_dst)) {
-            return ['error' => "Destination directory already exists: {$dst}"];
+        if (!$overwrite && is_dir($dst_full)) {
+            return ['status' => 'error', 'error' => 'Destination directory already exists: ' . $dst_full];
         }
 
-        $copied = $this->libFileIO->copyDir($full_src, $full_dst);
+        $copied = $this->libFileIO->copyDir($src_full, $dst_full);
 
-        unset($src, $dst, $full_src);
-
-        if ($copied < 0) {
-            return ['error' => 'Failed to copy directory'];
+        if (0 > $copied) {
+            return ['status' => 'error', 'error' => 'Failed to copy directory: ' . $src_full];
         }
 
-        return ['copied_files' => $copied, 'destination' => $full_dst];
+        $result = [
+            'status'       => 'success',
+            'src_dir_path' => $src_full,
+            'dst_dir_path' => $dst_full,
+            'copied_files' => $copied
+        ];
+
+        unset($src_dir_path, $dst_dir_path, $src_full, $dst_full, $copied);
+        return $result;
     }
 
     /**
-     * Delete directory recursively
+     * Delete directory recursively.
      *
-     * @param string $path
+     * @param string $dir_path
      *
      * @return array
      */
-    public function deleteDirectory(string $path): array
+    public function deleteDirectory(string $dir_path): array
     {
-        $full_path = $this->core->securePath($path);
+        $full_path = $this->core->securePath($dir_path);
 
         if (!is_dir($full_path)) {
-            return ['deleted' => false, 'message' => 'Directory does not exist'];
+            return ['status' => 'error', 'error' => 'Directory does not exist: ' . $full_path];
         }
 
         $removed = $this->libFileIO->delDir($full_path);
 
-        unset($path, $full_path);
-
-        if ($removed < 0) {
-            return ['error' => 'Failed to delete directory'];
+        if (0 > $removed) {
+            return ['status' => 'error', 'error' => 'Failed to delete directory: ' . $full_path];
         }
 
-        return ['deleted' => true, 'files_removed' => $removed];
+        $result = [
+            'status'        => 'success',
+            'dir_path'      => $full_path,
+            'files_removed' => $removed
+        ];
+
+        unset($dir_path, $full_path, $removed);
+        return $result;
     }
 
     /**

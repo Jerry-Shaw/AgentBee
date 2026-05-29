@@ -50,88 +50,88 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'readImage',
-                'description' => '获取图片 Data URL（仅存储，不附加到对话）。调用后请勿分析，等待用户明确要求时再处理。参数: path(必填)。返回 {"content":"data:image/...;base64,...","filename":"...","mime_type":"..."}',
-                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'readFile',
-                'description' => '读取文件。参数:path(必填),offset(默认0),limit(默认8192,0=全部)。返回 {"content":"..."} 或 {"error":"..."}',
-                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string'], 'offset' => ['type' => 'integer', 'default' => 0], 'limit' => ['type' => 'integer', 'default' => 8192]], 'required' => ['path']],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'writeFile',
-                'description' => '写入文件(自动建目录)。参数:path,content(必填),append(默认false)。单次content≤4096字符,大文件必须分多次追加。返回 {"bytes_written":N} 或 {"error":"..."}',
-                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string'], 'content' => ['type' => 'string'], 'append' => ['type' => 'boolean', 'default' => false]], 'required' => ['path', 'content']],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'copyFile',
-                'description' => '复制文件。参数:src,dst。目标存在则覆盖。返回 {"file_copied":"File copied to: dst"} 或 {"error":"..."}',
-                'parameters'  => ['type' => 'object', 'properties' => ['src' => ['type' => 'string'], 'dst' => ['type' => 'string']], 'required' => ['src', 'dst']],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'deleteFile',
-                'description' => '永久删除文件(危险)。参数:path。返回 {"deleted":true} 或 {"deleted":false,"message":"..."}。操作前须用户确认。',
-                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'searchFiles',
-                'description' => 'glob模式搜索文件。参数:path(起始目录),pattern(如*.php),recursive(默认false)。返回 {"files":[...]}',
-                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string'], 'pattern' => ['type' => 'string'], 'recursive' => ['type' => 'boolean', 'default' => false]], 'required' => ['path', 'pattern']],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'getFileSize',
-                'description' => '获取文件字节数。参数:file_path。返回 {"filesize":N} 或 {"error":"..."}',
+                'description' => '读取图片返回 Data URL。参数: file_path(必填)。返回 {"status":"success","content":"data:image/...","filename":"...","mime_type":"...","file_path":"..."} 或 {"status":"error","error":"..."}',
                 'parameters'  => ['type' => 'object', 'properties' => ['file_path' => ['type' => 'string']], 'required' => ['file_path']],
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
+                'name'        => 'readFile',
+                'description' => '读取文件内容。参数: file_path(必填), offset(默认0), limit(默认8192,0=全部)。返回 {"status":"success","content":"...","file_path":"..."} 或 {"status":"error","error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['file_path' => ['type' => 'string'], 'offset' => ['type' => 'integer', 'default' => 0], 'limit' => ['type' => 'integer', 'default' => 8192]], 'required' => ['file_path']],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'writeFile',
+                'description' => '写入文件(自动建目录)。参数: file_path, content(必填), append(默认false)。单次content≤4096字符,大文件需分多次追加。返回 {"status":"success","file_path":"...","bytes_written":N} 或 {"status":"error","error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['file_path' => ['type' => 'string'], 'content' => ['type' => 'string'], 'append' => ['type' => 'boolean', 'default' => false]], 'required' => ['file_path', 'content']],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'copyFile',
+                'description' => '复制文件。参数: src_file_path, dst_file_path。目标存在则覆盖。返回 {"status":"success","src_file_path":"...","dst_file_path":"..."} 或 {"status":"error","error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['src_file_path' => ['type' => 'string'], 'dst_file_path' => ['type' => 'string']], 'required' => ['src_file_path', 'dst_file_path']],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'deleteFile',
+                'description' => '永久删除文件(危险)。参数: file_path(必填)。返回 {"status":"success","file_path":"..."} 或 {"status":"error","error":"..."}。操作前须用户确认。',
+                'parameters'  => ['type' => 'object', 'properties' => ['file_path' => ['type' => 'string']], 'required' => ['file_path']],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'getFileSize',
+                'description' => '获取文件字节数。参数: file_path。返回 {"status":"success","file_path":"...","filesize":N} 或 {"status":"error","error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['file_path' => ['type' => 'string']], 'required' => ['file_path']],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'searchFiles',
+                'description' => 'glob模式搜索文件。参数: dir_path(起始目录), pattern(如*.php), recursive(默认false)。返回 {"status":"success","dir_path":"...","files":[...]} 或 {"status":"error","error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['dir_path' => ['type' => 'string'], 'pattern' => ['type' => 'string'], 'recursive' => ['type' => 'boolean', 'default' => false]], 'required' => ['dir_path', 'pattern']],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
                 'name'        => 'listDirectory',
-                'description' => '列出目录内容(非递归)。参数:path。返回 {"contents":[{"filename":"","filesize":N,"isFile":bool}]}',
-                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
+                'description' => '列出目录内容(非递归)。参数: dir_path。返回 {"status":"success","dir_path":"...","contents":[{"filename":"","filesize":N,"isFile":bool}]} 或 {"status":"error","error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['dir_path' => ['type' => 'string']], 'required' => ['dir_path']],
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'createDirectory',
-                'description' => '创建目录(自动建父目录)。参数:path。返回 {"created_path":"..."}',
-                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
+                'description' => '创建目录(自动建父目录)。参数: dir_path。返回 {"status":"success","dir_path":"..."} 或 {"status":"error","error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['dir_path' => ['type' => 'string']], 'required' => ['dir_path']],
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'copyDirectory',
-                'description' => '递归复制目录,目标必须不存在。参数:src,dst。返回 {"copied_files":N,"destination":"..."} 或 {"error":"..."}',
-                'parameters'  => ['type' => 'object', 'properties' => ['src' => ['type' => 'string'], 'dst' => ['type' => 'string']], 'required' => ['src', 'dst']],
+                'description' => '递归复制目录。参数: src_dir_path(必填), dst_dir_path(必填), overwrite(可选,默认false,是否覆盖已存在目录)。返回 {"status":"success","src_dir_path":"...","dst_dir_path":"...","copied_files":N} 或 {"status":"error","error":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['src_dir_path' => ['type' => 'string'], 'dst_dir_path' => ['type' => 'string'], 'overwrite' => ['type' => 'boolean', 'default' => false]], 'required' => ['src_dir_path', 'dst_dir_path']],
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'deleteDirectory',
-                'description' => '递归删除目录(危险)。参数:path。返回 {"deleted":true,"files_removed":N} 或 {"deleted":false,"message":"..."}。操作前须用户确认。',
-                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
+                'description' => '递归删除目录(危险)。参数: dir_path。返回 {"status":"success","dir_path":"...","files_removed":N} 或 {"status":"error","error":"..."}。操作前须用户确认。',
+                'parameters'  => ['type' => 'object', 'properties' => ['dir_path' => ['type' => 'string']], 'required' => ['dir_path']],
             ],
         ],
     ];

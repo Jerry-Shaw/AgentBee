@@ -266,17 +266,17 @@ class procWorker extends Factory
      */
     private function sendMsg(string $socket_id, string $message_type, string $payload_type, array $payload_meta, string|array $payload_data = ''): void
     {
-        $payload = ['type' => $payload_type];
+        $payload = [
+            'type' => $payload_type,
+            'data' => $payload_data
+        ];
 
-        if (!empty($payload_data)) {
-            $payload['data'] = $payload_data;
-        }
-
-        $stream_data = json_encode([
-            'type'      => $message_type,
-            'payload'   => $payload + $payload_meta,
-            'socket_id' => $socket_id,
-        ], JSON_FORMAT
+        $stream_data = json_encode(
+            [
+                'type'      => $message_type,
+                'payload'   => $payload + $payload_meta,
+                'socket_id' => $socket_id,
+            ], JSON_FORMAT
         );
 
         echo $stream_data . "\n";

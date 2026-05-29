@@ -77,6 +77,18 @@ class procWorker extends Factory
                 if (!$finished) {
                     $this->sendStream($socket_id, $data, $message_metadata, $tool_calls, $assistant_content, $reasons_content);
                 } else {
+                    if (isset($data['status']) && 'aborted' === $data['status']) {
+                        $assistant_message = [
+                            'role'              => 'assistant',
+                            'content'           => '[用户中断]',
+                            'reasoning_content' => ''
+                        ];
+
+                        $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
+                        $run_tools = false;
+                        return;
+                    }
+
                     $assistant_message = [
                         'role'              => 'assistant',
                         'content'           => $assistant_content,

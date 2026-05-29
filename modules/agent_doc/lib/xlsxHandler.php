@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_doc\app;
+namespace modules\agent_doc\lib;
 
 use Nervsys\Core\Factory;
 

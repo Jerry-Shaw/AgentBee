@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_core\app;
+namespace modules\agent_core\lib;
 
 use modules\agent_openai\go;
 use Nervsys\Core\Factory;

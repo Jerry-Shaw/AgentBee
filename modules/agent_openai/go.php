@@ -21,7 +21,7 @@
 namespace modules\agent_openai;
 
 use modules\agent_core\core;
-use modules\agent_openai\app\procWorker;
+use modules\agent_openai\lib\procWorker;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libOpenAI;
 

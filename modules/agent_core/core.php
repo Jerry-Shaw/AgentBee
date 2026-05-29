@@ -20,7 +20,7 @@
 
 namespace modules\agent_core;
 
-use modules\agent_core\app\config;
+use modules\agent_core\lib\config;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Lib\Error;
 use Nervsys\Core\Mgr\ProcMgr;

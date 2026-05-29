@@ -20,7 +20,7 @@
 
 namespace modules\agent_core;
 
-use modules\agent_core\app\message;
+use modules\agent_core\lib\message;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\SocketMgr;
 

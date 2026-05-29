@@ -42,7 +42,7 @@ class go extends Factory
             return null;
         }
         // Build class name with sub‑namespace
-        $class = "\\modules\\agent_doc\\app\\{$type}Handler";
+        $class = "\\modules\\agent_doc\\lib\\{$type}Handler";
         return $class::new();
     }
 

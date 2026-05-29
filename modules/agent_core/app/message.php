@@ -34,11 +34,14 @@ class message extends Factory
      */
     public function process_setting(string $socket_id, array $data_content): array
     {
-        switch ($data_content['act'] ?? 'unknown') {
+        $act = $data_content['act'] ?? 'unknown';
+
+        switch ($act) {
             case 'getConfig':
                 $current = config::new()->get();
                 $content = [
                     'status' => 'success',
+                    'act'    => $act,
                     'data'   => $current
                 ];
 
@@ -50,6 +53,7 @@ class message extends Factory
                 $save_bytes  = config::new()->save($config_json);
                 $content     = [
                     'status' => 'success',
+                    'act'    => $act,
                     'data'   => 'Bytes written: ' . $save_bytes,
                 ];
 
@@ -60,6 +64,7 @@ class message extends Factory
                 $defaults = config::new()->getDefault();
                 $content  = [
                     'status' => 'success',
+                    'act'    => $act,
                     'data'   => $defaults
                 ];
 
@@ -75,11 +80,11 @@ class message extends Factory
         }
 
         $result = [
-            'agent_llm' => false,
-            'data'      => $content
+            'need_llm' => false,
+            'data'     => $content
         ];
 
-        unset($socket_id, $data_content, $content);
+        unset($socket_id, $data_content, $act, $content);
         return $result;
     }
 
@@ -92,9 +97,12 @@ class message extends Factory
      */
     public function process_system(string $socket_id, array $data_content): array
     {
-        switch ($data_content['act'] ?? 'unknown') {
+        $act = $data_content['act'] ?? 'unknown';
+
+        switch ($act) {
             case 'getModels':
-                $content = go::new()->getModels();
+                $content        = go::new()->getModels();
+                $content['act'] = $act;
                 break;
 
             default:
@@ -106,11 +114,11 @@ class message extends Factory
         }
 
         $result = [
-            'agent_llm' => false,
-            'data'      => $content
+            'need_llm' => false,
+            'data'     => $content
         ];
 
-        unset($socket_id, $data_content, $content);
+        unset($socket_id, $data_content, $act, $content);
         return $result;
     }
 
@@ -125,8 +133,8 @@ class message extends Factory
     public function process_text(string $socket_id, array $data_content): array
     {
         return [
-            'agent_llm' => true,
-            'content'   => ['type' => 'text', 'text' => trim($data_content['text'] ?? '')]
+            'need_llm' => true,
+            'content'  => ['type' => 'text', 'text' => trim($data_content['text'] ?? '')]
         ];
     }
 
@@ -144,7 +152,7 @@ class message extends Factory
      * @param string $socket_id
      * @param array  $data_content
      *
-     * @return array Associative array with 'agent_llm' (bool) and 'text' (multimodal content array).
+     * @return array Associative array with 'need_llm' (bool) and 'text' (multimodal content array).
      */
     public function process_chat(string $socket_id, array $data_content): array
     {
@@ -197,8 +205,8 @@ class message extends Factory
         unset($socket_id, $data);
 
         return [
-            'agent_llm' => true,
-            'content'   => $content
+            'need_llm' => true,
+            'content'  => $content
         ];
     }
 

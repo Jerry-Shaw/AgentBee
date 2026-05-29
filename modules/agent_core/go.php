@@ -310,8 +310,6 @@ class go extends Factory
             $message = $this->message->process_binary($socket_id, $message);
         }
 
-        $end_data = [];
-        $llm_data = [];
         $messages = str_contains($message, "\n") ? explode("\n", $message) : [$message];
 
         foreach ($messages as $line) {
@@ -334,37 +332,43 @@ class go extends Factory
 
             $result = $this->message->$type_method($socket_id, $data['content']);
 
-            if ($result['agent_llm']) {
-                // LLM action
-                $this->socket_session[$socket_id] = [
-                    'sessionId' => $data['sessionId'],
-                    'messageId' => $data['messageId']
-                ];
+            if (!$result['need_llm']) {
+                // Other actions
+                $response = ['type' => $data['type']] + $result['data'];
+                $this->core->sendMessage($socket_id, json_encode($response, JSON_FORMAT));
 
-                if (!$this->in_process) {
-                    $llm_data = $result['content'];
+                unset($socket_id, $message, $is_binary, $messages, $line, $data, $type_method, $result, $response);
+                return;
+            }
 
-                    if (empty($this->core->session_history)) {
-                        array_unshift(
-                            $llm_data, [
-                                'type' => 'text',
-                                'text' => '[提醒] 上下文不全，请加载今日记忆。如有需要，可继续加载昨日记忆和 important 记忆。'
-                            ]
-                        );
+            // LLM action
+            $end_data = [];
+            $llm_data = [];
+
+            $this->socket_session[$socket_id] = [
+                'sessionId' => $data['sessionId'],
+                'messageId' => $data['messageId']
+            ];
+
+            if (!$this->in_process) {
+                $llm_data = $result['content'];
+
+                if (empty($this->core->session_history)) {
+                    array_unshift(
+                        $llm_data, [
+                            'type' => 'text',
+                            'text' => '[提醒] 上下文不全，请加载今日记忆。如有需要，可继续加载昨日记忆和 important 记忆。'
+                        ]
+                    );
+                }
+
+                if (!empty($this->coming_messages)) {
+                    while (!is_null($coming_message = array_shift($this->coming_messages))) {
+                        $llm_data[] = $coming_message;
                     }
-
-                    if (!empty($this->coming_messages)) {
-                        while (!is_null($coming_message = array_shift($this->coming_messages))) {
-                            $llm_data[] = $coming_message;
-                        }
-                    }
-                } else {
-                    $this->coming_messages = array_merge($this->coming_messages, $result['content']);
                 }
             } else {
-                // Other actions
-                $this->core->sendMessage($socket_id, json_encode($result['data']));
-                return;
+                $this->coming_messages = array_merge($this->coming_messages, $result['content']);
             }
 
             unset($data['content']);

@@ -88,14 +88,14 @@ class config extends Factory
                 'ping_interval' => 60,
             ],
             'agent_llm'    => [
-                'provider'     => 'agent_openai',
-                'work_name'    => 'procWorker',
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
-                'model'        => 'qwen3.6-35b-a3b-mtp-apex',
+                'model'        => 'gemma-4-26b-a4b-it-apex',
                 'org_id'       => '',
+                'provider'     => 'agent_openai',
+                'worker_name'  => 'procWorker',
                 'timeout'      => 7200,
-                'keep_reasons' => false,
+                'keep_reasons' => true,
                 'params'       => [
                     'max_tokens'        => 16384,
                     'temperature'       => 0.8,
@@ -116,24 +116,25 @@ class config extends Factory
                 ],
             ],
             'agent_task'   => [
-                'provider' => 'agent_mem_db',
+                'provider' => 'agent_memory',
             ],
             'agent_memory' => [
-                'provider'    => 'agent_mem_db',
-                'max_history' => 30,
+                'provider'    => 'agent_memory',
+                'max_history' => 50,
             ],
             'agent_tools'  => [
                 'enabled'        => true,
                 'in_sandbox'     => true,
                 'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
                 'list'           => [
-                    ['name' => 'agent_mem_db'],
+                    ['name' => 'agent_memory'],
                     ['name' => 'agent_tools'],
                     ['name' => 'agent_claw'],
                 ],
             ],
             'memory_limit' => '4G',
-            'debug'        => false,
+            'agent_debug'  => true,
+            'socket_debug' => false,
         ];
     }
 }

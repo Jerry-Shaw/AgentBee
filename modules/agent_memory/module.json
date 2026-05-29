@@ -1,5 +1,5 @@
 {
-  "name": "agent_mem_db",
+  "name": "agent_memory",
   "version": "0.1.0",
   "description": "SQLite-based memory management system - System/Important/Daily/RAM with full-text search and task scheduling",
   "author": "AgentBee self developed",

@@ -76,7 +76,7 @@ class go extends Factory
 
         try {
             $this->core->socketMgr
-                ->setDebugMode($this->core->agent_config['debug'])
+                ->setDebugMode($this->core->agent_config['socket_debug'])
                 ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'])
                 ->setEventListener('onHandshake', [$this, 'onHandshake'])
                 ->setEventListener('onHeartbeat', [$this, 'onHeartbeat'])
@@ -105,7 +105,7 @@ class go extends Factory
         $this->core->procMgr->command([
             $this->core->OSMgr->getPhpPath(),
             $this->core->app->script_path,
-            '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['work_name']
+            '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['worker_name']
         ])->run(core::PROC_IDX_OPENAI);
 
         $worker_pid = $this->core->procMgr->getPid(core::PROC_IDX_OPENAI);

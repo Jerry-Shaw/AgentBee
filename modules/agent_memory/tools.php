@@ -1,12 +1,13 @@
 <?php
 
 /**
- * Memory module for AgentBee - Four-layer memory management system
+ * Memory module for AgentBee - SQLite-based four-layer memory management system
  *
- * Provides system/important/daily memory storage using JSONL format.
+ * Provides system/important/daily/ram memory storage using SQLite database.
+ * All CRUD operations use libSQLite QueryBuilder with parameter binding.
+ * Full-text search via FTS5 with LIKE fallback.
  *
- * Copyright 2026 秋水之冰 <27206617@qq.com>
- *  Copyright 2026 AgentBee self developed
+ * Copyright 2026 AgentBee self developed
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +22,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_mem_file;
+namespace modules\agent_memory;
 
 class tools
 {
@@ -30,7 +31,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'addTask',
-                'description' => '添加定时任务。参数:task_id,task_prompt,run_at(时间戳),repeat(默认false),repeat_interval(秒)。返回{"bytes_written":N}',
+                'description' => '添加/更新定时任务。参数:task_id,task_prompt,run_at(时间戳,<当前则修正),repeat(默认false),repeat_interval(秒,repeat=true时>0)。返回{"bytes_written":1}或{"error":"..."}',
                 'parameters'  => ['type' => 'object', 'properties' => ['task_id' => ['type' => 'string'], 'task_prompt' => ['type' => 'string'], 'run_at' => ['type' => 'integer'], 'repeat' => ['type' => 'boolean', 'default' => false], 'repeat_interval' => ['type' => 'integer', 'default' => 0]], 'required' => ['task_id', 'task_prompt', 'run_at']],
             ],
         ],
@@ -38,7 +39,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'removeTask',
-                'description' => '删除定时任务。参数:task_id。返回{"success":true,"message":"..."}',
+                'description' => '删除定时任务。参数:task_id。返回{"success":true,"message":"..."}或{"success":false,"message":"..."}',
                 'parameters'  => ['type' => 'object', 'properties' => ['task_id' => ['type' => 'string']], 'required' => ['task_id']],
             ],
         ],
@@ -60,7 +61,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'save',
-                'description' => '保存记忆。参数:level(system|important|daily|ram),role(user|assistant|system|tool),content。返回{"saved":true,"path":"..."}',
+                'description' => '保存记忆。参数:level(system|important|daily|ram),role(user|assistant|system|tool),content(文本)。system/important强制覆盖role(→system/→user)。ram重启丢失。返回{"saved":true,"path":"...","role":"实际角色"}或{"error":"..."}',
                 'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram']], 'role' => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool']], 'content' => ['type' => 'string']], 'required' => ['level', 'role', 'content']],
             ],
         ],
@@ -76,7 +77,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '搜索记忆。参数:level(含all),keywords(数组),mode(or|and),offset,length,start_date,end_date(仅daily)。返回同read',
+                'description' => '搜索记忆。参数:level(含all),keywords(数组),mode(or|and,默认or),offset,length,start_date,end_date(仅daily)。返回同read()',
                 'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram', 'all']], 'keywords' => ['type' => 'array', 'items' => ['type' => 'string']], 'mode' => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'], 'offset' => ['type' => 'integer', 'default' => 0], 'length' => ['type' => 'integer', 'default' => 100], 'start_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'end_date' => ['type' => 'string', 'pattern' => '^\d{8}$']], 'required' => ['level', 'keywords']],
             ],
         ],
@@ -84,7 +85,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'delete',
-                'description' => '删除记忆。参数:level,keywords(逗号分隔),mode(or|and),start_date/end_date(YYYYMMDD),start_time/end_time(时间戳)。至少提供keywords/日期/时间之一。返回{"deleted":N}或{"error":"..."}',
+                'description' => '删除记忆。参数:level(必填),keywords(逗号分隔,可选),mode(or|and),start_date/end_date(仅daily,YYYYMMDD),start_time/end_time(时间戳)。至少提供keywords/日期范围/时间范围之一。返回{"deleted":N}或{"error":"..."}',
                 'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'ram', 'all']], 'keywords' => ['type' => 'string', 'default' => ''], 'mode' => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'], 'start_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'end_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'start_time' => ['type' => 'integer', 'default' => 0], 'end_time' => ['type' => 'integer', 'default' => 0]], 'required' => ['level']],
             ],
         ],

@@ -22,7 +22,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_mem_db;
+namespace modules\agent_memory;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;

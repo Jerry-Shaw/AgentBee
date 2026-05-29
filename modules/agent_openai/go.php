@@ -80,6 +80,15 @@ class go extends Factory
     }
 
     /**
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function getModels(): array
+    {
+        return $this->libOpenAI->listModels();
+    }
+
+    /**
      * Start a chat session.
      *
      * @param string $socket_id

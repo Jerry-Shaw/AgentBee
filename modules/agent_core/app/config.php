@@ -27,14 +27,16 @@ class config extends Factory
 {
     public array $config = [];
 
-    public string $config_dir = '';
+    public string $config_dir  = '';
+    public string $conf_system = '';
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->config_dir = App::new()->root_path . DIRECTORY_SEPARATOR . 'config';
+        $this->config_dir  = App::new()->root_path . DIRECTORY_SEPARATOR . 'config';
+        $this->conf_system = $this->config_dir . DIRECTORY_SEPARATOR . 'AgentBee.json';
     }
 
     /**
@@ -44,32 +46,42 @@ class config extends Factory
     public function get(): array
     {
         if (empty($this->config)) {
-            $config_file = $this->config_dir . DIRECTORY_SEPARATOR . 'AgentBee.json';
-
-            if (is_file($config_file)) {
-                $config_data = json_decode(file_get_contents($config_file), true) ?? [];
+            if (is_file($this->conf_system)) {
+                $config_data = json_decode(file_get_contents($this->conf_system), true) ?? [];
             }
 
             if (empty($config_data)) {
-                $config_data = $this->init($config_file);
+                $config_data = $this->getDefault();
+                file_put_contents($this->conf_system, json_encode($config_data, JSON_PRETTY));
             }
 
             $this->config = $config_data;
-            unset($config_file, $config_data);
+            unset($config_data);
         }
 
         return $this->config;
     }
 
     /**
-     * @param string $config_file
+     * @param string $config_json
      *
+     * @return int
+     */
+    public function save(string $config_json): int
+    {
+        $save_bytes = file_put_contents($this->conf_system, $config_json);
+
+        unset($config_json);
+        return (int)$save_bytes;
+    }
+
+    /**
      * @return array
      * @throws \ReflectionException
      */
-    private function init(string $config_file): array
+    public function getDefault(): array
     {
-        $config = [
+        return [
             'agent_server' => [
                 'host'          => '127.0.0.1',
                 'port'          => 8686,
@@ -85,7 +97,7 @@ class config extends Factory
                 'timeout'      => 7200,
                 'keep_reasons' => false,
                 'params'       => [
-                    'max_tokens'        => 32768,
+                    'max_tokens'        => 16384,
                     'temperature'       => 0.8,
                     'min_p'             => 0.05,
                     'top_p'             => 0.9,
@@ -123,10 +135,5 @@ class config extends Factory
             'memory_limit' => '4G',
             'debug'        => false,
         ];
-
-        file_put_contents($config_file, json_encode($config, JSON_PRETTY));
-
-        unset($config_file);
-        return $config;
     }
 }

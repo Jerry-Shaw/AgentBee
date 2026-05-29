@@ -322,7 +322,7 @@ class go extends Factory
             }
 
             if ('stop' === $data['type']) {
-                $this->core->agent_llm->about($socket_id);
+                $this->core->agent_llm->abort($socket_id);
                 continue;
             }
 

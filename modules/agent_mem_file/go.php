@@ -263,67 +263,79 @@ class go extends Factory
      */
     public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
     {
-        if (!in_array($level, self::LEVELS, true)) {
+        if (!in_array($level, self::ALL_LEVELS, true)) {
             return ['error' => "Invalid level: {$level}"];
         }
 
-        // RAM layer: read from memory array
+        // RAM 单独访问的情况
         if ('ram' === $level) {
-            $all_messages = $this->ram_memory;
-            $total        = count($all_messages);
-
-            if (0 === $length) {
-                $length = $total;
-            }
-
-            $selected = array_slice($all_messages, $offset, $length);
-            $result   = ['messages' => $selected, 'total' => $total];
-
-            unset($all_messages, $selected);
-            return $result;
+            $total    = count($this->ram_memory);
+            $messages = array_slice($this->ram_memory, $offset, ($length === 0) ? $total : $length);
+            $messages = array_map(fn($item) => ['role' => $item['role'], 'content' => $item['content']], $messages);
+            return ['messages' => $messages, 'total' => $total];
         }
 
-        $target_file = $this->getTargetFile($level, $date);
+        $levels_to_fetch = ('all' === $level) ? self::LEVELS : [$level];
+        $all_messages    = [];
 
-        if (!is_file($target_file)) {
-            return ['messages' => [], 'total' => 0];
-        }
-
-        $handle = fopen($target_file, 'rb');
-
-        if (false === $handle) {
-            return ['error' => "Cannot open file: {$target_file}"];
-        }
-
-        $all_messages = [];
-
-        while (false !== ($line = fgets($handle))) {
-            $line = rtrim($line, "\r\n");
-
-            if ('' === $line) {
+        foreach ($levels_to_fetch as $lv) {
+            if ('ram' === $lv) {
+                foreach ($this->ram_memory as $item) {
+                    $all_messages[] = [
+                        'role'       => $item['role'],
+                        'content'    => $item['content'],
+                        'created_at' => $item['created_at']
+                    ];
+                }
                 continue;
             }
 
-            $msg = json_decode($line, true);
+            // 获取该层级对应的文件列表
+            if ('daily' === $lv) {
+                $target_date = ($date !== '') ? $this->validateDate($date) : date('Ymd');
+                $file        = $this->daily_dir . $target_date . '.txt';
+                $files       = is_file($file) ? [$file] : [];
+            } else {
+                $files = $this->getTargetFiles($lv);
+            }
 
-            if (is_array($msg) && isset($msg['role'], $msg['content'])) {
-                $all_messages[] = ['role' => $msg['role'], 'content' => $msg['content']];
+            foreach ($files as $file) {
+                if (!is_file($file)) {
+                    continue;
+                }
+                $handle = fopen($file, 'rb');
+                if ($handle === false) {
+                    continue;
+                }
+                while (($line = fgets($handle)) !== false) {
+                    $line = rtrim($line, "\r\n");
+                    if ($line === '') {
+                        continue;
+                    }
+                    $msg = json_decode($line, true);
+                    if (is_array($msg) && isset($msg['role'], $msg['content'])) {
+                        $all_messages[] = [
+                            'role'       => $msg['role'],
+                            'content'    => $msg['content'],
+                            'created_at' => $msg['created_at'] ?? 0
+                        ];
+                    }
+                }
+                fclose($handle);
             }
         }
 
-        fclose($handle);
+        // 按 created_at 升序排序
+        usort($all_messages, fn($a, $b) => $a['created_at'] <=> $b['created_at']);
 
         $total = count($all_messages);
-
-        if (0 === $length) {
+        if ($length === 0) {
             $length = $total;
         }
+        $slice    = array_slice($all_messages, $offset, $length);
+        $messages = array_map(fn($item) => ['role' => $item['role'], 'content' => $item['content']], $slice);
 
-        $selected = array_slice($all_messages, $offset, $length);
-        $result   = ['messages' => $selected, 'total' => $total];
-
-        unset($all_messages, $selected);
-        return $result;
+        return ['messages' => $messages, 'total' => $total];
     }
 
     /**

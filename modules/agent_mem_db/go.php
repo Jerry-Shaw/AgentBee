@@ -367,52 +367,78 @@ class go extends Factory
 
     public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
     {
-        if (!in_array($level, self::LEVELS, true)) {
-            unset($offset, $length, $date);
+        // 检查 level 是否合法（包括 'all'）
+        if (!in_array($level, self::ALL_LEVELS, true)) {
             return ['error' => "Invalid level: {$level}"];
         }
 
-        if (0 > $offset) {
-            unset($level, $length, $date);
+        if ($offset < 0) {
             return ['error' => 'offset must be >= 0, got: ' . $offset];
         }
-        if (0 > $length) {
-            unset($level, $offset, $date);
+        if ($length < 0) {
             return ['error' => 'length must be >= 0, got: ' . $length];
         }
 
+        // 处理 RAM 单独访问的情况（保持原逻辑）
         if ('ram' === $level) {
             $total    = count($this->ram_memory);
-            $messages = array_slice($this->ram_memory, $offset, (0 === $length) ? $total : $length);
-            unset($level, $offset, $length, $date);
+            $messages = array_slice($this->ram_memory, $offset, ($length === 0) ? $total : $length);
+            // 返回时只保留 role 和 content
+            $messages = array_map(fn($item) => ['role' => $item['role'], 'content' => $item['content']], $messages);
             return ['messages' => $messages, 'total' => $total];
         }
 
-        $conditions = [['level', '=', $level]];
-        if ('daily' === $level) {
-            $date_val     = ('' !== $date) ? $date : date('Ymd');
-            $conditions[] = ['date_key', '=', $date_val];
-            unset($date_val);
-        }
+        // 确定要查询的层级列表
+        $levels_to_fetch = ('all' === $level) ? self::LEVELS : [$level];
+        $all_messages    = [];
 
-        $total = (int)($this->db->table('messages')
-            ->select($this->db->useSql('COUNT(*) AS cnt'))
-            ->where(...$conditions)
-            ->fetch()['cnt'] ?? 0);
+        foreach ($levels_to_fetch as $lv) {
+            if ('ram' === $lv) {
+                // RAM 层直接收集（包含 created_at 用于排序）
+                foreach ($this->ram_memory as $item) {
+                    $all_messages[] = [
+                        'role'       => $item['role'],
+                        'content'    => $item['content'],
+                        'created_at' => $item['created_at']
+                    ];
+                }
+                continue;
+            }
 
-        $messages = [];
-        if (0 < $total) {
-            $limit    = (0 === $length) ? $total : $length;
-            $messages = $this->db->table('messages')
-                ->select('role', 'content')
+            // 数据库层查询
+            $conditions = [['level', '=', $lv]];
+            if ('daily' === $lv) {
+                $date_val     = ($date !== '') ? $date : date('Ymd');
+                $conditions[] = ['date_key', '=', $date_val];
+            }
+
+            $rows = $this->db->table('messages')
+                ->select('role', 'content', 'created_at')
                 ->where(...$conditions)
-                ->order(['id' => 'ASC'])
-                ->limit($offset, $limit)
+                ->order(['id' => 'ASC'])   // 保持原始插入顺序，后续会按 created_at 重排
                 ->fetchAll();
-            unset($limit);
+
+            foreach ($rows as $row) {
+                $all_messages[] = [
+                    'role'       => $row['role'],
+                    'content'    => $row['content'],
+                    'created_at' => (int)$row['created_at']
+                ];
+            }
         }
 
-        unset($level, $offset, $length, $date, $conditions);
+        // 按 created_at 升序排序（最早记忆在前）
+        usort($all_messages, fn($a, $b) => $a['created_at'] <=> $b['created_at']);
+
+        $total = count($all_messages);
+        if ($length === 0) {
+            $length = $total;
+        }
+        $slice = array_slice($all_messages, $offset, $length);
+
+        // 移除内部使用的 created_at 字段，保持返回格式与原版一致
+        $messages = array_map(fn($item) => ['role' => $item['role'], 'content' => $item['content']], $slice);
+
         return ['messages' => $messages, 'total' => $total];
     }
 
@@ -482,6 +508,55 @@ class go extends Factory
         unset($level, $keywords, $offset, $length, $mode, $start_date, $end_date);
         unset($levels_to_search, $lv, $ram_results, $db_levels, $db_results, $all_results, $limit);
         return ['messages' => $messages, 'total' => $total];
+    }
+
+    public function delete(
+        string $level,
+        string $keywords = '',
+        string $mode = 'or',
+        string $start_date = '',
+        string $end_date = '',
+        int    $start_time = 0,
+        int    $end_time = 0
+    ): array
+    {
+        if (!in_array($level, self::ALL_LEVELS, true)) {
+            return ['error' => "Invalid level: {$level}"];
+        }
+
+        if (!in_array($mode, self::SEARCH_MODE, true)) {
+            return ['error' => "Invalid mode: {$mode}"];
+        }
+
+        $kw_list = [];
+        if ('' !== $keywords) {
+            foreach (explode(',', $keywords) as $kw) {
+                $kw = trim($kw);
+                if ('' !== $kw) {
+                    $kw_list[] = strtolower($kw);
+                }
+            }
+        }
+
+        // 检查是否至少提供了关键词、日期范围或时间范围之一
+        $has_date_range = ($start_date !== '' || $end_date !== '');
+        $has_time_range = ($start_time !== 0 || $end_time !== 0);
+        if (empty($kw_list) && !$has_time_range && !$has_date_range) {
+            return ['error' => 'At least one of keywords, date range (start_date/end_date), or time range (start_time/end_time) must be provided'];
+        }
+
+        $levels_to_process = ('all' === $level) ? self::LEVELS : [$level];
+        $total_deleted     = 0;
+
+        foreach ($levels_to_process as $lv) {
+            if ('ram' === $lv) {
+                $total_deleted += $this->deleteRAM($kw_list, $mode, $start_time, $end_time);
+            } else {
+                $total_deleted += $this->deleteFromDB($lv, $kw_list, $mode, $start_date, $end_date, $start_time, $end_time);
+            }
+        }
+
+        return ['deleted' => $total_deleted];
     }
 
     // =========================================================================
@@ -645,52 +720,6 @@ class go extends Factory
     // =========================================================================
     //  Memory Delete
     // =========================================================================
-
-    public function delete(
-        string $level,
-        string $keywords = '',
-        string $mode = 'or',
-        string $start_date = '',
-        string $end_date = '',
-        int    $start_time = 0,
-        int    $end_time = 0
-    ): array
-    {
-        if (!in_array($level, self::ALL_LEVELS, true)) {
-            return ['error' => "Invalid level: {$level}"];
-        }
-
-        if (!in_array($mode, self::SEARCH_MODE, true)) {
-            return ['error' => "Invalid mode: {$mode}"];
-        }
-
-        $kw_list = [];
-        if ('' !== $keywords) {
-            foreach (explode(',', $keywords) as $kw) {
-                $kw = trim($kw);
-                if ('' !== $kw) {
-                    $kw_list[] = strtolower($kw);
-                }
-            }
-        }
-
-        if (empty($kw_list) && 0 === $start_time && 0 === $end_time) {
-            return ['error' => 'At least one of keywords or time range (start_time/end_time) must be provided'];
-        }
-
-        $levels_to_process = ('all' === $level) ? self::LEVELS : [$level];
-        $total_deleted     = 0;
-
-        foreach ($levels_to_process as $lv) {
-            if ('ram' === $lv) {
-                $total_deleted += $this->deleteRAM($kw_list, $mode, $start_time, $end_time);
-            } else {
-                $total_deleted += $this->deleteFromDB($lv, $kw_list, $mode, $start_date, $end_date, $start_time, $end_time);
-            }
-        }
-
-        return ['deleted' => $total_deleted];
-    }
 
     private function deleteRAM(array $kw_list, string $mode, int $start_time, int $end_time): int
     {

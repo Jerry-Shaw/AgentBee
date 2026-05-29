@@ -20,10 +20,100 @@
 
 namespace modules\agent_core\app;
 
+use modules\agent_openai\go;
 use Nervsys\Core\Factory;
 
 class message extends Factory
 {
+    /**
+     * @param string $socket_id
+     * @param array  $data_content
+     *
+     * @return array|string[]
+     * @throws \ReflectionException
+     */
+    public function process_setting(string $socket_id, array $data_content): array
+    {
+        switch ($data_content['act'] ?? 'unknown') {
+            case 'getConfig':
+                $current = config::new()->get();
+                $content = [
+                    'status' => 'success',
+                    'data'   => $current
+                ];
+
+                unset($current);
+                break;
+
+            case 'saveConfig':
+                $config_json = json_encode($data_content['data'], JSON_PRETTY);
+                $save_bytes  = config::new()->save($config_json);
+                $content     = [
+                    'status' => 'success',
+                    'data'   => 'Bytes written: ' . $save_bytes,
+                ];
+
+                unset($config_json, $save_bytes);
+                break;
+
+            case 'getDefaultConfig':
+                $defaults = config::new()->getDefault();
+                $content  = [
+                    'status' => 'success',
+                    'data'   => $defaults
+                ];
+
+                unset($defaults);
+                break;
+
+            default:
+                $content = [
+                    'status' => 'error',
+                    'error'  => 'Unsupported act: ' . $data_content['act']
+                ];
+                break;
+        }
+
+        $result = [
+            'agent_llm' => false,
+            'data'      => $content
+        ];
+
+        unset($socket_id, $data_content, $content);
+        return $result;
+    }
+
+    /**
+     * @param string $socket_id
+     * @param array  $data_content
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function process_system(string $socket_id, array $data_content): array
+    {
+        switch ($data_content['act'] ?? 'unknown') {
+            case 'getModels':
+                $content = go::new()->getModels();
+                break;
+
+            default:
+                $content = [
+                    'status' => 'error',
+                    'error'  => 'Unsupported act: ' . $data_content['act']
+                ];
+                break;
+        }
+
+        $result = [
+            'agent_llm' => false,
+            'data'      => $content
+        ];
+
+        unset($socket_id, $data_content, $content);
+        return $result;
+    }
+
     /**
      * Normal text chat
      *

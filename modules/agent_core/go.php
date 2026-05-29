@@ -321,15 +321,9 @@ class go extends Factory
                 continue;
             }
 
-            $this->socket_session[$socket_id] = [
-                'sessionId' => $data['sessionId'],
-                'messageId' => $data['messageId']
-            ];
-
             if ('stop' === $data['type']) {
-                $this->core->agent_llm->abort($socket_id);
-                $this->core->sendMessage($socket_id, json_encode(['type' => 'end'] + $this->socket_session[$socket_id]));
-                return;
+                $this->core->agent_llm->about($socket_id);
+                continue;
             }
 
             $type_method = 'process_' . $data['type'];
@@ -341,6 +335,12 @@ class go extends Factory
             $result = $this->message->$type_method($socket_id, $data['content']);
 
             if ($result['agent_llm']) {
+                // LLM action
+                $this->socket_session[$socket_id] = [
+                    'sessionId' => $data['sessionId'],
+                    'messageId' => $data['messageId']
+                ];
+
                 if (!$this->in_process) {
                     $llm_data = $result['content'];
 
@@ -361,6 +361,10 @@ class go extends Factory
                 } else {
                     $this->coming_messages = array_merge($this->coming_messages, $result['content']);
                 }
+            } else {
+                // Other actions
+                $this->core->sendMessage($socket_id, json_encode($result['data']));
+                return;
             }
 
             unset($data['content']);

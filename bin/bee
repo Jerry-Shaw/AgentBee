@@ -1,0 +1,4 @@
+#!/bin/bash
+php84 "$(dirname "$(dirname "$0")")/modules/agent_bee/go.php" agent_core/start
+echo "Press any key to continue..."
+read -n 1

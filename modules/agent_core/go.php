@@ -339,6 +339,8 @@ class go extends Factory
             $message = $this->message->process_binary($socket_id, $message);
         }
 
+        $end_data = [];
+        $llm_data = [];
         $messages = str_contains($message, "\n") ? explode("\n", $message) : [$message];
 
         foreach ($messages as $line) {
@@ -375,9 +377,6 @@ class go extends Factory
             }
 
             // LLM action
-            $end_data = [];
-            $llm_data = [];
-
             $this->socket_session[$socket_id] = [
                 'sessionId' => $data['sessionId'],
                 'messageId' => $data['messageId']

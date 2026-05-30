@@ -421,17 +421,20 @@ final class core extends Factory
         $prompts[] = '`CWD:' . getcwd() . '` | `入口:' . $this->app->script_path . '` | `根:' . $this->app->root_path . '` | `框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . '/modules/` | `日志:' . $this->app->log_path . '` | `工作区:' . $work_path . '` | `临时:' . sys_get_temp_dir() . '`';
 
         $prompts[] = '## 记忆(4层)';
-        $prompts[] = '- 重要内容主动高频存：每次交互后评估重要性，勿等提醒，宁多勿漏';
-        $prompts[] = '- ram:临时存，重启丢，存中间结果，每次工具调用后写，有价值转存 daily/important/system';
-        $prompts[] = '- daily:按日期存摘要/要点/结果，每次用户消息后立即存当天(仅存有价值)';
-        $prompts[] = '- important:按主题存身份/偏好/事实，重要立刻提炼，冲突先问';
-        $prompts[] = '- system:固定人设/规则/边界/偏好，主动从对话提取写入(勿提醒)';
-        $prompts[] = '**读**:仅新对话(≤2条)读daily；用户提时间/人/事时可读对应层；其他情况禁自动读。同层不重复。';
-        $prompts[] = '**铁律&冲突&优先级**:跨会话禁只存ram，必转存。新旧冲突先问；可删 daily/important/ram，删system需用户同意。优先级 system>important>daily>ram';
+        $prompts[] = '- 总则：宁多勿漏，关键信息不丢。';
+        $prompts[] = '- system[人设/规则/边界]：主动提取写入，勿提醒。';
+        $prompts[] = '- important[事实/偏好/身份]：关键点立即存，冲突先问。';
+        $prompts[] = '- daily[日期摘要/结果]：用户消息后有价值即时记当天，按日期归档。';
+        $prompts[] = '- misc[短期持久/临时]：存中间态/草稿，跨会话保留，有价值必升级至上三层。';
+        $prompts[] = '**读**：新对话(≤2条)读daily；提时间/人/事可读对应层；否则禁自动读。同层不重复。';
+        $prompts[] = '**优先级&铁律**：system>important>daily>misc。冲突先问，删system需同意。重要项禁久留misc→必转持久层。';
 
         $prompts[] = '## 上下文';
-        $prompts[] = '- 历史 >' . $max_limit . '条自动裁剪，**主动管理**。';
-        $prompts[] = '**【必须】** ①随时存重要信息(需求/回复/工具结果/决策)到持久记忆(daily/important/system)，临时存ram。②历史过多/连续工具>20次/感觉过长 → **先用记忆工具保存将被删的关键内容(旧结果/早期要点)**，再调清理工具。③清理工具只删旧工具对和普通消息，**不自动存**。建议保留 ≥2工具对+10条消息。';
+        $prompts[] = '- 主动管理，历史>' . $max_limit . '条自动裁剪；单次输出上限：' . $this->agent_config['agent_llm']['params']['max_tokens'] . ' token(超长需分段)。';
+        $prompts[] = '**【必须】**';
+        $prompts[] = '1.分级：[需求/决策/结果]→持久层(上三层)；[短期中间态]→misc(有价值必升级)';
+        $prompts[] = '2.强制备份：历史过长或连续工具过多→**先手动存关键内容，再调清理工具**。';
+        $prompts[] = '3.清理规范：仅删旧工具对/消息，**清理前须手动保存**(保留≥2工具对+10条)。';
 
         $prompts[] = '## 工具';
         $prompts[] = '- 优先专用工具，避免直接系统命令。执行PHP用exec，路径:`' . $php_path . '`';

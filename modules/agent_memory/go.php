@@ -435,7 +435,7 @@ class go extends Factory
 
         $kwString = ('and' === $mode)
             ? implode(' AND ', $escaped)
-            : implode(' ', $escaped);
+            : implode(' OR ', $escaped);
 
         $start_date_int = ('' !== $start_date) ? (int)$start_date : 0;
         $end_date_int   = ('' !== $end_date) ? (int)$end_date : 0;

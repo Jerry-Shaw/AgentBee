@@ -53,8 +53,8 @@ class procWorker extends Factory
     {
         $assistant_content = '';
         $reasons_content   = '';
+        $finish_reason     = '';
         $tool_calls        = [];
-        $run_tools         = false;
 
         // Sync session history from main process
         $this->core->session_history = $session_history;
@@ -67,16 +67,25 @@ class procWorker extends Factory
             $libOpenAI,
             $socket_id,
             $message_metadata,
-            &$reasons_content,
             &$assistant_content,
+            &$reasons_content,
+            &$finish_reason,
             &$tool_calls,
-            &$run_tools,
         ): void
         {
             try {
                 if (!$finished) {
-                    $this->sendStream($socket_id, $data, $message_metadata, $tool_calls, $assistant_content, $reasons_content);
+                    $this->sendStream(
+                        $socket_id,
+                        $data,
+                        $message_metadata,
+                        $tool_calls,
+                        $assistant_content,
+                        $reasons_content,
+                        $finish_reason
+                    );
                 } else {
+                    // User abort
                     if (isset($data['status']) && 'aborted' === $data['status']) {
                         $assistant_message = [
                             'role'              => 'assistant',
@@ -85,7 +94,23 @@ class procWorker extends Factory
                         ];
 
                         $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
-                        $run_tools = false;
+
+                        $tool_calls = [];
+                        return;
+                    }
+
+                    // Max token reached, content truncated
+                    if ('length' === $finish_reason) {
+                        $assistant_message = [
+                            'role'              => 'assistant',
+                            'content'           => '[截断] 忽略未完成内容',
+                            'reasoning_content' => ''
+                        ];
+
+                        $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
+                        $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, '[系统提示] 内容过长被截断。试试拆分问题，或设置更大的输出长度。');
+
+                        $tool_calls = [];
                         return;
                     }
 
@@ -96,8 +121,6 @@ class procWorker extends Factory
                     ];
 
                     if (!empty($tool_calls)) {
-                        $run_tools = true;
-
                         $assistant_message['tool_calls'] = array_map(
                             fn($tool) => [
                                 'id'       => $tool['id'],
@@ -156,7 +179,7 @@ class procWorker extends Factory
                     unset($assistant_message, $session_history, $tool_results, $current_history, $image_loader, $result, $tool_history);
                 }
             } catch (\Throwable $exception) {
-                $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, ['message' => $exception->getMessage()]);
+                $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $exception->getMessage());
                 unset($exception);
             }
 
@@ -166,11 +189,16 @@ class procWorker extends Factory
         try {
             $libOpenAI->completions($session_history, $this->core->agent_config['agent_llm']['model'], [], $stream_callback);
         } catch (\Throwable $exception) {
-            $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, ['message' => $exception->getMessage()]);
+            $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $exception->getMessage());
         }
 
         $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
-        $this->sendMsg($socket_id, 'end', $run_tools ? 'tools' : 'end', $message_metadata, ['tool_calls' => $run_tools]);
+
+        if (empty($tool_calls)) {
+            $this->sendMsg($socket_id, 'end', 'end', $message_metadata);
+        } else {
+            $this->sendMsg($socket_id, 'end', 'tools', $message_metadata);
+        }
 
         unset($socket_id, $message_metadata, $session_history, $libOpenAI);
     }
@@ -184,11 +212,25 @@ class procWorker extends Factory
      * @param array  $tool_calls_buffer
      * @param string $assistant_content
      * @param string $reasons_content
+     * @param string $finish_reason
      *
      * @return void
      */
-    private function sendStream(string $socket_id, array $data, array $message_metadata, array &$tool_calls_buffer, string &$assistant_content, string &$reasons_content): void
+    private function sendStream(
+        string $socket_id,
+        array  $data,
+        array  $message_metadata,
+        array  &$tool_calls_buffer,
+        string &$assistant_content,
+        string &$reasons_content,
+        string &$finish_reason
+    ): void
     {
+        // Update finish_reason
+        if (isset($data['choices'][0]['finish_reason']) && is_string($data['choices'][0]['finish_reason'])) {
+            $finish_reason = $data['choices'][0]['finish_reason'];
+        }
+
         $delta = $data['choices'][0]['delta'] ?? [];
 
         // Normal content

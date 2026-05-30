@@ -323,45 +323,43 @@ final class core extends Factory
     /**
      * Secure target path and prevent path traversal
      *
-     * @param string $path
+     * @param string $input_path
      *
      * @return string
      */
-    public function securePath(string $path): string
+    public function securePath(string $input_path): string
     {
         $in_sandbox = $this->agent_config['agent_tools']['in_sandbox'] ?? true;
+        $input_path = strtr($input_path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
+        $work_path  = rtrim($this->agent_config['agent_tools']['workspace_path'], '\\/');
+        $work_path  = strtr($work_path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
 
-        $path  = strtr($path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
-        $parts = explode(DIRECTORY_SEPARATOR, $path);
-
-        $parts = array_filter(
-            $parts,
-            function (string $segment) use ($in_sandbox): bool
-            {
-                $segment = trim($segment, '.');
-
-                if ('' === $segment) {
-                    return false;
-                }
-
-                if ($in_sandbox && str_contains($segment, ':')) {
-                    return false;
-                }
-
-                unset($segment);
-                return true;
+        if ($in_sandbox) {
+            if (str_starts_with($input_path, $work_path)) {
+                $input_path = substr($input_path, strlen($work_path) + 1);
             }
-        );
 
-        $parts = array_values($parts);
-        $path  = implode(DIRECTORY_SEPARATOR, $parts);
+            $safe_parts = [];
+            $path_parts = explode(DIRECTORY_SEPARATOR, $input_path);
 
-        if ($in_sandbox && !str_starts_with($path, $this->agent_config['agent_tools']['workspace_path'])) {
-            $path = rtrim($this->agent_config['agent_tools']['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . $path;
+            foreach ($path_parts as $segment) {
+                $segment = trim($segment, '. ');
+
+                if ('' === $segment || str_contains($segment, ':')) {
+                    continue;
+                }
+
+                $safe_parts[] = $segment;
+            }
+
+            $input_path = implode(DIRECTORY_SEPARATOR, $safe_parts);
+            $input_path = $work_path . DIRECTORY_SEPARATOR . $input_path;
+
+            unset($safe_parts, $path_parts, $segment);
         }
 
-        unset($in_sandbox, $parts);
-        return $path;
+        unset($in_sandbox, $work_path);
+        return $input_path;
     }
 
     /**

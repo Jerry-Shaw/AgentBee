@@ -30,15 +30,15 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'addTask',
-                'description' => '添加定时任务。参数:task_prompt(必填),run_at(Unix秒时间戳),repeat(默认false),repeat_interval(秒,repeat=true时>0)。返回{"bytes_written":1,"create_at":微秒时间戳}',
-                'parameters'  => ['type' => 'object', 'properties' => ['task_prompt' => ['type' => 'string'], 'run_at' => ['type' => 'integer', 'description' => '秒级Unix时间戳'], 'repeat' => ['type' => 'boolean', 'default' => false], 'repeat_interval' => ['type' => 'integer', 'default' => 0]], 'required' => ['task_prompt', 'run_at']],
+                'description' => '添加定时任务。参数:task_prompt,run_at(秒时间戳),repeat(默认false),repeat_interval(秒)。返回{"bytes_written":1,"create_at":微秒时间戳}',
+                'parameters'  => ['type' => 'object', 'properties' => ['task_prompt' => ['type' => 'string'], 'run_at' => ['type' => 'integer', 'description' => '秒时间戳'], 'repeat' => ['type' => 'boolean', 'default' => false], 'repeat_interval' => ['type' => 'integer', 'default' => 0]], 'required' => ['task_prompt', 'run_at']],
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'removeTask',
-                'description' => '删除任务。参数:create_at(微秒时间戳)。返回{"status":"success","message":str} 或 {"status":"error","error":str}',
+                'description' => '删除任务。参数:create_at(微秒时间戳)。返回{"status":"success","message":str}或{"status":"error","error":str}',
                 'parameters'  => ['type' => 'object', 'properties' => ['create_at' => ['type' => 'integer', 'description' => '微秒时间戳']], 'required' => ['create_at']],
             ],
         ],
@@ -46,14 +46,14 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'listTasks',
-                'description' => '列出所有任务。无参数。返回任务数组，包含:create_at(微秒),run_at(秒),repeat,interval,prompt,run_time,create_time(格式Y-m-d H:i:s)',
+                'description' => '列出所有任务。无参数。返回任务数组，含create_at(微秒),run_at(秒),repeat,interval,prompt,run_time,create_time(Y-m-d H:i:s)',
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'runTask',
-                'description' => '触发到期任务。无参数。返回prompt数组:["prompt1","prompt2"]',
+                'description' => '触发到期任务。无参数。返回prompt数组["prompt1","prompt2"]',
             ],
         ],
         [
@@ -68,7 +68,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'read',
-                'description' => '读取记忆。参数:level(含all),offset(0),length(100,0=全部),date(仅daily/misc,YYYYMMDD)。返回{"messages":[{"role","content","create_at":微秒,"create_time":"Y-m-d H:i:s"}],"total":N}',
+                'description' => '读取记忆。参数:level(含all),offset(0),length(默认100,0=全部),date(仅daily/misc,YYYYMMDD)。返回{"messages":[{"role","content","create_at":微秒,"create_time":"Y-m-d H:i:s"}],"total":N}',
                 'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all']], 'offset' => ['type' => 'integer', 'default' => 0], 'length' => ['type' => 'integer', 'default' => 100], 'date' => ['type' => 'string', 'pattern' => '^\d{8}$']], 'required' => ['level']],
             ],
         ],
@@ -84,7 +84,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'delete',
-                'description' => '删除记忆。参数:level(必填),keywords(逗号分隔),mode(or|and),start_date/end_date(YYYYMMDD),start_time/end_time(秒时间戳)。至少一组条件。返回{"deleted":N}',
+                'description' => '删除记忆。参数:level,keywords(逗号分隔),mode(or|and),start_date/end_date(YYYYMMDD),start_time/end_time(秒时间戳)。至少一组条件。返回{"deleted":N}',
                 'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all']], 'keywords' => ['type' => 'string', 'default' => ''], 'mode' => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'], 'start_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'end_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'start_time' => ['type' => 'integer', 'default' => 0], 'end_time' => ['type' => 'integer', 'default' => 0]], 'required' => ['level']],
             ],
         ],

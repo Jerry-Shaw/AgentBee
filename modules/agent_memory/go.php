@@ -244,12 +244,18 @@ class go extends Factory
             $query->where(['date_key', '=', $date_int]);
         }
 
-        $query->order(['create_at' => 'ASC'])->limit($offset, $length);
+        $query->order(['create_at' => 'ASC']);
+
+        if (0 < $length) {
+            $query->limit($offset, $length);
+        }
+
         $data = $query->fetchAll();
 
         foreach ($data as &$item) {
             $item['create_time'] = $this->formatMicroTime($item['create_at']);
         }
+
         unset($item);
 
         $result = ['messages' => $data, 'total' => $query->getLastFoundRows()];

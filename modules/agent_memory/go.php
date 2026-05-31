@@ -79,11 +79,11 @@ class go extends Factory
         )';
 
     private const DDL_FTS_TRIGGERS = [
-        'CREATE TRIGGER IF NOT EXISTS mem_ai AFTER INSERT ON agent_memory BEGIN
+        'CREATE TRIGGER IF NOT EXISTS memory_insert AFTER INSERT ON agent_memory BEGIN
             INSERT INTO agent_memory_fts(rowid, content, level, role) VALUES (new.create_at, new.content, new.level, new.role); END',
-        'CREATE TRIGGER IF NOT EXISTS mem_ad AFTER DELETE ON agent_memory BEGIN
+        'CREATE TRIGGER IF NOT EXISTS memory_delete AFTER DELETE ON agent_memory BEGIN
             INSERT INTO agent_memory_fts(agent_memory_fts, rowid, content, level, role) VALUES (\'delete\', old.create_at, old.content, old.level, old.role); END',
-        'CREATE TRIGGER IF NOT EXISTS mem_au AFTER UPDATE ON agent_memory BEGIN
+        'CREATE TRIGGER IF NOT EXISTS memory_update AFTER UPDATE ON agent_memory BEGIN
             INSERT INTO agent_memory_fts(agent_memory_fts, rowid, content, level, role) VALUES (\'delete\', old.create_at, old.content, old.level, old.role);
             INSERT INTO agent_memory_fts(rowid, content, level, role) VALUES (new.create_at, new.content, new.level, new.role); END'
     ];
@@ -123,25 +123,26 @@ class go extends Factory
 
     private function setupSchema(): void
     {
-        $this->libSQLite->exec('DROP TABLE IF EXISTS agent_memory');
+        // Create memory table if not exists
         $this->libSQLite->exec(self::DDL_MEMORY);
 
-        $this->libSQLite->exec('DROP TABLE IF EXISTS agent_task');
+        // Create task table if not exists
         $this->libSQLite->exec(self::DDL_TASK);
 
+        // Create indexes if not exists
         foreach (self::DDL_INDEXES as $sql) {
             $this->libSQLite->exec($sql);
         }
-        unset($sql);
 
+        // Create FTS5 virtual table and triggers if not exists (if FTS is available)
         try {
-            $this->libSQLite->exec('DROP TABLE IF EXISTS agent_memory_fts');
             $this->libSQLite->exec(self::DDL_FTS);
+
             foreach (self::DDL_FTS_TRIGGERS as $trigger) {
                 $this->libSQLite->exec($trigger);
             }
+
             $this->fts_enabled = true;
-            unset($trigger);
         } catch (\Throwable) {
             $this->fts_enabled = false;
         }
@@ -186,6 +187,10 @@ class go extends Factory
 
     public function save(string $level, string $role, string $content): array
     {
+        if ('' === trim($content)) {
+            return ['error' => 'Empty content'];
+        }
+
         if (!in_array($level, self::LEVELS)) {
             return ['error' => 'Invalid level: ' . $level];
         }
@@ -218,6 +223,9 @@ class go extends Factory
         return $result;
     }
 
+    /**
+     * @throws \ReflectionException
+     */
     public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
@@ -228,7 +236,7 @@ class go extends Factory
 
         $this->purgeExpired();
 
-        $query = $this->libSQLite->table('agent_memory')->select('role, content, create_at');
+        $query = $this->libSQLite->table('agent_memory')->select('role', 'content', 'create_at');
         if ('all' !== $level) {
             $query->where(['level', '=', $level]);
         }
@@ -244,11 +252,14 @@ class go extends Factory
         }
         unset($item);
 
-        $result = ['messages' => $data, 'total' => count($data)];
+        $result = ['messages' => $data, 'total' => $query->getLastFoundRows()];
         unset($query, $date_int, $data);
         return $result;
     }
 
+    /**
+     * @throws \ReflectionException
+     */
     public function search(string $level, array $keywords, string $mode = 'or', int $offset = 0, int $length = 100, string $start_date = '', string $end_date = ''): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
@@ -365,7 +376,13 @@ class go extends Factory
     {
         $this->libSQLite->table('agent_task')->where(['create_at', '=', $create_at])->delete()->execute();
         $affected = $this->libSQLite->getAffectedRows();
-        $result   = ['success' => (0 < $affected), 'message' => (0 < $affected) ? 'Task removed.' : 'Task not found.'];
+
+        if (0 < $affected) {
+            $result = ['status' => 'success', 'message' => $affected . ' task(s) were removed.'];
+        } else {
+            $result = ['status' => 'error', 'error' => 'Task not found.'];
+        }
+
         unset($affected);
         return $result;
     }
@@ -383,13 +400,42 @@ class go extends Factory
 
     public function runTask(): array
     {
-        $now   = time();
+        $now = time();
+
+        // Fetch due tasks
         $tasks = $this->libSQLite->table('agent_task')
-            ->select('prompt')
+            ->select('create_at', 'prompt', 'run_at', 'repeat', 'interval')
             ->where(['run_at', '<=', $now])
-            ->fetchAll(\PDO::FETCH_COLUMN);
-        unset($now);
-        return $tasks;
+            ->fetchAll();
+
+        $result = [];
+
+        foreach ($tasks as $task) {
+            $result[] = $task['prompt'];
+
+            if ($task['repeat']) {
+                // Recurring task: calculate next run time
+                $next_run = $task['run_at'] + $task['interval'];
+
+                // Avoid infinite backlog: if next_run still <= now, jump to now + interval
+                if ($next_run <= $now) {
+                    $next_run = $now + $task['interval'];
+                }
+
+                $this->libSQLite->table('agent_task')
+                    ->where(['create_at', '=', $task['create_at']])
+                    ->update(['run_at' => $next_run])
+                    ->execute();
+            } else {
+                // One-time task: delete it
+                $this->libSQLite->table('agent_task')
+                    ->where(['create_at', '=', $task['create_at']])
+                    ->delete()
+                    ->execute();
+            }
+        }
+
+        return $result;
     }
 
     // =========================================================================
@@ -398,19 +444,22 @@ class go extends Factory
 
     private function applyKeywordFilter($query, string $keywords, string $mode): void
     {
-        $kwArray = explode(',', $keywords);
-        if (empty($kwArray)) {
-            unset($kwArray);
+        $keywords  = trim($keywords);
+        $word_list = str_contains($keywords, ',') ? explode(',', $keywords) : [$keywords];
+        $word_list = array_filter($word_list);
+
+        if (empty($word_list)) {
+            unset($query, $keywords, $mode, $word_list);
             return;
         }
 
         if ('and' === $mode) {
-            foreach ($kwArray as $kw) {
+            foreach ($word_list as $kw) {
                 $query->where(['content', 'LIKE', '%' . $kw . '%']);
             }
         } else {
             $conditions = [];
-            foreach ($kwArray as $idx => $kw) {
+            foreach ($word_list as $idx => $kw) {
                 if (0 === $idx) {
                     $conditions[] = ['content', 'LIKE', '%' . $kw . '%'];
                 } else {
@@ -420,7 +469,7 @@ class go extends Factory
             $query->where(...$conditions);
             unset($conditions);
         }
-        unset($kwArray, $kw, $idx);
+        unset($word_list, $kw, $idx);
     }
 
     private function searchViaFts(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
@@ -440,47 +489,68 @@ class go extends Factory
         $start_date_int = ('' !== $start_date) ? (int)$start_date : 0;
         $end_date_int   = ('' !== $end_date) ? (int)$end_date : 0;
 
-        $sql = 'SELECT m.role, m.content, m.create_at
-                FROM agent_memory m
-                JOIN agent_memory_fts f ON m.create_at = f.rowid
-                WHERE agent_memory_fts MATCH ?';
-
+        // Build WHERE clause (shared between COUNT and SELECT)
+        $where  = 'WHERE agent_memory_fts MATCH ?';
         $params = [$kwString];
 
         if ('all' !== $level) {
-            $sql      .= ' AND m.level = ?';
+            $where    .= ' AND agent_memory.level = ?';
             $params[] = $level;
         }
         if (0 !== $start_date_int && 0 !== $end_date_int) {
-            $sql      .= ' AND m.date_key BETWEEN ? AND ?';
+            $where    .= ' AND agent_memory.date_key BETWEEN ? AND ?';
             $params[] = $start_date_int;
             $params[] = $end_date_int;
         } elseif (0 !== $start_date_int) {
-            $sql      .= ' AND m.date_key >= ?';
+            $where    .= ' AND agent_memory.date_key >= ?';
             $params[] = $start_date_int;
         } elseif (0 !== $end_date_int) {
-            $sql      .= ' AND m.date_key <= ?';
+            $where    .= ' AND agent_memory.date_key <= ?';
             $params[] = $end_date_int;
         }
 
-        $offset   = max(0, $offset);
-        $length   = max(0, $length);
-        $sql      .= ' ORDER BY m.create_at ASC LIMIT ? OFFSET ?';
-        $params[] = $length;
-        $params[] = $offset;
+        // 1. Get total count
+        $countSql = "SELECT COUNT(*) AS total
+                 FROM agent_memory 
+                 JOIN agent_memory_fts ON agent_memory.create_at = agent_memory_fts.rowid
+                 $where";
+        $stmt     = $this->libSQLite->pdo->prepare($countSql);
+        $stmt->execute($params);
+        $total = (int)($stmt->fetch(\PDO::FETCH_ASSOC)['total'] ?? 0);
+
+        // 2. Get paginated results
+        $offset = max(0, $offset);
+        $length = max(0, $length);
+
+        // Build SELECT query with proper LIMIT/OFFSET (handle length=0 as "no limit")
+        $sql = "SELECT agent_memory.role, agent_memory.content, agent_memory.create_at
+            FROM agent_memory 
+            JOIN agent_memory_fts ON agent_memory.create_at = agent_memory_fts.rowid
+            $where
+            ORDER BY agent_memory.create_at ASC";
+
+        if (0 === $length) {
+            $sql      .= " LIMIT -1 OFFSET ?";
+            $params[] = $offset;
+        } else {
+            $sql      .= " LIMIT ? OFFSET ?";
+            $params[] = $length;
+            $params[] = $offset;
+        }
 
         $stmt = $this->libSQLite->pdo->prepare($sql);
         $stmt->execute($params);
         $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-        $result = ['messages' => $results, 'total' => count($results)];
-        unset($escaped, $kwString, $sql, $params, $stmt, $results, $offset, $length, $start_date_int, $end_date_int);
-        return $result;
+        return ['messages' => $results, 'total' => $total];
     }
 
+    /**
+     * @throws \ReflectionException
+     */
     private function searchViaLike(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
     {
-        $query = $this->libSQLite->table('agent_memory')->select('role, content, create_at');
+        $query = $this->libSQLite->table('agent_memory')->select('role', 'content', 'create_at');
         if ('all' !== $level) {
             $query->where(['level', '=', $level]);
         }
@@ -517,7 +587,7 @@ class go extends Factory
 
         $query->order(['create_at' => 'ASC'])->limit($offset, $length);
         $data   = $query->fetchAll();
-        $result = ['messages' => $data, 'total' => count($data)];
+        $result = ['messages' => $data, 'total' => $query->getLastFoundRows()];
         unset($query, $data, $keywords, $mode, $offset, $length, $start_date_int, $end_date_int);
         return $result;
     }

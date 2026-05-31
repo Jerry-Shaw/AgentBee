@@ -38,7 +38,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'removeTask',
-                'description' => '删除任务。参数:create_at(微秒时间戳)。返回{"success":bool,"message":str}',
+                'description' => '删除任务。参数:create_at(微秒时间戳)。返回{"status":"success","message":str} 或 {"status":"error","error":str}',
                 'parameters'  => ['type' => 'object', 'properties' => ['create_at' => ['type' => 'integer', 'description' => '微秒时间戳']], 'required' => ['create_at']],
             ],
         ],
@@ -76,7 +76,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '搜索记忆。参数:level(含all),keywords(数组),mode(or|and),offset,length,start_date,end_date(YYYYMMDD)。返回同read()',
+                'description' => '搜索记忆。参数:level(含all),keywords(数组),mode(or|and),offset,length,start_date,end_date(YYYYMMDD,对所有层级生效)。返回同read()',
                 'parameters'  => ['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all']], 'keywords' => ['type' => 'array', 'items' => ['type' => 'string']], 'mode' => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or'], 'offset' => ['type' => 'integer', 'default' => 0], 'length' => ['type' => 'integer', 'default' => 100], 'start_date' => ['type' => 'string', 'pattern' => '^\d{8}$'], 'end_date' => ['type' => 'string', 'pattern' => '^\d{8}$']], 'required' => ['level', 'keywords']],
             ],
         ],

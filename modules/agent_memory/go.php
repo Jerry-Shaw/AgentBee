@@ -44,7 +44,7 @@ class go extends Factory
 
     private const DDL_MEMORY = '
         CREATE TABLE IF NOT EXISTS agent_memory (
-            create_at INTEGER PRIMARY KEY,
+            create_id INTEGER PRIMARY KEY,
             expire_at INTEGER DEFAULT 0,
             date_key  INTEGER NOT NULL,
             level     TEXT NOT NULL,
@@ -54,7 +54,7 @@ class go extends Factory
 
     private const DDL_TASK = '
         CREATE TABLE IF NOT EXISTS agent_task (
-            create_at INTEGER PRIMARY KEY,
+            create_id INTEGER PRIMARY KEY,
             run_at    INTEGER NOT NULL,
             repeat    INTEGER DEFAULT 0,
             interval  INTEGER DEFAULT 0,
@@ -75,19 +75,22 @@ class go extends Factory
             level,
             role,
             content=\'agent_memory\',
-            content_rowid=\'create_at\'
+            content_rowid=\'create_id\'
         )';
 
     private const DDL_FTS_TRIGGERS = [
         'CREATE TRIGGER IF NOT EXISTS memory_insert AFTER INSERT ON agent_memory BEGIN
-            INSERT INTO agent_memory_fts(rowid, content, level, role) VALUES (new.create_at, new.content, new.level, new.role); END',
+            INSERT INTO agent_memory_fts(rowid, content, level, role) VALUES (new.create_id, new.content, new.level, new.role); END',
         'CREATE TRIGGER IF NOT EXISTS memory_delete AFTER DELETE ON agent_memory BEGIN
-            INSERT INTO agent_memory_fts(agent_memory_fts, rowid, content, level, role) VALUES (\'delete\', old.create_at, old.content, old.level, old.role); END',
+            INSERT INTO agent_memory_fts(agent_memory_fts, rowid, content, level, role) VALUES (\'delete\', old.create_id, old.content, old.level, old.role); END',
         'CREATE TRIGGER IF NOT EXISTS memory_update AFTER UPDATE ON agent_memory BEGIN
-            INSERT INTO agent_memory_fts(agent_memory_fts, rowid, content, level, role) VALUES (\'delete\', old.create_at, old.content, old.level, old.role);
-            INSERT INTO agent_memory_fts(rowid, content, level, role) VALUES (new.create_at, new.content, new.level, new.role); END'
+            INSERT INTO agent_memory_fts(agent_memory_fts, rowid, content, level, role) VALUES (\'delete\', old.create_id, old.content, old.level, old.role);
+            INSERT INTO agent_memory_fts(rowid, content, level, role) VALUES (new.create_id, new.content, new.level, new.role); END'
     ];
 
+    /**
+     * @throws \ReflectionException
+     */
     public function __construct()
     {
         $this->core = core::new();
@@ -101,6 +104,10 @@ class go extends Factory
         $this->initDatabase();
     }
 
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
     private function initDatabase(): void
     {
         $db_file      = $this->db_path . 'agent_memory.db';
@@ -121,6 +128,10 @@ class go extends Factory
         unset($db_file);
     }
 
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
     private function setupSchema(): void
     {
         // Create memory table if not exists
@@ -148,6 +159,10 @@ class go extends Factory
         }
     }
 
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
     private function purgeExpired(): void
     {
         $this->libSQLite->table('agent_memory')
@@ -156,26 +171,37 @@ class go extends Factory
             ->execute();
     }
 
+    /**
+     * @param string $table
+     *
+     * @return int
+     * @throws \ReflectionException
+     */
     private function generateMicroTimestamp(string $table): int
     {
         $ts = (int)(microtime(true) * 1000000);
 
         $exists = $this->libSQLite->table($table)
-            ->select('create_at')
-            ->where(['create_at', '=', $ts])
+            ->select('create_id')
+            ->where(['create_id', '=', $ts])
             ->fetch();
 
         while (!empty($exists)) {
             ++$ts;
             $exists = $this->libSQLite->table($table)
-                ->select('create_at')
-                ->where(['create_at', '=', $ts])
+                ->select('create_id')
+                ->where(['create_id', '=', $ts])
                 ->fetch();
         }
 
         return $ts;
     }
 
+    /**
+     * @param int $micro
+     *
+     * @return string
+     */
     private function formatMicroTime(int $micro): string
     {
         return date('Y-m-d H:i:s', (int)($micro / 1000000));
@@ -185,32 +211,39 @@ class go extends Factory
     //  Memory CRUD
     // =========================================================================
 
+    /**
+     * @param string $level
+     * @param string $role
+     * @param string $content
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
     public function save(string $level, string $role, string $content): array
     {
         if ('' === trim($content)) {
-            return ['error' => 'Empty content'];
+            return ['status' => 'error', 'error' => 'Empty content'];
         }
 
         if (!in_array($level, self::LEVELS)) {
-            return ['error' => 'Invalid level: ' . $level];
+            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
         }
 
         if ('system' === $level) {
             $role = 'system';
-        } elseif ('important' === $level) {
-            $role = 'user';
-        }
-        if (!in_array($role, self::ROLES)) {
-            return ['error' => 'Invalid role: ' . $role];
         }
 
-        $create_at = $this->generateMicroTimestamp('agent_memory');
+        if (!in_array($role, self::ROLES)) {
+            return ['status' => 'error', 'error' => 'Invalid role: ' . $role];
+        }
+
+        $create_id = $this->generateMicroTimestamp('agent_memory');
         $now_sec   = time();
         $expire_at = ('misc' === $level) ? ($now_sec + self::MISC_TTL_SEC) : 0;
         $date_key  = (int)date('Ymd');
 
         $this->libSQLite->table('agent_memory')->insert([
-            'create_at' => $create_at,
+            'create_id' => $create_id,
             'expire_at' => $expire_at,
             'date_key'  => $date_key,
             'level'     => $level,
@@ -218,25 +251,74 @@ class go extends Factory
             'content'   => $content
         ])->execute();
 
-        $result = ['saved' => true, 'create_at' => $create_at, 'role' => $role];
-        unset($create_at, $now_sec, $expire_at, $date_key);
+        $result = ['status' => 'success', 'create_id' => $create_id];
+
+        unset($level, $role, $content, $create_id, $now_sec, $expire_at, $date_key);
         return $result;
     }
 
     /**
+     * @param int    $create_id
+     * @param string $role
+     * @param string $content
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function update(int $create_id, string $role, string $content): array
+    {
+        if ('' === trim($content)) {
+            return ['status' => 'error', 'error' => 'Empty content'];
+        }
+
+        if (!in_array($role, self::ROLES)) {
+            return ['status' => 'error', 'error' => 'Invalid role: ' . $role];
+        }
+
+        $record = $this->libSQLite->table('agent_memory')
+            ->select('level')
+            ->where(['create_id', '=', $create_id])
+            ->fetch();
+
+        if (empty($record)) {
+            return ['status' => 'error', 'error' => 'Record not found: ' . $create_id];
+        }
+
+        $level = $record['level'];
+
+        if ('system' === $level) {
+            $role = 'system';
+        }
+
+        $this->libSQLite->table('agent_memory')
+            ->where(['create_id', '=', $create_id])
+            ->update(['role' => $role, 'content' => $content])
+            ->execute();
+
+        unset($create_id, $role, $content, $record, $level);
+        return ['status' => 'success', 'affected_rows' => $this->libSQLite->getAffectedRows()];
+    }
+
+    /**
+     * @param string $level
+     * @param int    $offset
+     * @param int    $length
+     * @param string $date
+     *
+     * @return array
      * @throws \ReflectionException
      */
     public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
-            return ['error' => 'Invalid level: ' . $level];
+            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
         }
 
         $date_int = ('' === $date) ? (int)date('Ymd') : (int)$date;
 
         $this->purgeExpired();
 
-        $query = $this->libSQLite->table('agent_memory')->select('role', 'content', 'create_at');
+        $query = $this->libSQLite->table('agent_memory')->select('role', 'content', 'create_id');
         if ('all' !== $level) {
             $query->where(['level', '=', $level]);
         }
@@ -244,7 +326,7 @@ class go extends Factory
             $query->where(['date_key', '=', $date_int]);
         }
 
-        $query->order(['create_at' => 'ASC']);
+        $query->order(['create_id' => 'ASC']);
 
         if (0 < $length) {
             $query->limit($offset, $length);
@@ -253,26 +335,34 @@ class go extends Factory
         $data = $query->fetchAll();
 
         foreach ($data as &$item) {
-            $item['create_time'] = $this->formatMicroTime($item['create_at']);
+            $item['create_time'] = $this->formatMicroTime($item['create_id']);
         }
 
-        unset($item);
+        $result = ['status' => 'success', 'data' => $data, 'total' => $query->getLastFoundRows()];
 
-        $result = ['messages' => $data, 'total' => $query->getLastFoundRows()];
-        unset($query, $date_int, $data);
+        unset($query, $date_int, $data, $item);
         return $result;
     }
 
     /**
+     * @param string $level
+     * @param array  $keywords
+     * @param string $mode
+     * @param int    $offset
+     * @param int    $length
+     * @param string $start_date
+     * @param string $end_date
+     *
+     * @return array
      * @throws \ReflectionException
      */
     public function search(string $level, array $keywords, string $mode = 'or', int $offset = 0, int $length = 100, string $start_date = '', string $end_date = ''): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
-            return ['error' => 'Invalid level: ' . $level];
+            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
         }
         if (empty($keywords)) {
-            return ['messages' => [], 'total' => 0];
+            return ['status' => 'success', 'data' => [], 'total' => 0];
         }
 
         $this->purgeExpired();
@@ -283,23 +373,37 @@ class go extends Factory
             $result = $this->searchViaLike($level, $keywords, $mode, $offset, $length, $start_date, $end_date);
         }
 
-        if (isset($result['messages'])) {
-            foreach ($result['messages'] as &$msg) {
-                if (isset($msg['create_at'])) {
-                    $msg['create_time'] = $this->formatMicroTime($msg['create_at']);
+        if (isset($result['data'])) {
+            foreach ($result['data'] as &$msg) {
+                if (isset($msg['create_id'])) {
+                    $msg['create_time'] = $this->formatMicroTime($msg['create_id']);
                 }
             }
             unset($msg);
         }
 
+        $result['status'] = 'success';
+
         unset($keywords, $mode, $offset, $length, $start_date, $end_date);
         return $result;
     }
 
+    /**
+     * @param string $level
+     * @param string $keywords
+     * @param string $mode
+     * @param string $start_date
+     * @param string $end_date
+     * @param int    $start_time
+     * @param int    $end_time
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
     public function delete(string $level, string $keywords = '', string $mode = 'or', string $start_date = '', string $end_date = '', int $start_time = 0, int $end_time = 0): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
-            return ['error' => 'Invalid level: ' . $level];
+            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
         }
 
         $query = $this->libSQLite->table('agent_memory');
@@ -329,22 +433,24 @@ class go extends Factory
 
         if (0 < $start_time || 0 < $end_time) {
             if (0 < $start_time) {
-                $query->where(['create_at', '>=', $start_time * 1000000]);
+                $query->where(['create_id', '>=', $start_time * 1000000]);
             }
             if (0 < $end_time) {
-                $query->where(['create_at', '<=', $end_time * 1000000]);
+                $query->where(['create_id', '<=', $end_time * 1000000]);
             }
             $hasCondition = true;
         }
 
         if (!$hasCondition) {
             unset($query, $hasCondition, $keywords, $mode, $start_date, $end_date, $start_time, $end_time, $start_date_int, $end_date_int);
-            return ['error' => 'No deletion criteria provided.'];
+            return ['status' => 'error', 'error' => 'No deletion criteria provided.'];
         }
 
         $query->delete()->execute();
+
         $affected = $this->libSQLite->getAffectedRows();
-        $result   = ['deleted' => $affected];
+        $result   = ['status' => 'success', 'deleted' => $affected];
+
         unset($query, $hasCondition, $affected, $keywords, $mode, $start_date, $end_date, $start_time, $end_time, $start_date_int, $end_date_int);
         return $result;
     }
@@ -353,6 +459,15 @@ class go extends Factory
     //  Task Management
     // =========================================================================
 
+    /**
+     * @param string $task_prompt
+     * @param int    $run_at
+     * @param bool   $repeat
+     * @param int    $repeat_interval
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
     public function addTask(string $task_prompt, int $run_at, bool $repeat = false, int $repeat_interval = 0): array
     {
         $now = time();
@@ -361,26 +476,33 @@ class go extends Factory
         }
         if ($repeat && 0 >= $repeat_interval) {
             unset($now);
-            return ['error' => 'repeat_interval must be positive when repeat is enabled'];
+            return ['status' => 'error', 'error' => 'repeat_interval must be positive when repeat is enabled'];
         }
 
-        $create_at = $this->generateMicroTimestamp('agent_task');
+        $create_id = $this->generateMicroTimestamp('agent_task');
         $this->libSQLite->table('agent_task')->replace([
-            'create_at' => $create_at,
+            'create_id' => $create_id,
             'run_at'    => $run_at,
             'repeat'    => (int)$repeat,
             'interval'  => $repeat_interval,
             'prompt'    => $task_prompt
         ])->execute();
 
-        $result = ['bytes_written' => 1, 'create_at' => $create_at];
-        unset($now, $create_at, $run_at, $repeat, $repeat_interval);
+        $result = ['status' => 'success', 'create_id' => $create_id];
+
+        unset($now, $create_id, $run_at, $repeat, $repeat_interval);
         return $result;
     }
 
-    public function removeTask(int $create_at): array
+    /**
+     * @param int $create_id
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function removeTask(int $create_id): array
     {
-        $this->libSQLite->table('agent_task')->where(['create_at', '=', $create_at])->delete()->execute();
+        $this->libSQLite->table('agent_task')->where(['create_id', '=', $create_id])->delete()->execute();
         $affected = $this->libSQLite->getAffectedRows();
 
         if (0 < $affected) {
@@ -393,24 +515,34 @@ class go extends Factory
         return $result;
     }
 
+    /**
+     * @return array
+     * @throws \ReflectionException
+     */
     public function listTasks(): array
     {
         $tasks = $this->libSQLite->table('agent_task')->select('*')->order(['run_at' => 'ASC'])->fetchAll();
+
         foreach ($tasks as &$task) {
             $task['run_time']    = date('Y-m-d H:i:s', $task['run_at']);
-            $task['create_time'] = date('Y-m-d H:i:s', (int)($task['create_at'] / 1000000));
+            $task['create_time'] = date('Y-m-d H:i:s', (int)($task['create_id'] / 1000000));
         }
+
         unset($task);
-        return $tasks;
+        return ['status' => 'success', 'tasks' => $tasks];
     }
 
+    /**
+     * @return array
+     * @throws \ReflectionException
+     */
     public function runTask(): array
     {
         $now = time();
 
         // Fetch due tasks
         $tasks = $this->libSQLite->table('agent_task')
-            ->select('create_at', 'prompt', 'run_at', 'repeat', 'interval')
+            ->select('create_id', 'prompt', 'run_at', 'repeat', 'interval')
             ->where(['run_at', '<=', $now])
             ->fetchAll();
 
@@ -429,18 +561,19 @@ class go extends Factory
                 }
 
                 $this->libSQLite->table('agent_task')
-                    ->where(['create_at', '=', $task['create_at']])
+                    ->where(['create_id', '=', $task['create_id']])
                     ->update(['run_at' => $next_run])
                     ->execute();
             } else {
                 // One-time task: delete it
                 $this->libSQLite->table('agent_task')
-                    ->where(['create_at', '=', $task['create_at']])
+                    ->where(['create_id', '=', $task['create_id']])
                     ->delete()
                     ->execute();
             }
         }
 
+        unset($now, $tasks, $task, $next_run);
         return $result;
     }
 
@@ -448,6 +581,13 @@ class go extends Factory
     //  Internal Helpers
     // =========================================================================
 
+    /**
+     * @param        $query
+     * @param string $keywords
+     * @param string $mode
+     *
+     * @return void
+     */
     private function applyKeywordFilter($query, string $keywords, string $mode): void
     {
         $keywords  = trim($keywords);
@@ -478,6 +618,17 @@ class go extends Factory
         unset($word_list, $kw, $idx);
     }
 
+    /**
+     * @param string $level
+     * @param array  $keywords
+     * @param string $mode
+     * @param int    $offset
+     * @param int    $length
+     * @param string $start_date
+     * @param string $end_date
+     *
+     * @return array
+     */
     private function searchViaFts(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
     {
         $escaped = array_map(
@@ -518,7 +669,7 @@ class go extends Factory
         // 1. Get total count
         $countSql = "SELECT COUNT(*) AS total
                  FROM agent_memory 
-                 JOIN agent_memory_fts ON agent_memory.create_at = agent_memory_fts.rowid
+                 JOIN agent_memory_fts ON agent_memory.create_id = agent_memory_fts.rowid
                  $where";
         $stmt     = $this->libSQLite->pdo->prepare($countSql);
         $stmt->execute($params);
@@ -529,11 +680,11 @@ class go extends Factory
         $length = max(0, $length);
 
         // Build SELECT query with proper LIMIT/OFFSET (handle length=0 as "no limit")
-        $sql = "SELECT agent_memory.role, agent_memory.content, agent_memory.create_at
+        $sql = "SELECT agent_memory.role, agent_memory.content, agent_memory.create_id
             FROM agent_memory 
-            JOIN agent_memory_fts ON agent_memory.create_at = agent_memory_fts.rowid
+            JOIN agent_memory_fts ON agent_memory.create_id = agent_memory_fts.rowid
             $where
-            ORDER BY agent_memory.create_at ASC";
+            ORDER BY agent_memory.create_id ASC";
 
         if (0 === $length) {
             $sql      .= " LIMIT -1 OFFSET ?";
@@ -548,15 +699,24 @@ class go extends Factory
         $stmt->execute($params);
         $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-        return ['messages' => $results, 'total' => $total];
+        return ['data' => $results, 'total' => $total];
     }
 
     /**
+     * @param string $level
+     * @param array  $keywords
+     * @param string $mode
+     * @param int    $offset
+     * @param int    $length
+     * @param string $start_date
+     * @param string $end_date
+     *
+     * @return array
      * @throws \ReflectionException
      */
     private function searchViaLike(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
     {
-        $query = $this->libSQLite->table('agent_memory')->select('role', 'content', 'create_at');
+        $query = $this->libSQLite->table('agent_memory')->select('role', 'content', 'create_id');
         if ('all' !== $level) {
             $query->where(['level', '=', $level]);
         }
@@ -591,9 +751,11 @@ class go extends Factory
             }
         }
 
-        $query->order(['create_at' => 'ASC'])->limit($offset, $length);
+        $query->order(['create_id' => 'ASC'])->limit($offset, $length);
+
         $data   = $query->fetchAll();
-        $result = ['messages' => $data, 'total' => $query->getLastFoundRows()];
+        $result = ['data' => $data, 'total' => $query->getLastFoundRows()];
+
         unset($query, $data, $keywords, $mode, $offset, $length, $start_date_int, $end_date_int);
         return $result;
     }

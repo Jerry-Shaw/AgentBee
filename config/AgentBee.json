@@ -7,7 +7,7 @@
   "agent_llm": {
     "api_url": "http://127.0.0.1:1234/v1",
     "api_key": "sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS",
-    "model": "gemma-4-26b-a4b-it-apex",
+    "model": "qwen3.6-35b-a3b-apex",
     "org_id": "",
     "provider": "agent_openai",
     "worker_name": "procWorker",
@@ -15,17 +15,18 @@
     "keep_reasons": true,
     "params": {
       "max_tokens": 16384,
-      "temperature": 0.8,
-      "min_p": 0.05,
-      "top_p": 0.9,
+      "temperature": 0.7,
+      "min_p": 0,
+      "top_p": 0.8,
+      "top_k": 20,
       "frequency_penalty": 0,
-      "presence_penalty": 0.5,
+      "presence_penalty": 1.5,
       "stop": [],
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
       "extra_body": {
-        "thinking": false,
-        "chat_template_kwargs": {
-          "enable_thinking": false
-        }
+        "enable_thinking": false
       },
       "thinking": {
         "type": "disabled"
@@ -45,13 +46,16 @@
     "workspace_path": "",
     "list": [
       {
-        "name": "agent_memory"
+        "module": "agent_memory",
+        "disabled": []
       },
       {
-        "name": "agent_tools"
+        "module": "agent_tools",
+        "disabled": []
       },
       {
-        "name": "agent_claw"
+        "module": "agent_claw",
+        "disabled": []
       }
     ]
   },

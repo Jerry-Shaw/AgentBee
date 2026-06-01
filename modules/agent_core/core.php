@@ -121,17 +121,23 @@ final class core extends Factory
         $tool_list   = $this->agent_config['agent_tools']['list'] ?? [];
 
         foreach ($tool_list as $tool) {
-            $tool_class = '\\modules\\' . $tool['name'] . '\\go';
-            $tool_meta  = '\\modules\\' . $tool['name'] . '\\tools';
+            $tool_class  = '\\modules\\' . $tool['module'] . '\\go';
+            $tool_meta   = '\\modules\\' . $tool['module'] . '\\tools';
+            $fn_disabled = $tool['disabled'] ?? [];
 
             try {
                 $metadata = $tool_meta::META;
 
                 foreach ($metadata as $index => $meta_item) {
-                    $metadata[$index]['function']['name'] = $tool['name'] . '/' . $meta_item['function']['name'];
+                    if (in_array($meta_item['function']['name'], $fn_disabled, true)) {
+                        unset($metadata[$index]);
+                        continue;
+                    }
+
+                    $metadata[$index]['function']['name'] = $tool['module'] . '/' . $meta_item['function']['name'];
                 }
 
-                $this->agent_tools[$tool['name']] = $tool_class::new();
+                $this->agent_tools[$tool['module']] = $tool_class::new();
 
                 $agent_tools = array_merge($agent_tools, $metadata);
             } catch (\Throwable $throwable) {
@@ -146,7 +152,7 @@ final class core extends Factory
             $this->llm_tools['parallel_tool_calls'] = true;
         }
 
-        unset($agent_tools, $tool_list, $tool, $tool_class, $tool_meta, $metadata, $index, $meta_item);
+        unset($agent_tools, $tool_list, $tool, $tool_class, $tool_meta, $fn_disabled, $metadata, $index, $meta_item);
     }
 
     /**

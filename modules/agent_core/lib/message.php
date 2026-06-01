@@ -49,15 +49,14 @@ class message extends Factory
                 break;
 
             case 'saveConfig':
-                $config_json = json_encode($data_content['data'], JSON_PRETTY);
-                $save_bytes  = config::new()->save($config_json);
-                $content     = [
+                $save_bytes = config::new()->save($data_content['data']);
+                $content    = [
                     'status' => 'success',
                     'act'    => $act,
                     'data'   => 'Bytes written: ' . $save_bytes,
                 ];
 
-                unset($config_json, $save_bytes);
+                unset($save_bytes);
                 break;
 
             case 'getDefaultConfig':

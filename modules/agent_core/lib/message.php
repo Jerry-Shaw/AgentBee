@@ -38,7 +38,7 @@ class message extends Factory
 
         switch ($act) {
             case 'getConfig':
-                $current = config::new()->get();
+                $current = config::new()->get(false);
                 $content = [
                     'status' => 'success',
                     'act'    => $act,

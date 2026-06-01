@@ -99,6 +99,13 @@ class message extends Factory
         $act = $data_content['act'] ?? 'unknown';
 
         switch ($act) {
+            case 'getVersion':
+                $content = [
+                    'AGENT'   => AGENT_NAME . ' v' . AGENT_VERSION,
+                    'Nervsys' => NS_NAMESPACE . ' v' . NS_VER,
+                ];
+                break;
+
             case 'getModels':
                 $content        = go::new()->getModels();
                 $content['act'] = $act;

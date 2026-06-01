@@ -39,8 +39,6 @@ final class core extends Factory
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
 
-    public string $agent_name = 'AgentBee/蜂小秘';
-
     public array $llm_tools  = [];
     public array $llm_params = [];
 
@@ -423,7 +421,7 @@ final class core extends Factory
         $max_limit = $this->agent_config['agent_memory']['max_history'] * 3;
 
         $prompts[] = '## 系统';
-        $prompts[] = '`OS:' . php_uname() . '` | `Agent:' . $this->agent_name . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `PHP:' . PHP_VERSION . '(' . $php_path . ')`';
+        $prompts[] = '`OS:' . php_uname() . '` | `Agent:' . AGENT_NAME . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `PHP:' . PHP_VERSION . '(' . $php_path . ')`';
         $prompts[] = '`CWD:' . getcwd() . '` | `入口:' . $this->app->script_path . '` | `根:' . $this->app->root_path . '` | `框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . '/modules/` | `日志:' . $this->app->log_path . '` | `工作区:' . $work_path . '` | `临时:' . sys_get_temp_dir() . '`';
 
         $prompts[] = '## 记忆(4层)';

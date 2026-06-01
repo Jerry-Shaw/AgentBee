@@ -20,7 +20,8 @@
 
 declare(strict_types = 1);
 
-const AGENT_VERSION = '1.0.2';
+const AGENT_VERSION = '1.0.5';
+const AGENT_NAME    = 'AgentBee (蜂小秘)';
 
 use Nervsys\Core\Lib\App;
 

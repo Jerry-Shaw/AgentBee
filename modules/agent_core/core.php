@@ -308,7 +308,12 @@ final class core extends Factory
                     $result_content = json_encode(['status' => 'error', 'message' => json_last_error_msg()], JSON_FORMAT);
                 }
             } catch (\Throwable $throwable) {
-                Error::new()->exceptionHandler($throwable, false, false);
+                Error::new()->exceptionHandler(
+                    new \InvalidArgumentException($fn_name . ': ' . $throwable->getMessage(), $throwable->getCode(), $throwable),
+                    false,
+                    false
+                );
+
                 $result_content = json_encode(['status' => 'error', 'message' => mb_substr($throwable->getMessage(), 0, 256, 'UTF-8')], JSON_FORMAT);
                 unset($throwable);
             }

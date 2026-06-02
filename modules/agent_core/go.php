@@ -84,10 +84,12 @@ class go extends Factory
     {
         $memory_limit = $this->core->agent_config['memory_limit'] ?? '4G';
 
-        $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
         ini_set('memory_limit', $memory_limit);
+        $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
 
         $this->runProcWorker();
+
+        $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
         try {
             $server_host = 'tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'];

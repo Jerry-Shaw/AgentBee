@@ -58,6 +58,8 @@ class go extends Factory
         $this->utils->debug('Initializing Providers...', 'debug');
         $this->core->initProvider();
 
+        $this->utils->debug('SandBox mode: ' . ($this->core->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
+
         $workspace_path = $this->core->agent_config['workspace_path'] ?? '';
         $this->utils->debug('Checking workspace: ' . $workspace_path, 'trace');
         if ('' !== $workspace_path && !is_dir($workspace_path)) {

@@ -451,7 +451,7 @@ final class core extends Factory
 
         $prompts[] = '## 系统';
         $prompts[] = '`OS:' . php_uname() . '` | `Agent:' . AGENT_NAME . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `PHP:' . PHP_VERSION . '(' . $php_path . ')`';
-        $prompts[] = '`CWD:' . getcwd() . '` | `入口:' . $this->app->script_path . '` | `根:' . $this->app->root_path . '` | `框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . '/modules/` | `日志:' . $this->app->log_path . '` | `工作区:' . $work_path . '` | `临时:' . sys_get_temp_dir() . '`';
+        $prompts[] = '`CWD:' . getcwd() . '` | `入口:' . $this->app->script_path . '` | `根:' . $this->app->root_path . '` | `框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . '/modules/` | `Tools:' . $this->app->root_path . '/tools/` | `Skills:' . $this->app->root_path . '/skills/` | `日志:' . $this->app->log_path . '` | `工作区:' . $work_path . '` | `临时:' . sys_get_temp_dir() . '`';
 
         $prompts[] = '## 记忆(4层)';
         $prompts[] = '- 总则：宁多勿漏，关键信息不丢。';

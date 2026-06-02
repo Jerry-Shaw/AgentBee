@@ -151,7 +151,7 @@ class config extends Factory
             ],
             'agent_llm'    => [
                 'api_url'      => 'http://127.0.0.1:1234/v1',
-                'api_key'      => 'sk-lm-J78sqMgX:IUMBn3qsotGyfViPMaRS',
+                'api_key'      => 'sk-lm-S2SF0wz1:IVHYeIh6rh5KPQfQfdsD',
                 'model'        => 'qwen3.6-35b-a3b-apex',
                 'org_id'       => '',
                 'hw_hash'      => '',

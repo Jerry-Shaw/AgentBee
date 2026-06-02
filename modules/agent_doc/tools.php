@@ -26,123 +26,56 @@ namespace modules\agent_doc;
 class tools
 {
     public const META = [
-        // readDocx
+        // DOCX
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'readDocx',
-                'description' => '读取 DOCX。参数：path(string,必填,绝对路径)。返回：{"status":"success","content":"文本"}',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string']],
-                    'required'   => ['path']
-                ]
-            ]
+                'description' => '读DOCX纯文本。参数: path(必填)。返回: {"status":"success","content":"文本"}',
+                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
+            ],
         ],
-        // writeDocx (text + image)
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeDocx',
-                'description' => '写入 DOCX。参数：path(string,必填), data(array,必填)。data每项：string(段落) 或 {"type":"image","content":"路径","width":px(默认200),"height":px(可选,自动)}。返回：{"status":"success","path":"..."}',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'path' => ['type' => 'string'],
-                        'data' => [
-                            'type'  => 'array',
-                            'items' => [
-                                'anyOf' => [
-                                    ['type' => 'string'],
-                                    [
-                                        'type'       => 'object',
-                                        'properties' => [
-                                            'type'    => ['type' => 'string', 'enum' => ['image']],
-                                            'content' => ['type' => 'string'],
-                                            'width'   => ['type' => 'integer'],
-                                            'height'  => ['type' => 'integer']
-                                        ],
-                                        'required'   => ['type', 'content']
-                                    ]
-                                ]
-                            ]
-                        ]
-                    ],
-                    'required'   => ['path', 'data']
-                ]
-            ]
+                'description' => '写DOCX。参数: path, data(数组), append(默认false)。data元素为段落文本(字符串)或图片对象{"type":"image","content":"绝对路径","width":px(默认200)}。append=true保留原文档全部内容(文字+图片)。示例: ["标题",{"type":"image","content":"/a.png"}]。返回: {"status":"success","path":"..."}',
+                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string'], 'data' => ['type' => 'array'], 'append' => ['type' => 'boolean', 'default' => false]], 'required' => ['path', 'data']],
+            ],
         ],
-        // readXlsx
+        // XLSX
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'readXlsx',
-                'description' => '读取 XLSX。参数：path(string,必填)。返回：{"status":"success","sheets":{"Sheet1":[[行]]}}',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string']],
-                    'required'   => ['path']
-                ]
-            ]
+                'description' => '读XLSX。参数: path。返回: {"status":"success","sheets":{"Sheet1":[["A1","B1"],["A2","B2"]]}}',
+                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
+            ],
         ],
-        // writeXlsx
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeXlsx',
-                'description' => '写入 XLSX。参数：path(string,必填), data(array,必填)。data：二维数组(单表) 或 [{"name":"Sheet1","rows":[[行]]}] (多表)。返回：{"status":"success","path":"..."}',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'path' => ['type' => 'string'],
-                        'data' => ['type' => 'array']
-                    ],
-                    'required'   => ['path', 'data']
-                ]
-            ]
+                'description' => '写XLSX。参数: path, data(数组), append(默认false)。data单表: 二维数组，每行是一个数组，如[["姓名","年龄"],["张三",25]]。多表: [{"name":"Sheet1","rows":[[...]]}]。append=true 向现有工作表追加行或新建表。返回: {"status":"success","path":"...","sheets_count":N}',
+                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string'], 'data' => ['type' => 'array'], 'append' => ['type' => 'boolean', 'default' => false]], 'required' => ['path', 'data']],
+            ],
         ],
-        // readPptx
+        // PPTX
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'readPptx',
-                'description' => '读取 PPTX。参数：path(string,必填)。返回：{"status":"success","slides":[{"number":1,"title":"...","content":"..."}]}',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => ['path' => ['type' => 'string']],
-                    'required'   => ['path']
-                ]
-            ]
+                'description' => '读PPTX文本。参数: path。返回: {"status":"success","slides":[{"number":1,"title":"...","content":"..."}]}',
+                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string']], 'required' => ['path']],
+            ],
         ],
-        // writePptx (supports image, EMU units)
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'writePptx',
-                'description' => '写入 PPTX。参数：path(string,必填), data(array,必填)。每张幻灯片：{"title":"(可选)","content":"(可选)","image":"路径(可选)","image_x":整数(默认8000000),"image_y":整数(默认500000),"image_width":整数(默认2540000),"image_height":整数(默认1905000)}。单位EMU：1英寸=914400，1厘米=360000。返回：{"status":"success","path":"..."}',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'path' => ['type' => 'string'],
-                        'data' => [
-                            'type'  => 'array',
-                            'items' => [
-                                'type'       => 'object',
-                                'properties' => [
-                                    'title'        => ['type' => 'string'],
-                                    'content'      => ['type' => 'string'],
-                                    'image'        => ['type' => 'string'],
-                                    'image_x'      => ['type' => 'integer'],
-                                    'image_y'      => ['type' => 'integer'],
-                                    'image_width'  => ['type' => 'integer'],
-                                    'image_height' => ['type' => 'integer']
-                                ]
-                            ]
-                        ]
-                    ],
-                    'required'   => ['path', 'data']
-                ]
-            ]
-        ]
+                'description' => '写PPTX。参数: path, data(数组), append(默认false)。data每项: {"title":"","content":"","image":"绝对路径可选","image_x":EMU(默认8000000),"image_y":500000,"image_width":2540000,"image_height":1905000}。EMU换算: 1像素 ≈ 9525 EMU。append=true追加幻灯片并保留原图(图片位置恢复默认)。返回: {"status":"success","path":"...","slides_count":N}',
+                'parameters'  => ['type' => 'object', 'properties' => ['path' => ['type' => 'string'], 'data' => ['type' => 'array'], 'append' => ['type' => 'boolean', 'default' => false]], 'required' => ['path', 'data']],
+            ],
+        ],
     ];
 }

@@ -23,10 +23,18 @@
 
 namespace modules\agent_doc;
 
+use modules\agent_core\core;
 use Nervsys\Core\Factory;
 
 class go extends Factory
 {
+    public core $core;
+
+    public function __construct()
+    {
+        $this->core = core::new();
+    }
+
     /**
      * Get handler instance by document type.
      *
@@ -38,116 +46,133 @@ class go extends Factory
     {
         $type       = strtolower($type);
         $validTypes = ['docx', 'xlsx', 'pptx'];
-        if (!in_array($type, $validTypes)) {
+
+        if (false === in_array($type, $validTypes, true)) {
             return null;
         }
-        // Build class name with sub‑namespace
-        $class = "\\modules\\agent_doc\\lib\\{$type}Handler";
-        return $class::new();
+
+        $class  = "\\modules\\agent_doc\\lib\\{$type}Handler";
+        $result = $class::new();
+
+        unset($type, $validTypes, $class);
+        return $result;
+    }
+
+    /**
+     * Recursively secure all image paths inside data array.
+     *
+     * @param array $data
+     *
+     * @return array
+     */
+    private function secureDataPaths(array $data): array
+    {
+        foreach ($data as &$item) {
+            if (is_array($item)) {
+                if (isset($item['type']) && 'image' === $item['type'] && isset($item['content'])) {
+                    $item['content'] = $this->core->securePath($item['content']);
+                } else {
+                    $item = $this->secureDataPaths($item);
+                }
+            }
+        }
+
+        unset($item);
+        return $data;
     }
 
     // ---------- DOCX ----------
-
-    /**
-     * Read DOCX document content.
-     *
-     * @param string $path
-     *
-     * @return array
-     */
     public function readDocx(string $path): array
     {
+        $path    = $this->core->securePath($path);
         $handler = $this->getHandler('docx');
-        if (!$handler) {
+
+        if (null === $handler) {
             return ['error' => 'DOCX handler not found.'];
         }
-        return $handler->read($path);
+
+        $result = $handler->read($path);
+
+        unset($path, $handler);
+        return $result;
     }
 
-    /**
-     * Write DOCX document from paragraphs.
-     *
-     * @param string $path
-     * @param array  $data
-     *
-     * @return array
-     */
-    public function writeDocx(string $path, array $data): array
+    public function writeDocx(string $path, array $data, bool $append = false): array
     {
+        $path = $this->core->securePath($path);
+        $data = $this->secureDataPaths($data);
+
         $handler = $this->getHandler('docx');
-        if (!$handler) {
+        if (null === $handler) {
             return ['error' => 'DOCX handler not found.'];
         }
-        return $handler->write($path, $data);
+
+        $result = $handler->write($path, $data, $append);
+
+        unset($path, $data, $append, $handler);
+        return $result;
     }
 
     // ---------- XLSX ----------
-
-    /**
-     * Read XLSX spreadsheet content.
-     *
-     * @param string $path
-     *
-     * @return array
-     */
     public function readXlsx(string $path): array
     {
+        $path    = $this->core->securePath($path);
         $handler = $this->getHandler('xlsx');
-        if (!$handler) {
+
+        if (null === $handler) {
             return ['error' => 'XLSX handler not found.'];
         }
-        return $handler->read($path);
+
+        $result = $handler->read($path);
+
+        unset($path, $handler);
+        return $result;
     }
 
-    /**
-     * Write XLSX spreadsheet from data.
-     *
-     * @param string $path
-     * @param array  $data
-     *
-     * @return array
-     */
-    public function writeXlsx(string $path, array $data): array
+    public function writeXlsx(string $path, array $data, bool $append = false): array
     {
+        $path    = $this->core->securePath($path);
         $handler = $this->getHandler('xlsx');
-        if (!$handler) {
+
+        if (null === $handler) {
             return ['error' => 'XLSX handler not found.'];
         }
-        return $handler->write($path, $data);
+
+        $result = $handler->write($path, $data, $append);
+
+        unset($path, $data, $append, $handler);
+        return $result;
     }
 
     // ---------- PPTX ----------
-
-    /**
-     * Read PPTX presentation content.
-     *
-     * @param string $path
-     *
-     * @return array
-     */
     public function readPptx(string $path): array
     {
+        $path    = $this->core->securePath($path);
         $handler = $this->getHandler('pptx');
-        if (!$handler) {
+
+        if (null === $handler) {
             return ['error' => 'PPTX handler not found.'];
         }
-        return $handler->read($path);
+
+        $result = $handler->read($path);
+
+        unset($path, $handler);
+        return $result;
     }
 
-    /**
-     * Write PPTX presentation from slides.
-     *
-     * @param string $path
-     * @param array  $data
-     *
-     * @return array
-     */
-    public function writePptx(string $path, array $data): array
+    public function writePptx(string $path, array $data, bool $append = false): array
     {
+        $path = $this->core->securePath($path);
+        $data = $this->secureDataPaths($data);
+
         $handler = $this->getHandler('pptx');
-        if (!$handler) {
+        if (null === $handler) {
             return ['error' => 'PPTX handler not found.'];
         }
-        return $handler->write($path, $data);
+
+        $result = $handler->write($path, $data, $append);
+
+        unset($path, $data, $append, $handler);
+        return $result;
     }
 }

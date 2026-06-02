@@ -1,7 +1,7 @@
 <?php
 
 /**
- * XLSX Handler - Complete Native PHP Implementation
+ * XLSX Handler - Complete Native PHP Implementation (Read + Write + Append)
  *
  * This module provides high-efficiency web data acquisition tools for Agents,
  * focusing on noise reduction and structural extraction to optimize LLM token usage.
@@ -23,12 +23,20 @@
 
 namespace modules\agent_doc\lib;
 
+use modules\agent_core\core;
 use Nervsys\Core\Factory;
 
 class xlsxHandler extends Factory
 {
+    public core $core;
+
+    public function __construct()
+    {
+        $this->core = core::new();
+    }
+
     /**
-     * Read ALL content from an .xlsx file.
+     * Read all content from an .xlsx file.
      *
      * @param string $path
      *
@@ -41,18 +49,18 @@ class xlsxHandler extends Factory
         }
 
         $zip = new \ZipArchive();
-        if ($zip->open($path) !== true) {
+        if (true !== $zip->open($path)) {
             return ['error' => "Failed to open XLSX file as a zip archive."];
         }
 
-        // 1. Extract shared strings table
+        // Extract shared strings
         $sharedStrings = [];
         $sstContent    = $zip->getFromName('xl/sharedStrings.xml');
-        if ($sstContent !== false && $sstContent !== '') {
+        if (false !== $sstContent && '' !== $sstContent) {
             $reader = new \XMLReader();
-            if ($reader->XML($sstContent)) {
+            if (true === $reader->XML($sstContent)) {
                 while ($reader->read()) {
-                    if ($reader->nodeType == \XMLReader::ELEMENT && $reader->name === 't') {
+                    if ($reader->nodeType == \XMLReader::ELEMENT && 't' === $reader->name) {
                         $sharedStrings[] = $reader->readString() ?? '';
                     }
                 }
@@ -62,7 +70,7 @@ class xlsxHandler extends Factory
         }
         unset($sstContent);
 
-        // 2. Find all worksheet files and parse each one
+        // Parse worksheets
         $sheetsData = [];
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $filename = $zip->getNameIndex($i);
@@ -73,37 +81,43 @@ class xlsxHandler extends Factory
             unset($matches);
 
             $xmlContent = $zip->getFromName($filename);
-            if ($xmlContent === false) {
+            if (false === $xmlContent) {
                 continue;
             }
 
             $cells  = [];
             $reader = new \XMLReader();
-            if ($reader->XML($xmlContent)) {
+            if (true === $reader->XML($xmlContent)) {
                 while ($reader->read()) {
-                    if ($reader->nodeType == \XMLReader::ELEMENT && $reader->name === 'c') {
+                    if ($reader->nodeType == \XMLReader::ELEMENT && 'c' === $reader->name) {
                         $ref  = null;
                         $type = null;
                         if ($reader->hasAttributes) {
                             while ($reader->moveToNextAttribute()) {
-                                if ($reader->name === 'r') {
+                                if ('r' === $reader->name) {
                                     $ref = $reader->value;
-                                } elseif ($reader->name === 't') {
+                                } elseif ('t' === $reader->name) {
                                     $type = $reader->value;
                                 }
                             }
                             $reader->moveToElement();
                         }
-                        if (!$ref) continue;
+                        if (!$ref) {
+                            continue;
+                        }
 
                         $value = null;
                         while ($reader->read()) {
-                            if ($reader->nodeType == \XMLReader::ELEMENT && $reader->name === 'v') {
+                            if ($reader->nodeType == \XMLReader::ELEMENT && 'v' === $reader->name) {
                                 $rawValue = $reader->readString() ?? '';
-                                if ($type === 's') {
-                                    $idx   = (int)$rawValue;
-                                    $value = $sharedStrings[$idx] ?? '';
-                                } elseif ($type === 'inlineStr') {
+                                if ('s' === $type) {
+                                    $idx = (int)$rawValue;
+                                    if (isset($sharedStrings[$idx])) {
+                                        $value = $sharedStrings[$idx];
+                                    } else {
+                                        $value = '';
+                                    }
+                                } elseif ('inlineStr' === $type) {
                                     $value = '';
                                 } else {
                                     if (is_numeric($rawValue)) {
@@ -113,7 +127,7 @@ class xlsxHandler extends Factory
                                     }
                                 }
                                 unset($rawValue);
-                            } elseif ($reader->nodeType == \XMLReader::END_ELEMENT && $reader->name === 'c') {
+                            } elseif ($reader->nodeType == \XMLReader::END_ELEMENT && 'c' === $reader->name) {
                                 break;
                             }
                         }
@@ -125,26 +139,41 @@ class xlsxHandler extends Factory
             $reader->close();
             unset($reader, $xmlContent);
 
-            // Convert sparse cells to 2D grid
+            // Convert sparse cells to 2D grid with robust bounds
             $grid = [];
             foreach ($cells as $cell) {
-                if (!preg_match('/^([A-Z]+)(\d+)$/', $cell['ref'], $match)) continue;
-                $col              = self::columnToIndex($match[1]);
-                $row              = (int)$match[2] - 1;
+                if (!preg_match('/^([A-Z]+)(\d+)$/', $cell['ref'], $match)) {
+                    continue;
+                }
+                $col = $this->columnToIndex($match[1]);
+                $row = (int)$match[2] - 1;
+                if ($row < 0 || $col < 0) {
+                    continue;
+                }
                 $grid[$row][$col] = $cell['value'];
                 unset($match);
             }
             unset($cells);
 
-            // Fill missing cells with null
+            // Fill missing cells with null, using global max column across all rows
             if (!empty($grid)) {
                 $maxRow = max(array_keys($grid));
+                // Determine the maximum column index that appears in any row
+                $maxCol = 0;
+                foreach ($grid as $rowCells) {
+                    $cols = array_keys($rowCells);
+                    if (!empty($cols)) {
+                        $maxCol = max($maxCol, max($cols));
+                    }
+                }
                 for ($r = 0; $r <= $maxRow; $r++) {
-                    if (!isset($grid[$r])) $grid[$r] = [];
-                    if (empty($grid[$r])) continue;
-                    $maxCol = max(array_keys($grid[$r]));
+                    if (!isset($grid[$r])) {
+                        $grid[$r] = [];
+                    }
                     for ($c = 0; $c <= $maxCol; $c++) {
-                        if (!isset($grid[$r][$c])) $grid[$r][$c] = null;
+                        if (!array_key_exists($c, $grid[$r])) {
+                            $grid[$r][$c] = null;
+                        }
                     }
                     ksort($grid[$r]);
                 }
@@ -157,38 +186,50 @@ class xlsxHandler extends Factory
         $zip->close();
         unset($zip);
 
-        if (empty($sheetsData)) {
-            return ['status' => 'success', 'file' => basename($path), 'sheets' => [], 'message' => 'No worksheets found.'];
-        }
-
         // Get sheet names
         $sheetNames   = $this->getSheetNames($path);
         $resultSheets = [];
         foreach ($sheetsData as $idx => $grid) {
             $name                = $sheetNames[$idx] ?? "Sheet$idx";
             $resultSheets[$name] = $grid;
-            unset($grid);
         }
-        unset($sheetsData, $sheetNames);
 
         $result = [
             'status' => 'success',
             'file'   => basename($path),
             'sheets' => $resultSheets
         ];
-        unset($resultSheets);
+
+        unset($sharedStrings, $sheetsData, $sheetNames, $resultSheets);
         return $result;
     }
 
     /**
-     * Write an .xlsx file from 2D array data.
+     * Write an .xlsx file from data.
+     *
+     * @param string $path
+     * @param array  $data
+     * @param bool   $append
+     *
+     * @return array
+     */
+    public function write(string $path, array $data, bool $append = false): array
+    {
+        if ($append && file_exists($path)) {
+            return $this->appendToExisting($path, $data);
+        }
+        return $this->writeNew($path, $data);
+    }
+
+    /**
+     * Write new file (overwrite).
      *
      * @param string $path
      * @param array  $data
      *
      * @return array
      */
-    public function write(string $path, array $data): array
+    private function writeNew(string $path, array $data): array
     {
         $tempDir = null;
         try {
@@ -197,7 +238,7 @@ class xlsxHandler extends Factory
                 return ['error' => 'No data to write.'];
             }
 
-            $tempDir = sys_get_temp_dir() . '/xlsx_' . uniqid();
+            $tempDir = $this->core->agent_config['agent_tools']['workspace_path'] . '/temp/xlsx_' . uniqid();
             if (!mkdir($tempDir, 0755, true)) {
                 return ['error' => "Cannot create temp dir"];
             }
@@ -210,10 +251,16 @@ class xlsxHandler extends Factory
             $stringIndex   = [];
             foreach ($allSheets as &$sheet) {
                 foreach ($sheet['rows'] as $row) {
-                    if (!is_array($row)) continue;
+                    if (!is_array($row)) {
+                        continue;
+                    }
                     foreach ($row as $cell) {
-                        if ($cell === null || $cell === '') continue;
-                        if (is_numeric($cell)) continue;
+                        if (null === $cell || '' === $cell) {
+                            continue;
+                        }
+                        if (is_numeric($cell)) {
+                            continue;
+                        }
                         $str = (string)$cell;
                         if (!isset($stringIndex[$str])) {
                             $stringIndex[$str] = count($sharedStrings);
@@ -244,15 +291,15 @@ class xlsxHandler extends Factory
                 mkdir(dirname($path), 0755, true);
             }
             $zip = new \ZipArchive();
-            if ($zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-                self::rrmdir($tempDir);
+            if (true !== $zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE)) {
+                $this->rrmdir($tempDir);
                 return ['error' => "Failed to create ZIP archive"];
             }
-            self::addDirectoryToZip($zip, $tempDir, '');
+            $this->addDirToZip($zip, $tempDir, '');
             $zip->close();
             unset($zip);
 
-            self::rrmdir($tempDir);
+            $this->rrmdir($tempDir);
             $tempDir = null;
 
             $result = [
@@ -261,19 +308,68 @@ class xlsxHandler extends Factory
                 'sheets_count' => count($allSheets),
                 'message'      => "XLSX written successfully."
             ];
+
             unset($allSheets, $sharedStrings, $stringIndex, $sheetFiles);
             return $result;
         } catch (\Exception $e) {
-            if ($tempDir !== null && is_dir($tempDir)) {
-                self::rrmdir($tempDir);
+            if (null !== $tempDir && is_dir($tempDir)) {
+                $this->rrmdir($tempDir);
             }
             return ['error' => "Failed to write XLSX: " . $e->getMessage()];
         }
     }
 
-    // ---------- Helper methods (unchanged, but ensure constants are correct) ----------
+    /**
+     * Append data to existing file.
+     *
+     * @param string $path
+     * @param array  $data
+     *
+     * @return array
+     */
+    private function appendToExisting(string $path, array $data): array
+    {
+        $existing = $this->read($path);
+        if (isset($existing['error'])) {
+            return $existing;
+        }
+
+        $newSheets    = $this->normalizeSheets($data);
+        $mergedSheets = $existing['sheets'];
+
+        foreach ($newSheets as $newSheet) {
+            $name = $newSheet['name'];
+            if (isset($mergedSheets[$name])) {
+                // Append rows
+                $mergedSheets[$name] = array_merge($mergedSheets[$name], $newSheet['rows']);
+            } else {
+                // Add new sheet
+                $mergedSheets[$name] = $newSheet['rows'];
+            }
+        }
+
+        // Convert to normalized format
+        $normalized = [];
+        foreach ($mergedSheets as $name => $rows) {
+            $normalized[] = ['name' => $name, 'rows' => $rows];
+        }
+
+        $result = $this->writeNew($path, $normalized);
+
+        unset($existing, $newSheets, $mergedSheets, $normalized);
+        return $result;
+    }
+
+    /**
+     * Normalize sheet data to internal format.
+     *
+     * @param array $data
+     *
+     * @return array
+     */
     private function normalizeSheets(array $data): array
     {
+        // Single sheet (2D array)
         if (isset($data[0]) && is_array($data[0]) && !isset($data[0]['name']) && !isset($data[0]['rows'])) {
             return [['name' => 'Sheet1', 'rows' => $this->normalizeRows($data)]];
         }
@@ -289,27 +385,50 @@ class xlsxHandler extends Factory
         return $sheets;
     }
 
+    /**
+     * Ensure rows are rectangular.
+     *
+     * @param array $rows
+     *
+     * @return array
+     */
     private function normalizeRows(array $rows): array
     {
-        if (empty($rows)) return [];
+        if (empty($rows)) {
+            return [];
+        }
         $maxCols = 0;
         foreach ($rows as $row) {
             if (is_array($row)) {
                 $cnt = count($row);
-                if ($cnt > $maxCols) $maxCols = $cnt;
+                if ($cnt > $maxCols) {
+                    $maxCols = $cnt;
+                }
             } else {
                 $maxCols = max($maxCols, 1);
             }
         }
         $normalized = [];
         foreach ($rows as $row) {
-            if (!is_array($row)) $row = [$row];
-            while (count($row) < $maxCols) $row[] = null;
+            if (!is_array($row)) {
+                $row = [$row];
+            }
+            while (count($row) < $maxCols) {
+                $row[] = null;
+            }
             $normalized[] = $row;
         }
         return $normalized;
     }
 
+    /**
+     * Write shared strings XML.
+     *
+     * @param string $tempDir
+     * @param array  $strings
+     *
+     * @return void
+     */
     private function writeSharedStrings(string $tempDir, array $strings): void
     {
         $xml = new \XMLWriter();
@@ -334,6 +453,16 @@ class xlsxHandler extends Factory
         unset($xml);
     }
 
+    /**
+     * Write worksheet XML.
+     *
+     * @param string $tempDir
+     * @param string $sheetFile
+     * @param array  $rows
+     * @param array  $stringIndex
+     *
+     * @return void
+     */
     private function writeWorksheet(string $tempDir, string $sheetFile, array $rows, array $stringIndex): void
     {
         $xml = new \XMLWriter();
@@ -349,8 +478,8 @@ class xlsxHandler extends Factory
             $xml->writeAttribute('r', $rowNum);
             $colNum = 0;
             foreach ($row as $cell) {
-                $colLetter = self::indexToColumn($colNum);
-                if ($cell === null) {
+                $colLetter = $this->indexToColumn($colNum);
+                if (null === $cell) {
                     $colNum++;
                     continue;
                 }
@@ -361,7 +490,7 @@ class xlsxHandler extends Factory
                     $xml->startElement('v');
                     $xml->text((string)$cell);
                     $xml->endElement();
-                } elseif (is_string($cell) && $cell !== '') {
+                } elseif (is_string($cell) && '' !== $cell) {
                     if (isset($stringIndex[$cell])) {
                         $xml->writeAttribute('t', 's');
                         $xml->startElement('v');
@@ -391,6 +520,14 @@ class xlsxHandler extends Factory
         unset($xml);
     }
 
+    /**
+     * Write workbook.xml.
+     *
+     * @param string $tempDir
+     * @param array  $sheets
+     *
+     * @return void
+     */
     private function writeWorkbook(string $tempDir, array $sheets): void
     {
         $xml = new \XMLWriter();
@@ -416,6 +553,15 @@ class xlsxHandler extends Factory
         unset($xml);
     }
 
+    /**
+     * Write workbook relationships.
+     *
+     * @param string $tempDir
+     * @param array  $sheets
+     * @param bool   $hasSharedStrings
+     *
+     * @return void
+     */
     private function writeWorkbookRels(string $tempDir, array $sheets, bool $hasSharedStrings): void
     {
         $xml = new \XMLWriter();
@@ -444,6 +590,15 @@ class xlsxHandler extends Factory
         unset($xml);
     }
 
+    /**
+     * Write [Content_Types].xml.
+     *
+     * @param string $tempDir
+     * @param array  $sheets
+     * @param bool   $hasSharedStrings
+     *
+     * @return void
+     */
     private function writeContentTypes(string $tempDir, array $sheets, bool $hasSharedStrings): void
     {
         $xml = new \XMLWriter();
@@ -482,6 +637,13 @@ class xlsxHandler extends Factory
         unset($xml);
     }
 
+    /**
+     * Write root relationships.
+     *
+     * @param string $tempDir
+     *
+     * @return void
+     */
     private function writeRootRels(string $tempDir): void
     {
         $xml = new \XMLWriter();
@@ -501,22 +663,33 @@ class xlsxHandler extends Factory
         unset($xml);
     }
 
+    /**
+     * Get sheet names from workbook.
+     *
+     * @param string $path
+     *
+     * @return array
+     */
     private function getSheetNames(string $path): array
     {
         $zip = new \ZipArchive();
-        if ($zip->open($path) !== true) return [];
+        if (true !== $zip->open($path)) {
+            return [];
+        }
         $workbook = $zip->getFromName('xl/workbook.xml');
         $zip->close();
-        if (!$workbook) return [];
+        if (!$workbook) {
+            return [];
+        }
 
         $names  = [];
         $reader = new \XMLReader();
-        if ($reader->XML($workbook)) {
+        if (true === $reader->XML($workbook)) {
             while ($reader->read()) {
-                if ($reader->nodeType == \XMLReader::ELEMENT && $reader->name === 'sheet') {
+                if ($reader->nodeType == \XMLReader::ELEMENT && 'sheet' === $reader->name) {
                     if ($reader->hasAttributes) {
                         while ($reader->moveToNextAttribute()) {
-                            if ($reader->name === 'name') {
+                            if ('name' === $reader->name) {
                                 $names[] = $reader->value;
                                 break;
                             }
@@ -537,7 +710,14 @@ class xlsxHandler extends Factory
         return $result;
     }
 
-    private static function indexToColumn(int $col): string
+    /**
+     * Convert column index (0-based) to Excel letter.
+     *
+     * @param int $col
+     *
+     * @return string
+     */
+    private function indexToColumn(int $col): string
     {
         $col++;
         $result = '';
@@ -549,7 +729,14 @@ class xlsxHandler extends Factory
         return $result;
     }
 
-    private static function columnToIndex(string $col): int
+    /**
+     * Convert Excel column letter to zero-based index.
+     *
+     * @param string $col
+     *
+     * @return int
+     */
+    private function columnToIndex(string $col): int
     {
         $index = 0;
         for ($i = 0; $i < strlen($col); $i++) {
@@ -558,45 +745,63 @@ class xlsxHandler extends Factory
         return $index - 1;
     }
 
-    private static function addDirectoryToZip(\ZipArchive $zip, string $dir, string $prefix): void
+    /**
+     * Recursively add directory to zip.
+     *
+     * @param \ZipArchive $zip
+     * @param string      $dir
+     * @param string      $prefix
+     *
+     * @return void
+     */
+    private function addDirToZip(\ZipArchive $zip, string $dir, string $prefix): void
     {
-        if (!is_dir($dir)) return;
+        if (!is_dir($dir)) {
+            return;
+        }
         $files = scandir($dir);
         foreach ($files as $file) {
-            if ($file === '.' || $file === '..') continue;
+            if ('.' === $file || '..' === $file) {
+                continue;
+            }
             $full    = $dir . '/' . $file;
             $zipPath = $prefix . $file;
             if (is_dir($full)) {
-                self::addDirectoryToZip($zip, $full, $zipPath . '/');
+                $this->addDirToZip($zip, $full, $zipPath . '/');
             } else {
                 $zip->addFile($full, $zipPath);
             }
-            unset($file, $full, $zipPath);
+            unset($full, $zipPath);
         }
         unset($files);
     }
 
-    private static function rrmdir(string $dir): void
+    /**
+     * Recursively remove directory.
+     *
+     * @param string $dir
+     *
+     * @return void
+     */
+    private function rrmdir(string $dir): void
     {
-        if (!is_dir($dir)) return;
+        if (!is_dir($dir)) {
+            return;
+        }
         $files = scandir($dir);
         foreach ($files as $file) {
-            if ($file === '.' || $file === '..') continue;
+            if ('.' === $file || '..' === $file) {
+                continue;
+            }
             $full = $dir . '/' . $file;
             if (is_dir($full)) {
-                self::rrmdir($full);
+                $this->rrmdir($full);
             } else {
-                try {
-                    unlink($full);
-                } catch (\Exception) {
-                }
+                unlink($full);
             }
-            unset($file, $full);
+            unset($full);
         }
-        try {
-            rmdir($dir);
-        } catch (\Exception) {
-        }
+        rmdir($dir);
         unset($files);
     }
 }

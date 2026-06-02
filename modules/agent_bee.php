@@ -20,14 +20,14 @@
 
 declare(strict_types = 1);
 
-const AGENT_VERSION = '1.0.5';
+const AGENT_VERSION = '1.0.6';
 const AGENT_NAME    = 'AgentBee (蜂小秘)';
 
 use Nervsys\Core\Lib\App;
 
-require __DIR__ . '/../../Nervsys/NS.php';
+require __DIR__ . '/../Nervsys/NS.php';
 
-$root = dirname(__DIR__, 2);
+$root = dirname(__DIR__, 1);
 
 $ns = new Nervsys\NS($root, 'modules', App::MODE_MODULE);
 

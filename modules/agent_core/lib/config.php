@@ -203,6 +203,10 @@ class config extends Factory
                         'module'   => 'agent_claw',
                         'disabled' => [],
                     ],
+                    [
+                        'module'   => 'agent_doc',
+                        'disabled' => [],
+                    ],
                 ],
             ],
             'memory_limit' => '4G',

@@ -57,6 +57,10 @@
       {
         "module": "agent_claw",
         "disabled": []
+      },
+      {
+        "module": "agent_doc",
+        "disabled": []
       }
     ]
   },

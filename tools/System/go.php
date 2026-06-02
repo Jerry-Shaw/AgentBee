@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_tools;
+namespace tools\System;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
@@ -59,7 +59,7 @@ class go extends Factory
         ];
 
         $work_path = '' === $work_path
-            ? $this->core->agent_config['agent_tools']['workspace_path']
+            ? $this->core->agent_config['workspace_path']
             : $this->core->securePath($work_path);
 
         if (empty($argv) && str_contains($program, ' ')) {

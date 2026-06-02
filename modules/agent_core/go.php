@@ -52,11 +52,13 @@ class go extends Factory
         $this->utils->debug('Initializing...', 'trace');
         $this->core->initCore();
         $this->utils->debug('Initializing Tools...', 'debug');
-        $this->core->initTools();
-        $this->utils->debug('Initializing Modules...', 'debug');
-        $this->core->initModules();
+        $this->core->initModule('tools');
+        $this->utils->debug('Initializing Skills...', 'debug');
+        $this->core->initModule('skills');
+        $this->utils->debug('Initializing Providers...', 'debug');
+        $this->core->initProvider();
 
-        $workspace_path = $this->core->agent_config['agent_tools']['workspace_path'] ?? '';
+        $workspace_path = $this->core->agent_config['workspace_path'] ?? '';
         $this->utils->debug('Checking workspace: ' . $workspace_path, 'trace');
         if ('' !== $workspace_path && !is_dir($workspace_path)) {
             try {

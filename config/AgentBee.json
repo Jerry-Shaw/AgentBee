@@ -10,7 +10,7 @@
     "model": "qwen3.6-35b-a3b-apex",
     "org_id": "",
     "hw_hash": "",
-    "provider": "agent_openai",
+    "provider": "modules/agent_openai",
     "worker_name": "procWorker",
     "timeout": 7200,
     "keep_reasons": true,
@@ -35,35 +35,14 @@
     }
   },
   "agent_task": {
-    "provider": "agent_memory"
+    "provider": "tools/Memory"
   },
   "agent_memory": {
-    "provider": "agent_memory",
+    "provider": "tools/Memory",
     "max_history": 50
   },
-  "agent_tools": {
-    "enabled": true,
-    "in_sandbox": true,
-    "workspace_path": "",
-    "list": [
-      {
-        "module": "agent_memory",
-        "disabled": []
-      },
-      {
-        "module": "agent_tools",
-        "disabled": []
-      },
-      {
-        "module": "agent_claw",
-        "disabled": []
-      },
-      {
-        "module": "agent_doc",
-        "disabled": []
-      }
-    ]
-  },
+  "workspace_path": "",
+  "sandbox_mode": true,
   "memory_limit": "4G",
   "agent_debug": "trace",
   "socket_debug": false

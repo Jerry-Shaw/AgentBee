@@ -144,18 +144,18 @@ class config extends Factory
     public function getDefault(): array
     {
         return [
-            'agent_server' => [
+            'agent_server'   => [
                 'host'          => '127.0.0.1',
                 'port'          => 8686,
                 'ping_interval' => 60,
             ],
-            'agent_llm'    => [
+            'agent_llm'      => [
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-S2SF0wz1:IVHYeIh6rh5KPQfQfdsD',
                 'model'        => 'qwen3.6-35b-a3b-apex',
                 'org_id'       => '',
                 'hw_hash'      => '',
-                'provider'     => 'agent_openai',
+                'provider'     => 'modules/agent_openai',
                 'worker_name'  => 'procWorker',
                 'timeout'      => 7200,
                 'keep_reasons' => true,
@@ -179,39 +179,18 @@ class config extends Factory
                     ],
                 ],
             ],
-            'agent_task'   => [
-                'provider' => 'agent_memory',
+            'agent_task'     => [
+                'provider' => 'tools/Memory',
             ],
-            'agent_memory' => [
-                'provider'    => 'agent_memory',
+            'agent_memory'   => [
+                'provider'    => 'tools/Memory',
                 'max_history' => 50,
             ],
-            'agent_tools'  => [
-                'enabled'        => true,
-                'in_sandbox'     => true,
-                'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
-                'list'           => [
-                    [
-                        'module'   => 'agent_memory',
-                        'disabled' => [],
-                    ],
-                    [
-                        'module'   => 'agent_tools',
-                        'disabled' => [],
-                    ],
-                    [
-                        'module'   => 'agent_claw',
-                        'disabled' => [],
-                    ],
-                    [
-                        'module'   => 'agent_doc',
-                        'disabled' => [],
-                    ],
-                ],
-            ],
-            'memory_limit' => '4G',
-            'agent_debug'  => 'trace',
-            'socket_debug' => false,
+            'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
+            'sandbox_mode'   => true,
+            'memory_limit'   => '4G',
+            'agent_debug'    => 'trace',
+            'socket_debug'   => false,
         ];
     }
 

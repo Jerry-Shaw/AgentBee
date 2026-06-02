@@ -43,7 +43,8 @@ class go extends Factory
         $this->procWorker = procWorker::new();
 
         $this->core->initCore();
-        $this->core->initTools();
+        $this->core->initModule('tools');
+        $this->core->initModule('skills');
 
         $this->libOpenAI = libOpenAI::new(
             $this->core->agent_config['agent_llm']['api_url'],

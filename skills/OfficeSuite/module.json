@@ -1,8 +1,8 @@
 {
-  "name": "agent_doc",
+  "name": "OfficeSuite",
   "version": "1.0.0",
   "description": "Document processing module for reading and writing DOCX, XLSX, and PPTX files using native PHP (no external dependencies).",
-  "author": "AgentBee self developed",
+  "author": "agent self-developed",
   "email": "",
   "entry": "go.php",
   "repo": "",

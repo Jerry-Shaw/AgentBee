@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_doc\lib;
+namespace skills\OfficeSuite\lib;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
@@ -314,7 +314,7 @@ class docxHandler extends Factory
                 }
             }
 
-            $tempDir = $this->core->agent_config['agent_tools']['workspace_path'] . '/temp/docx_' . uniqid();
+            $tempDir = $this->core->agent_config['workspace_path'] . '/temp/docx_' . uniqid();
             if (!mkdir($tempDir, 0755, true)) {
                 return ['error' => 'Failed to create temp dir'];
             }

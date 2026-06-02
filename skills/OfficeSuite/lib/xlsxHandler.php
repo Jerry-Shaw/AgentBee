@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_doc\lib;
+namespace skills\OfficeSuite\lib;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
@@ -238,7 +238,7 @@ class xlsxHandler extends Factory
                 return ['error' => 'No data to write.'];
             }
 
-            $tempDir = $this->core->agent_config['agent_tools']['workspace_path'] . '/temp/xlsx_' . uniqid();
+            $tempDir = $this->core->agent_config['workspace_path'] . '/temp/xlsx_' . uniqid();
             if (!mkdir($tempDir, 0755, true)) {
                 return ['error' => "Cannot create temp dir"];
             }

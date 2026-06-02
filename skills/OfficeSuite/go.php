@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_doc;
+namespace skills\OfficeSuite;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
@@ -51,7 +51,7 @@ class go extends Factory
             return null;
         }
 
-        $class  = "\\modules\\agent_doc\\lib\\{$type}Handler";
+        $class  = '\\' . __NAMESPACE__ . '\\lib\\' . $type . 'Handler';
         $result = $class::new();
 
         unset($type, $validTypes, $class);

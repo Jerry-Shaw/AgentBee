@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_doc\lib;
+namespace skills\OfficeSuite\lib;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
@@ -471,7 +471,7 @@ class pptxHandler extends Factory
         }
 
         // Append mode
-        $tempDir = $this->core->agent_config['agent_tools']['workspace_path'] . '/temp/pptx_append_' . uniqid();
+        $tempDir = $this->core->agent_config['workspace_path'] . '/temp/pptx_append_' . uniqid();
         if (!mkdir($tempDir, 0755, true)) {
             return ['error' => 'Cannot create temp directory'];
         }
@@ -732,7 +732,7 @@ class pptxHandler extends Factory
                 $slides = [['title' => '', 'content' => '', 'image' => null]];
             }
 
-            $tempDir = $this->core->agent_config['agent_tools']['workspace_path'] . '/temp/pptx_' . uniqid('pptx_', true);
+            $tempDir = $this->core->agent_config['workspace_path'] . '/temp/pptx_' . uniqid('pptx_', true);
             if (!mkdir($tempDir, 0755, true)) {
                 return ['error' => 'Cannot create temp directory'];
             }

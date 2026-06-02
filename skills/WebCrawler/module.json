@@ -1,0 +1,13 @@
+{
+  "name": "WebCrawler",
+  "version": "1.0.0",
+  "description": "Web page crawler tool based on libHttp - extract HTML, text, content, links, assets, JSON, and download files.",
+  "author": "agent self-developed",
+  "email": "",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  }
+}

@@ -21,12 +21,14 @@
 namespace modules\agent_core;
 
 use modules\agent_core\lib\config;
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Lib\Error;
 use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\Reflect;
 use Nervsys\Core\System;
+use Nervsys\Ext\libFileIO;
 
 final class core extends Factory
 {
@@ -35,6 +37,7 @@ final class core extends Factory
     public const PROC_IDX_OPENAI = 0;
     public const PROC_IDX_EXEC   = 1;
 
+    public utils     $utils;
     public config    $config;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
@@ -59,6 +62,7 @@ final class core extends Factory
     {
         $this->init();
 
+        $this->utils     = utils::new();
         $this->config    = config::new();
         $this->socketMgr = SocketMgr::new();
         $this->procMgr   = ProcMgr::new('socket');
@@ -70,11 +74,11 @@ final class core extends Factory
             $this->session_history_limit = $this->agent_config['agent_memory']['max_history'];
         }
 
-        if ('' === $this->agent_config['agent_tools']['workspace_path'] || !is_dir($this->agent_config['agent_tools']['workspace_path'])) {
-            $this->agent_config['agent_tools']['workspace_path'] = $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
+        if ('' === $this->agent_config['workspace_path'] || !is_dir($this->agent_config['workspace_path'])) {
+            $this->agent_config['workspace_path'] = $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
         }
 
-        $this->agent_config['agent_tools']['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
+        $this->agent_config['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
     }
 
     /**
@@ -83,17 +87,18 @@ final class core extends Factory
      * @return void
      * @throws \ReflectionException
      */
-    public function initModules(): void
+    public function initProvider(): void
     {
         foreach ($this->agent_config as $name => $config) {
             if (!isset($config['provider'])) {
                 continue;
             }
 
-            $module = '\\modules\\' . $config['provider'] . '\\go';
+            $module = '\\' . strtr($config['provider'], '/', '\\') . '\\go';
 
             try {
                 $this->agent_modules[$name] = $module::new();
+                $this->utils->debug('Loading Provider: ' . $config['provider'] . '...', 'trace');
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
@@ -104,53 +109,72 @@ final class core extends Factory
     }
 
     /**
-     * Initialize tools.
+     * @param string $module_type
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function initTools(): void
+    public function initModule(string $module_type): void
     {
-        if (!isset($this->agent_config['agent_tools']['enabled']) || true !== $this->agent_config['agent_tools']['enabled']) {
-            return;
-        }
+        $modules   = [];
+        $libFileIO = libFileIO::new();
+        $dir_list  = $libFileIO->getDirContents($this->app->root_path . DIRECTORY_SEPARATOR . $module_type);
 
-        $agent_tools = [];
-        $tool_list   = $this->agent_config['agent_tools']['list'] ?? [];
+        foreach ($dir_list as $dir) {
+            if ($dir['is_file']) {
+                continue;
+            }
 
-        foreach ($tool_list as $tool) {
-            $tool_class  = '\\modules\\' . $tool['module'] . '\\go';
-            $tool_meta   = '\\modules\\' . $tool['module'] . '\\tools';
-            $fn_disabled = $tool['disabled'] ?? [];
+            $json_file = $dir['absolute_path'] . DIRECTORY_SEPARATOR . 'module.json';
+            $meta_file = $dir['absolute_path'] . DIRECTORY_SEPARATOR . $module_type . '.php';
+
+            if (!is_file($json_file) || !is_file($meta_file)) {
+                continue;
+            }
+
+            $json_data = json_decode(file_get_contents($json_file), true);
+
+            if (
+                !is_array($json_data)
+                || !isset($json_data['entry'])
+                || !isset($json_data['name'])
+                || $json_data['name'] !== $dir['name']
+                || isset($this->agent_tools[$json_data['name']])
+            ) {
+                continue;
+            }
+
+            $namespace = '\\' . $module_type . '\\' . $json_data['name'];
 
             try {
-                $metadata = $tool_meta::META;
+                $module_class = $namespace . '\\' . strstr($json_data['entry'], '.', true);
+                $module_meta  = $namespace . '\\' . $module_type;
 
-                foreach ($metadata as $index => $meta_item) {
-                    if (in_array($meta_item['function']['name'], $fn_disabled, true)) {
-                        unset($metadata[$index]);
-                        continue;
-                    }
+                $metadata = $module_meta::META;
 
-                    $metadata[$index]['function']['name'] = $tool['module'] . '/' . $meta_item['function']['name'];
+                foreach ($metadata as $index => $meta) {
+                    $metadata[$index]['function']['name'] = $json_data['name'] . '/' . $meta['function']['name'];
                 }
 
-                $this->agent_tools[$tool['module']] = $tool_class::new();
+                $this->agent_tools[$json_data['name']] = $module_class::new();
 
-                $agent_tools = array_merge($agent_tools, $metadata);
+                $modules = array_merge($modules, $metadata);
+
+                $this->utils->debug('Loading ' . ucfirst($module_type) . ': ' . $json_data['name'] . '...', 'trace');
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
             }
         }
 
-        if (!empty($agent_tools)) {
-            $this->llm_tools['tools']               = $agent_tools;
+        if (!empty($modules)) {
+            $this->llm_tools['tools']               ??= [];
+            $this->llm_tools['tools']               = array_merge($this->llm_tools['tools'], $modules);
             $this->llm_tools['tool_choice']         = 'auto';
             $this->llm_tools['parallel_tool_calls'] = true;
         }
 
-        unset($agent_tools, $tool_list, $tool, $tool_class, $tool_meta, $fn_disabled, $metadata, $index, $meta_item);
+        unset($module_type, $modules, $libFileIO, $dir_list, $dir, $json_file, $meta_file, $json_data, $namespace, $module_class, $module_meta, $metadata, $index, $meta);
     }
 
     /**
@@ -254,7 +278,7 @@ final class core extends Factory
      */
     public function getSystemMemory(): array
     {
-        $system_default = $this->getSystemDefault($this->agent_config['agent_tools']['in_sandbox'] ?? true);
+        $system_default = $this->getSystemDefault($this->agent_config['sandbox_mode'] ?? true);
         $system_memory  = $this->agent_modules['agent_memory']->read('system', 0, 0);
 
         if (!empty($system_memory['messages'])) {
@@ -338,12 +362,12 @@ final class core extends Factory
      */
     public function securePath(string $input_path): string
     {
-        $in_sandbox = $this->agent_config['agent_tools']['in_sandbox'] ?? true;
-        $input_path = strtr($input_path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
-        $work_path  = rtrim($this->agent_config['agent_tools']['workspace_path'], '\\/');
-        $work_path  = strtr($work_path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
+        $sandbox_mode = $this->agent_config['sandbox_mode'] ?? true;
+        $input_path   = strtr($input_path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
+        $work_path    = rtrim($this->agent_config['workspace_path'], '\\/');
+        $work_path    = strtr($work_path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
 
-        if ($in_sandbox) {
+        if ($sandbox_mode) {
             if (str_starts_with($input_path, $work_path)) {
                 $input_path = substr($input_path, strlen($work_path) + 1);
             }
@@ -367,7 +391,7 @@ final class core extends Factory
             unset($safe_parts, $path_parts, $segment);
         }
 
-        unset($in_sandbox, $work_path);
+        unset($sandbox_mode, $work_path);
         return $input_path;
     }
 
@@ -411,18 +435,18 @@ final class core extends Factory
     /**
      * Get system default prompt.
      *
-     * @param bool $in_sandbox
+     * @param bool $sandbox_mode
      *
      * @return array
      * @throws \Exception
      */
-    public function getSystemDefault(bool $in_sandbox = true): array
+    public function getSystemDefault(bool $sandbox_mode = true): array
     {
         $prompts   = [];
         $php_path  = $this->OSMgr->getPhpPath();
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
-        $work_path = $this->agent_config['agent_tools']['workspace_path'];
+        $work_path = $this->agent_config['workspace_path'];
         $max_limit = $this->agent_config['agent_memory']['max_history'] * 3;
 
         $prompts[] = '## 系统';
@@ -449,7 +473,7 @@ final class core extends Factory
         $prompts[] = '- 优先专用工具，避免直接系统命令。执行PHP用exec，路径:`' . $php_path . '`';
 
         $prompts[] = '## 安全';
-        if ($in_sandbox) {
+        if ($sandbox_mode) {
             $prompts[] = '- **沙箱开**:所有文件以 `' . $work_path . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
         } else {
             $prompts[] = '- **沙箱关**:按绝对路径，优先项目目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
@@ -479,7 +503,7 @@ final class core extends Factory
             'content' => implode("\n", $prompts)
         ];
 
-        unset($in_sandbox, $php_path, $lang_code, $lang_name, $work_path, $prompts);
+        unset($sandbox_mode, $php_path, $lang_code, $lang_name, $work_path, $prompts);
         return $system_prompt;
     }
 

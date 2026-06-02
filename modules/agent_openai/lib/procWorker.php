@@ -148,7 +148,7 @@ class procWorker extends Factory
                         $image_loader = [];
 
                         foreach ($tool_results as $result) {
-                            if ('agent_tools/readImage' === $result['function_name']) {
+                            if ('System/readImage' === $result['function_name']) {
                                 $result_data = json_decode($result['content'], true);
 
                                 if (is_array($result_data) && 'success' === $result_data['status']) {

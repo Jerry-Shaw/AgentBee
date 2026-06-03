@@ -131,7 +131,6 @@ class go extends Factory
 
         $worker_pid = $this->core->procMgr->getPid(core::PROC_IDX_OPENAI);
         $this->utils->debug('ProcWorker started with pid: ' . $worker_pid, 'trace');
-
         $this->utils->debug('Register streamWorkerHandler', 'debug');
         $this->core->socketMgr->addExternalProc(
             $this->core->procMgr->getProc(core::PROC_IDX_OPENAI),
@@ -227,7 +226,7 @@ class go extends Factory
                     switch ($payload_type) {
                         case 'tools':
                             $this->in_process = true;
-                            $this->utils->debug('streamWorkerHandler: LLM Tool calls', 'debug');
+                            $this->utils->debug('streamWorkerHandler: LLM Tool calls', 'trace');
 
                             $this->core->agent_llm->chat(
                                 $message['socket_id'],
@@ -261,6 +260,8 @@ class go extends Factory
                             }
                             break;
                     }
+
+                    $this->utils->debug('streamWorkerHandler: LLM Stream end', 'trace');
                     break;
             }
         }

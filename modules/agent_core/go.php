@@ -39,6 +39,7 @@ class go extends Factory
 
     public array $coming_messages = [];
     public array $onsend_messages = [];
+    public array $message_buffers = [];
 
     /**
      * @throws \ReflectionException
@@ -189,7 +190,13 @@ class go extends Factory
 
             switch ($message['type']) {
                 case 'stream':
-                    $this->core->sendMessage($message['socket_id'], json_encode($payload, JSON_FORMAT));
+                    $stream_msg = json_encode($payload, JSON_FORMAT);
+
+                    if (isset($this->socket_session[$message['socket_id']])) {
+                        $this->core->sendMessage($message['socket_id'], $stream_msg);
+                    } else {
+                        $this->message_buffers[] = $stream_msg;
+                    }
 
                     if ('error' === $payload_type) {
                         unset($this->stream_buffers[$external_stream_id]);
@@ -224,7 +231,13 @@ class go extends Factory
 
                             $this->core->agent_llm->chat(
                                 $message['socket_id'],
-                                array_intersect_key($payload, $this->socket_session[$message['socket_id']]),
+                                array_intersect_key(
+                                    $payload,
+                                    [
+                                        'sessionId' => '',
+                                        'messageId' => '',
+                                    ]
+                                ),
                                 $current_history
                             );
                             break;
@@ -440,6 +453,12 @@ class go extends Factory
      */
     public function onSendString(string $socket_id): array
     {
+        if (!empty($this->message_buffers)) {
+            while (!is_null($buffer = array_shift($this->message_buffers))) {
+                $this->core->sendMessage($socket_id, $buffer);
+            }
+        }
+
         if (!empty($this->onsend_messages)) {
             $llm_data = [];
 

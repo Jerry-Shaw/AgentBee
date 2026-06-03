@@ -1,8 +1,8 @@
-# AgentBee - 开源 AI Agent 框架
+# AgentBee - 蜂小秘，来助力! 🐝
 
 <div align="center">
 
-**蜂小秘，来助力！** 🐝
+**蜂小秘，来助力!** 🐝
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.md)
 [![PHP](https://img.shields.io/badge/PHP-8.2+-green.svg)](https://www.php.net/)
@@ -16,246 +16,106 @@
 
 ## 概述 (Overview)
 
-**AgentBee (蜂小秘)** 是一个基于 PHP 开发的开源、轻量级 AI Agent 框架。它通过模块化架构，为大语言模型 (LLM) 对话和自主任务执行提供了全栈能力。依托 [Nervsys](https://github.com/Jerry-Shaw/Nervsys.git) 框架，AgentBee 支持 OpenAI 兼容协议，并通过 WebSocket 提供实时流式响应 —— 让开发者能够轻松地将 AI Agent 集成到任何应用或平台中。
+**AgentBee (蜂小秘)** 是一个基于 [Nervsys](https://github.com/Jerry-Shaw/Nervsys.git) PHP 生态构建的开源、模块化 AI Agent 框架。它通过轻量级的自动加载架构，为大语言模型 (LLM) 对话和自主任务执行提供了全栈能力。依托实时 WebSocket 通信协议、智能四级记忆管理系统以及动态技能发现机制，AgentBee 能够无缝集成到各类应用或平台中。
 
 ### 核心特性
 
-- **LLM 流式对话** — 实现逐 Token 的实时响应（支持正文、思考过程/推理、工具调用）。
-- **自主工具执行** — Agent 在对话过程中可动态调用各种工具（文件系统、网页爬取、文档处理、记忆管理、系统命令等）。
-- **模块化架构** — 能力即模块。通过内置的模块系统，无需修改核心代码即可添加或替换功能组件。
-- **多模态输入** — 支持文本、图片 (Data URL / 二进制) 以及嵌入式文本文件作为对话内容。
-- **四层记忆系统** — 提供 `system` (系统提示), `important` (重要事实), `daily` (每日摘要), 和 `ram` (临时缓存) 四个维度，基于 SQLite 或 JSONL 存储，支持 FTS5 全文检索。
-- **定时任务调度** — 内置任务调度器，支持周期性或一次性的自动化作业。
-- **WebSocket 原生设计** — 从底层构建，专为前端客户端与 Agent 后端之间的实时双向通信而设计。
+- **全自动加载技能与工具** — 将文件放入 `skills/` 或 `tools/` 目录即可自动生效（位于项目根目录）。无需修改配置中心或手动注册，系统启动时会自动检测并加载所有合规模块。
+- **四级记忆架构** — 采用持久化角色分层存储 (`system`, `important`, `daily`, `misc`)，内置智能上下文注入与自动清理触发器。
+- **原生 WebSocket 通信** — 支持纯文本、多模态输入（图片/文件）、二进制流式传输以及批量消息处理（`\n` 分隔符）。
+- **模块化业务逻辑** — 所有智能体工作流均写在 `go.php` 中。能力定义 (`skills/`) 与执行工具 (`tools/`) 清晰分离，避免将复杂逻辑散落在元数据里。
 
 ---
 
-## 架构与模块 (Architecture & Modules)
+## 📁 目录结构与核心规范
 
-AgentBee 由 `modules/` 目录下的多个独立模块组成。每个模块拥有自己的入口点 (`go.php`) 和可选的工具定义 (`tools.php`)。
-
-| 模块名称 | 功能描述 |
-| :--- | :--- |
-| **agent_bee** | 主程序引导模块 —— 连接所有组件的核心启动器。 |
-| **agent_core** | 核心运行时：包含 WebSocket 服务端、进程管理器 (ProcMgr)、Socket 管理 (SocketMgr)、会话历史管理、系统记忆注入、工具执行流水线 (`execTools`) 及主消息处理逻辑。 |
-| **agent_openai** | LLM 集成模块。封装 `libOpenAI` 用于调用 OpenAI 兼容接口。通过独立的工作进程 (`procWorker`) 并利用共享内存 (shmop) 处理流式响应，支持内容、思考块及并行工具调用。 |
-| **agent_claw** | 网络爬虫与 HTTP 工具 —— 实现 HTML 获取、正文智能提取、链接列表解析、文件下载、JSON API 解析及页面资源提取。 |
-| **agent_doc** | Office 文档处理模块 — 支持读取/写入 `.docx`、`.xlsx` (单表或多表) 及 `.pptx` (支持图片嵌入)。PPTX 图片采用 EMU 单位定位。 |
-| **agent_mem_db** | 基于 SQLite 的四层记忆系统，提供 CRUD 接口、FTS5 全文检索及任务调度器（添加/删除/列出/执行任务）。 |
-| **agent_mem_file** | 基于 JSONL 的备选记忆系统，具备与 `agent_mem_db` 相同的接口 —— 适用于仅依赖文件系统的部署环境。 |
-| **agent_tools** | 基础工具集：执行系统命令、获取时间、清理上下文窗口、读取图片 (Data URL)、以及完整的物理文件/目录操作。 |
-
-### 模块扩展模型
-
-每个模块通过 `tools.php` 中的 `META` 常量注册工具，格式遵循 OpenAI 的 Function Calling Schema：
-
-```php
-namespace modules\your_module;
-
-class tools {
-    public const META = [
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'toolName',
-                'description' => '工具的功能描述',
-                'parameters'  => ['type' => 'object', /* JSON Schema */],
-            ],
-        ],
-    ];
-}
-```
-
-只需在 `config/AgentBee.json` 的 `agent_tools.list` 中注册该模块，即可自动将其能力暴露给 LLM。支持通过 Git 仓库安装，无需改动核心代码。
-
----
-
-## 🚀 开发指南：如何创建工具模块
-
-想要添加新的功能？你可以按照 `agent_tools` 模块的模式来创建一个自己的工具模块。
-
-### 1. 目录结构
-在 `modules/` 目录下为你的模块创建一个新目录。例如，如果你要创建一个天气查询工具：
 ```text
-modules/agent_weather/
-├── go.php       # 模块入口点 (Bootstrap)
-└── tools.php    # 工具定义与逻辑实现
+AgentBee/
+├── modules/                    # 插件生态体系（合规检测后自动加载，无需配置）
+│   └── agent_core/             # 主程序引导模块 (Bootstrap)
+│       ├── module.json         # 模块元数据（name必须严格等于当前文件夹名）
+│       ├── go.php              # 核心业务逻辑、WebSocket处理器与状态管理
+│       └── core.php            # 核心业务基础模块
+├── skills/                     # AI能力库 / 插件目录（丰富的LLM能力扩展）
+│   ├── OfficeSuite/            # Office文档处理 (.docx/.xlsx/.pptx)
+│   └── WebCrawler/             # 网页抓取、内容提取与资源下载
+└── tools/                      # Agent执行工具目录（与skills同级，同样全自动加载）
+    ├── Memory/                 # 记忆库/定时任务相关操作工具
+    └── System/                 # Shell命令、文件I/O、上下文管理等底层操作
 ```
 
-### 2. 实现细节
+### 核心规则说明
+1. **`module.json.name`**：必须与所在文件夹名称完全一致。若不匹配，模块加载器将直接跳过该目录。需包含 `version`（版本）、`description`（描述）和 `dependencies`（依赖项）。PHP环境要求已交由 Nervsys 核心统一管控，故不再在文件中声明。
+2. **自动加载机制**：`tools/` 与 `skills/` 均支持热插拔发现模式。无需向配置中心注册或执行额外的初始化步骤，只需将符合语法规范的代码放入对应目录，即可即时生效。
+3. **Skills & Tools 关系说明** — Skills相当于复杂的Tools，两者在应用层类似，都是丰富LLM的能力。所有的路由分发、会话状态管理、记忆注入及定时任务调度逻辑全部编写在 `go.php` 中。
 
-#### **步骤 A: 定义工具逻辑 (`tools.php`)**
-在你的 `tools.php` 中，必须定义一个 `META` 常量来向 LLM 描述该工具，并实现实际的函数逻辑。
+---## 🧠 四级记忆系统 (4-Tier Memory System)
 
-```php
-namespace modules\agent_weather;
+旧版 JSONL 格式已被彻底移除，取而代之的是一个高性能、支持持久化的四层角色分级存储架构：
 
-class tools {
-    // 1. 面向 LLM 的元数据 (OpenAI Schema)
-    public const META = [
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'get_current_weather',
-                'description' => '获取指定位置的当前天气',
-                'parameters'  => [
-                    'type' => 'object',
-                    'properties' => [
-                        'location' => [
-                            'type' => 'string',
-                            'description' => '城市名称，例如：北京市',
-                        ],
-                    ],
-                    'required' => ['location'],
-                ],
-            ],
-        ],
-    ];
+| 层级 | 用途说明 | 生命周期与保留策略 |
+|------|----------|------------------|
+| **`system`** | 核心人设、系统规则、交互边界与约束条件。上下文注入时优先级最高。 | 永久保存（通过 `create_id` 更新） |
+| **`important`** | 关键事实、用户偏好、身份特征、长期状态变更。关键点发生后立即写入防丢失。 | 永久 / 长周期保留 |
+| **`daily`** | 按日期归档的摘要、任务执行结果与每日日志（自动按 `YYYYMMDD` 归类）。 | 每日滚动，过期自动清理 |
+| **`misc`** | 短期中间态数据、草稿或临时变量。系统会自动评估其价值并升级至上层持久化目录。 | 短周期 / 遇有价值自动升层 |
 
-    // 2. 实际的执行逻辑
-    public function get_current_weather(string $location): string {
-        // 你的实现 (例如调用第三方天气 API)
-        return "{$location} 的天气是晴天，25°C。";
-    }
-}
-```
-
-#### **步骤 B: 模块引导 (`go.php`)**
-`go.php` 文件确保模块在 Agent 启动时被初始化。对于简单的工具模块，这可以是一个占位符，或者用于注册特定的启动任务。
-
-#### **步骤 C: 注册模块 (`config/AgentBee.json`)**
-要使你的工具生效，请将你的模块名称添加到全局配置文件 `config/AgentBee.json` 的 `agent_tools.list` 中：
-
-```json
-{
-  "agent_tools": {
-    "list": [
-      "modules\\agent_tools",
-      "modules\\agent_weather" 
-    ]
-  }
-}
-```
-
-### 3. 开发流程总结
-1. **创建文件夹** $\rightarrow$ 2. **在 `tools.php` 中定义 `META` 与逻辑** $\rightarrow$ 3. **添加到 `config/AgentBee.json`** $\rightarrow$ **运行 Agent！**
+*智能触发逻辑*：收到新消息 → 检查 `daily`；提及时间/人物/事件 → 定向检索对应层级；上下文不足时 → 自动注入“请加载今日记忆”提示。系统遵循 **“宁多勿漏”** 原则，优先保证关键信息不丢失（仅在 Token 超限或连续工具调用过多时触发裁剪）。
 
 ---
 
-## WebSocket 对接指南 (Frontend Integration)
+## 🔌 WebSocket 协议详解 (Protocol Specification)
 
-AgentBee 使用 WebSocket 进行实时通信。前端应建立长连接并处理不同的消息类型。
+AgentBee 采用标准 WebSocket 进行双向通信，载荷格式为 JSON。客户端支持在单个帧内发送多条消息（使用换行符 `\n` 分隔）。每条请求必须包含 `type` 字段用于核心引擎的路由分发。会话状态通过 `sessionId` 与每次请求生成的唯一 `messageId` 绑定追踪。
 
-### 连接流程
-1. **Handshake**: 前端发起 WS 连接至服务端端口（默认 `8686`）。
-2. **Chat Request**: 发送用户指令，包含必要的 `socket_id`。
-3. **Stream Response**: 服务端推送流式数据包。
-4. **End Signal**: 收到结束信号后，完成本次对话循环。
+### 1. 连接与会话初始化
+- 建立标准 WS 握手即可接入服务。
+- 客户端需维护 `sessionId`（首次可传 `"default"`）并为每轮对话生成独立 `messageId`，服务端据此关联上下文与记忆索引。
 
-### 消息协议格式
+### 2. 消息类型 (`type`) 路由行为
 
-**客户端发送 (Request):**
-```json
-{
-  "type": "chat",
-  "payload": { "content": "帮我查一下今天的天气" },
-  "socket_id": "unique_session_id"
-}
-```
+| Type | Content 结构示例 | 处理逻辑 | 返回格式 |
+|------|------------------|----------|----------|
+| **`setting`** | `{ "act": "getConfig"\|"saveConfig"\|"getDefaultConfig", "data": {...} }` | 直接读取/保存配置，不经过 LLM。同步执行并立即返回结果。 | `{"type":"setting","status":"success/error","act":"...","data":{}}` |
+| **`system`** | `{ "act": "getVersion"\|"getModels" }` | 获取系统版本或当前可用的 LLM 模型列表。纯元数据查询，无需调用大模型。 | `{"type":"streaming", ...}` 或错误对象 |
+| **`text`** | `{ "sessionId":"...", "messageId":"...", "content": { "text": "你好" } }` | 发送纯文本至 LLM 处理。支持完整的流式输出（SSE/WS双模）。 | 持续推送 `payload.type: "text"` → 最终返回 `"end"` 或工具调用请求数组 |
+| **`chat`** | `{ "sessionId":"...", "messageId":"...", "content":[ {"type":"text","text":"..."}, {"type":"image_url",{"url":"data:..."}}, {"type":"file":{"filename":"x.txt","mimeType":"text/plain","content":"..."}} ] }` | 多模态输入（文本、图片Data URL或二进制占位符 `__BINARY__`、纯文本文件）。自动过滤非法后缀，合并后送入 LLM。 | 同 `text` 流式协议。文件头会自动添加“--- 文件开始 ---”等标识便于模型理解上下文。 |
+| **`stop`** | `{ "sessionId":"...", "messageId":"..." }` (content可选) | 立即中断当前正在进行的 LLM 生成或工具执行链。状态重置，等待下一轮输入。 | 无额外载荷，流式通道关闭并将控制权交还给客户端。 |
 
-**服务端推送 (Stream/Response):**
-服务端通过 `agent_openai` 模块实时推送以下格式的数据：
+### 3. 服务端响应结构
+- **同步指令**（`setting`/`system`) & **异步/流式处理**：服务端推送帧格式如下：  
+  ```json
+  {"type": "text|tool_calls|error|end", ...}
+  ```
+  *(注：`socket_id` 仅用于内部路由确定发送对象，实际通过 WebSocket 发送给客户端的内容仅有上述 Payload 部分。)*
 
-| 消息类型 (`type`) | 说明 | Payload 内容示例 |
-| :--- | :--- | :--- |
-| `content` | 普通文本回复 | `{"data": "今天天气晴朗..."}` |
-| `think` | 模型思考过程/推理链 | `{"data": "用户询问天气，我需要调用工具..."}` |
-| `tool_calls` | 工具调用指令 | `{"data": {"name": "get_weather", "args": {...}}}` |
-| `end` | 对话结束信号 | `{"data": null}` |
+  - `text`: LLM 生成的文本分片（支持逐字渲染）
+  - `tool_calls`: 模型请求调用的工具列表及对应参数
+  - `history/add` & `sync`: 处理过程中动态同步的上下文记忆快照
+  - `context`: 排队等待下一轮处理的待发消息队列
+- **批量消息**：客户端若通过 `\n` 发送多行，每行独立路由。全部处理完毕后，最后一帧包裹 `"type":"end"` 标识当前批次结束（非 close）。
 
-### 流式参数解析 (LLM Streaming Details)
-
-在流式传输过程中，底层通过 `agent_openai` 实时转发 LLM 的 Delta 数据。前端应根据 `type` 进行差异化渲染：
-
-- **正文内容**: 监听 `type: 'content'`，其 `payload.data` 即为当前片段的文本。
-- **推理过程**: 监听 `type: 'think'`，用于展示模型的思考逻辑（若模型支持）。
-- **工具执行**: 当收到 `type: 'tool_calls'` 时，前端应停止渲染文本，转而进入等待状态或展示工具调用动作。
-
----
-
-## 工具列表 (Available Tools)
-
-### 📦 agent_tools (核心实用工具)
-
-| 工具名称 | 功能描述 |
-| :--- | :--- |
-| `agent_tools/exec` | 执行外部系统命令 (`program` + `argv[]`)。支持超时设置与工作目录。 |
-| `agent_tools/getTime` | 返回当前系统的日期时间及 Unix 时间戳。 |
-| `agent_tools/cleanContext` | 清理上下文窗口：保留最近 N 条消息及 M 组工具调用对，控制 Token 使用量。 |
-| `agent_tools/readImage` | 将图片文件加载为 Data URL (base64)。常用于将本地图片转为模型可读格式。 |
-| `agent_tools/readFile` | 读取文本或二进制文件，支持 offset 和 limit 参数。 |
-| `agent_tools/writeFile` | 写入或追加文件内容（自动创建目录）。单次建议 $\le$ 4096 字符。 |
-| `agent_tools/copyFile` | 复制文件到目标位置，若目标已存在则覆盖。 |
-| `agent_tools/deleteFile` | 永久删除磁盘上的文件（危险操作，需确认）。 |
-| `agent_tools/searchFiles` | 使用 Glob 模式搜索目录下的文件 (如 `*.php`)，支持递归扫描。 |
-| `agent_tools/getFileSize` | 获取指定文件的字节大小。 |
-| `agent_tools/listDirectory` | 列出目录内容（非递归），包含文件大小与类型信息。 |
-| `agent_tools/createDirectory` | 创建目录树，自动创建不存在的父级目录。 |
-| `agent_tools/copyDirectory` | 递归复制整个目录到新位置（目标路径必须不存在）。 |
-| `agent_tools/deleteDirectory` | 递归删除目录及其所有内容（危险操作，需确认）。 |
-
-### 🕷️ agent_claw (网页爬取与 HTTP)
-
-| 工具名称 | 功能描述 |
-| :--- | :--- |
-| `agent_claw/fetchHtml` | 获取指定 URL 的原始 HTML。支持自定义 Header 与超时设置。 |
-| `agent_claw/fetchText` | 提取网页纯文本，自动去除标签并压缩空白符。 |
-| `agent_claw/fetchContent` | 智能正文提取 —— 剔除导航、页脚及广告，仅返回 `{title, content}` 主体内容。 |
-| `agent_claw/extractLinks` | 从页面中提取所有绝对路径的超链接（已去重）。 |
-| `agent_claw/extractAssets` | 识别并提取页面中的图片 (`.png`, `.jpg`) 及文件 (`.pdf`, `.zip`, `.docx`)。 |
-| `agent_claw/fetchJson` | 发起 HTTP GET/POST 请求并返回解析后的 JSON 对象，适用于 API 调用。 |
-| `agent_claw/downloadFile` | 流式下载远程文件到本地磁盘，支持自动创建目录。 |
-
-### 📄 agent_doc (文档处理)
-
-| 工具名称 | 功能描述 |
-| :--- | :--- |
-| `agent_doc/readDocx` | 通过绝对路径读取 `.docx` 文档的文本内容。 |
-| `agent_doc/writeDocx` | 创建或覆盖 `.docx` 文件。支持段落及图片嵌入 (`{type:"image", content:"path"}`)。 |
-| `agent_doc/readXlsx` | 读取 `.xlsx` 表格，返回所有工作表的数据（二维数组格式）。 |
-| `agent_doc/writeXlsx` | 写入 Excel 文件。支持单表或多表模式 (`[{"name":"Sheet1","rows":[[...]]}]`)。 |
-| `agent_doc/readPptx` | 读取 `.pptx` 幻灯片，返回每张幻灯片的标题与文本内容。 |
-| `agent_doc/writePptx` | 创建或覆盖 `.pptx` 文件。支持插入文字及图片（使用 EMU 单位定位）。 |
+### 4. 二进制传输优化 (Advanced Binary Support)
+针对大体积图片或文件场景，支持零拷贝/低内存占用的批量上传机制：
+1. 客户端将 JSON 头与原始二进制流打包为单个 WS Frame。
+2. 前 **4字节** (Big-Endian Uint32) = JSON 元数据部分的长度。
+3. 元数据内 `content` 数组使用 `"__BINARY__"` 作为占位符，并通过 `binary_sizes` 声明各二进制块的精确尺寸（单位：Byte）。
+4. 服务端剥离头部、解析JSON后按顺序将真实二进制数据替换进对应位置，随后送入 LLM 或记忆流水线处理。
 
 ---
 
-## 配置 (Configuration)
+## 🚀 快速接入指南 (Quick Start)
 
-所有核心配置均存储在 `config/AgentBee.json` 中，包括：
-- LLM API Key 及 Base URL。
-- WebSocket 服务端口。
-- 已启用的模块列表 (`agent_tools.list`)。
-- 记忆库存储路径及数据库类型。
-
----
-
-## 开发与部署 (Development)
-
-1. **环境要求**: PHP $\ge$ 8.2, SQLite3 扩展, `shmop` (共享内存)。
-2. **快速启动**: 
+1. **创建模块**：确保文件夹名称与 `module.json.name` 严格一致（否则加载器跳过）。
+2. **放入文件**：将自定义技能/工具直接拖入对应目录（无需编写注册表或修改配置中心，语法合规即热插拔生效）。
+3. **实现逻辑**：所有工作流、消息路由与状态管理均写在 `go.php` 中。保持元数据简洁专注。
+4. **启动服务**：  
    ```bash
-   # 进入项目目录并运行 bootstrap
-   php modules/agent_bee/go.php
+   php go.php -c=provider/worker_name
    ```
-3. **前端接入**: 使用标准 WebSocket API 连接至服务端端口。
+5. **前端接入**：连接至配置的 WebSocket 地址。首次可调用 `setting/getConfig` 验证连通性，或直接发送带有效 `sessionId` 的 `chat` 请求开始对话。
 
 ---
 
-## 📅 开发路线图 (Development Roadmap)
-
-- [x] **阶段 1: 工具集时代 (Tooling Era)** — 实现基础原子能力（文件、网页、文档、命令）。*当前进度*
-- [ ] **阶段 2: 技能模块时代 (Skill Era)** — 将多个工具组合成“任务流”。例如：`agent_skill/report_generator` 可以自动完成“读取数据 $\rightarrow$ 生成图表 $\rightarrow$ 写入Docx”的闭环。
-- [ ] **阶段 3: 自主调度时代 (Autonomous Era)** — 结合定时任务，实现基于时间的自动化触发（如：每天早上 9 点自动抓取新闻并整理成摘要）。
-
----
-*Built with ❤️ by AgentBee Team.*
+## 📜 许可协议 (License)
+Apache 2.0 | © 2026 秋水之冰 & AgentBee

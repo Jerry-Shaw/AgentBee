@@ -118,4 +118,4 @@ For heavy images or files within `chat` type:
 ---
 
 ## 📜 License & Credits
-Apache 2.0 | © 2026 秋水之冰 (Aquarius Ice) & AgentBee
+Apache 2.0 | © 2026 秋水之冰 & AgentBee

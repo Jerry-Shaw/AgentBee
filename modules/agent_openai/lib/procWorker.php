@@ -54,7 +54,7 @@ class procWorker extends Factory
         $assistant_content = '';
         $reasons_content   = '';
         $finish_reason     = '';
-        $tool_calls        = [];
+        $tool_calls_buffer = [];
 
         // Sync session history from main process
         $this->core->session_history = $session_history;
@@ -67,10 +67,10 @@ class procWorker extends Factory
             $libOpenAI,
             $socket_id,
             $message_metadata,
+            &$tool_calls_buffer,
             &$assistant_content,
             &$reasons_content,
-            &$finish_reason,
-            &$tool_calls,
+            &$finish_reason
         ): void
         {
             try {
@@ -79,7 +79,7 @@ class procWorker extends Factory
                         $socket_id,
                         $data,
                         $message_metadata,
-                        $tool_calls,
+                        $tool_calls_buffer,
                         $assistant_content,
                         $reasons_content,
                         $finish_reason
@@ -95,7 +95,7 @@ class procWorker extends Factory
 
                         $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
 
-                        $tool_calls = [];
+                        $tool_calls_buffer = [];
                         return;
                     }
 
@@ -110,7 +110,7 @@ class procWorker extends Factory
                         $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
                         $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, '[系统提示] 内容过长被截断。试试拆分问题，或设置更大的输出长度。');
 
-                        $tool_calls = [];
+                        $tool_calls_buffer = [];
                         return;
                     }
 
@@ -120,7 +120,7 @@ class procWorker extends Factory
                         'reasoning_content' => $reasons_content
                     ];
 
-                    if (!empty($tool_calls)) {
+                    if (!empty($tool_calls_buffer)) {
                         $assistant_message['tool_calls'] = array_map(
                             fn($tool) => [
                                 'id'       => $tool['id'],
@@ -129,16 +129,18 @@ class procWorker extends Factory
                                     'name'      => $tool['function']['name'],
                                     'arguments' => $tool['function']['arguments']
                                 ]
-                            ], $tool_calls
+                            ], $tool_calls_buffer
                         );
+
+                        $this->sendMsg($socket_id, 'stream', 'tool_calls', $message_metadata, $assistant_message['tool_calls']);
                     }
 
                     $this->core->session_history[] = $assistant_message;
                     $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
 
-                    if (!empty($tool_calls)) {
+                    if (!empty($tool_calls_buffer)) {
                         $session_history = $this->core->session_history;
-                        $tool_results    = $this->core->execTools($tool_calls);
+                        $tool_results    = $this->core->execTools($tool_calls_buffer);
                         $current_history = $this->core->session_history;
 
                         if (count($current_history) < count($session_history)) {
@@ -194,7 +196,7 @@ class procWorker extends Factory
 
         $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
 
-        if (empty($tool_calls)) {
+        if (empty($tool_calls_buffer)) {
             $this->sendMsg($socket_id, 'end', 'end', $message_metadata);
         } else {
             $this->sendMsg($socket_id, 'end', 'tools', $message_metadata);
@@ -286,8 +288,6 @@ class procWorker extends Factory
                     $tool_calls_buffer[$tool_index]['function']['arguments'] .= $tool_call_chunk['function']['arguments'];
                 }
             }
-
-            $this->sendMsg($socket_id, 'stream', 'tool_calls', $message_metadata, $tool_calls_buffer);
         }
 
         unset($socket_id, $data, $message_metadata, $delta, $tool_call_chunk, $tool_index);

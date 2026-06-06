@@ -50,15 +50,30 @@ class go extends Factory
         $this->core  = core::new();
         $this->utils = utils::new();
 
-        $this->utils->debug('Initializing...', 'trace');
-        $this->core->initCore();
-        $this->utils->debug('Initializing Tools...', 'debug');
+        $this->init();
+
+        $this->message         = message::new();
+        $this->core->socketMgr = SocketMgr::new();
+    }
+
+    /**
+     * @param bool $reload
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function init(bool $reload = false): void
+    {
+        $this->utils->debug($reload ? 'Reloading...' : 'Initializing...', 'trace');
+        $this->core->initCore($reload);
+        $this->utils->debug('Loading Tools...', 'debug');
         $this->core->initModule('tools');
-        $this->utils->debug('Initializing Skills...', 'debug');
+        $this->utils->debug('Loading Skills...', 'debug');
         $this->core->initModule('skills');
-        $this->utils->debug('Initializing Providers...', 'debug');
+        $this->utils->debug('Loading Providers...', 'debug');
         $this->core->initProvider();
 
+        $this->utils->debug('Model ID: ' . $this->core->agent_config['agent_llm']['model'] ?? 'NONE', 'trace');
         $this->utils->debug('SandBox mode: ' . ($this->core->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
 
         $workspace_path = $this->core->agent_config['workspace_path'] ?? '';
@@ -70,9 +85,6 @@ class go extends Factory
             } catch (\Throwable) {
             }
         }
-
-        $this->message         = message::new();
-        $this->core->socketMgr = SocketMgr::new();
     }
 
     /**
@@ -391,6 +403,13 @@ class go extends Factory
 
                 $response = ['type' => $data['type']] + $result['data'];
                 $this->core->sendMessage($socket_id, json_encode($response, JSON_FORMAT));
+
+                // Reload config
+                if ('saveConfig' === $result['data']['act']) {
+                    $this->init(true);
+                    $this->core->agent_llm->reload();
+                    $this->utils->debug('UserMessage: ' . $data['type'] . '->reloaded', 'trace');
+                }
 
                 unset($socket_id, $message, $is_binary, $messages, $line, $data, $type_method, $result, $response);
                 return;

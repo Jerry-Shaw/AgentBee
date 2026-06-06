@@ -55,10 +55,12 @@ final class core extends Factory
     /**
      * Initialize core components.
      *
+     * @param bool $reload
+     *
      * @return void
      * @throws \ReflectionException
      */
-    public function initCore(): void
+    public function initCore(bool $reload = false): void
     {
         $this->init();
 
@@ -67,7 +69,7 @@ final class core extends Factory
         $this->socketMgr = SocketMgr::new();
         $this->procMgr   = ProcMgr::new('socket');
 
-        $this->agent_config = $this->config->get();
+        $this->agent_config = $this->config->get(true, $reload);
         $this->llm_params   = $this->agent_config['agent_llm']['params'] ?? [];
 
         if (isset($this->agent_config['agent_memory']['max_history'])) {

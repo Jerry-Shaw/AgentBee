@@ -52,13 +52,15 @@ class config extends Factory
 
     /**
      * @param bool $decrypt
+     * @param bool $reload
      *
      * @return array
      * @throws \ReflectionException
+     * @throws \Exception
      */
-    public function get(bool $decrypt = true): array
+    public function get(bool $decrypt = true, bool $reload = false): array
     {
-        if (!empty($this->config)) {
+        if (!$reload && !empty($this->config)) {
             $config_data = $this->config;
         } else {
             if (is_file($this->conf_system)) {

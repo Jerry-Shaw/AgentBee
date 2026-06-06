@@ -27,6 +27,8 @@ use Nervsys\Ext\libOpenAI;
 
 class go extends Factory
 {
+    const CMD_RELOAD = '__RELOAD__';
+
     public core   $core;
     public \Shmop $shmop;
 
@@ -42,9 +44,24 @@ class go extends Factory
         $this->core       = core::new();
         $this->procWorker = procWorker::new();
 
-        $this->core->initCore();
+        $this->init();
+    }
+
+    /**
+     * @param bool $reload
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function init(bool $reload = false): void
+    {
+        $this->core->initCore($reload);
         $this->core->initModule('tools');
         $this->core->initModule('skills');
+
+        if ($reload) {
+            Factory::destroy($this->libOpenAI);
+        }
 
         $this->libOpenAI = libOpenAI::new(
             $this->core->agent_config['agent_llm']['api_url'],
@@ -56,6 +73,25 @@ class go extends Factory
         $this->libOpenAI->setTimeout($this->core->agent_config['agent_llm']['timeout']);
         $this->libOpenAI->setApiModel($this->core->agent_config['agent_llm']['model']);
         $this->libOpenAI->setModelParams($this->core->getLLMParams());
+    }
+
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function reload(): void
+    {
+        $this->init(true);
+        $this->core->procMgr->writeProc(core::PROC_IDX_OPENAI, self::CMD_RELOAD);
+    }
+
+    /**
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function getModels(): array
+    {
+        return $this->libOpenAI->listModels();
     }
 
     /**
@@ -78,15 +114,6 @@ class go extends Factory
 
         unset($worker_pid, $shm_key, $shmop);
         return $this;
-    }
-
-    /**
-     * @return array
-     * @throws \ReflectionException
-     */
-    public function getModels(): array
-    {
-        return $this->libOpenAI->listModels();
     }
 
     /**
@@ -149,6 +176,12 @@ class go extends Factory
             }
 
             $job_line = trim($job_line);
+
+            if (self::CMD_RELOAD === $job_line) {
+                $this->reload();
+                continue;
+            }
+
             $job_data = json_decode($job_line, true);
 
             if (!is_array($job_data)) {

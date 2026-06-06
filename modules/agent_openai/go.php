@@ -29,8 +29,7 @@ class go extends Factory
 {
     const CMD_RELOAD = '__RELOAD__';
 
-    public core   $core;
-    public \Shmop $shmop;
+    public core $core;
 
     public libOpenAI $libOpenAI;
 
@@ -82,6 +81,7 @@ class go extends Factory
     public function reload(): void
     {
         $this->init(true);
+        $this->setShmop($this->core->procMgr->getPid(core::PROC_IDX_OPENAI));
         $this->core->procMgr->writeProc(core::PROC_IDX_OPENAI, self::CMD_RELOAD);
     }
 
@@ -99,20 +99,12 @@ class go extends Factory
      *
      * @return $this
      */
-    public function buildShmop(int $worker_pid): static
+    public function setShmop(int $worker_pid): static
     {
         $shm_key = crc32($worker_pid) & 0x7FFFFFFF;
-        $shmop   = shmop_open($shm_key, "c", 0644, 1);
+        $this->libOpenAI->openShmop($shm_key);
 
-        if (false === $shmop) {
-            throw new \RuntimeException('Failed to create shared memory');
-        } else {
-            $this->shmop = $shmop;
-        }
-
-        $this->libOpenAI->setShmop($shmop);
-
-        unset($worker_pid, $shm_key, $shmop);
+        unset($worker_pid, $shm_key);
         return $this;
     }
 
@@ -165,8 +157,7 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
-        $this->buildShmop(getmypid());
-        $this->procWorker = procWorker::new();
+        $this->setShmop(getmypid());
 
         while (true) {
             $job_line = fgets(STDIN);
@@ -179,6 +170,7 @@ class go extends Factory
 
             if (self::CMD_RELOAD === $job_line) {
                 $this->init(true);
+                $this->setShmop(getmypid());
                 continue;
             }
 

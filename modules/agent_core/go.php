@@ -150,8 +150,8 @@ class go extends Factory
             [$this, 'streamWorkerHandler']
         );
 
-        $this->utils->debug('Build Shmop for libOpenAI', 'debug');
-        $this->core->agent_llm->buildShmop($worker_pid);
+        $this->utils->debug('Create shared memory for libOpenAI', 'debug');
+        $this->core->agent_llm->setShmop($worker_pid);
     }
 
     /**

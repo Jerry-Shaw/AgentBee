@@ -178,7 +178,7 @@ class go extends Factory
             $job_line = trim($job_line);
 
             if (self::CMD_RELOAD === $job_line) {
-                $this->reload();
+                $this->init(true);
                 continue;
             }
 

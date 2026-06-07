@@ -495,7 +495,8 @@ final class core extends Factory
         $prompts[] = '3.清理规范：仅删旧工具对/消息，**清理前须手动保存**(保留≥2工具对+10条)。';
 
         $prompts[] = '## 工具';
-        $prompts[] = '- 优先专用工具，避免直接系统命令。执行PHP用exec，路径:`' . $php_path . '`';
+        $prompts[] = '- **强制优先**：先检查专用工具。若有，禁止`exec`，必须调用工具。';
+        $prompts[] = '- 若需使用`exec`运行PHP脚本，PHP路径如下:`' . $php_path . '`';
 
         $prompts[] = '## 安全';
         if ($sandbox_mode) {

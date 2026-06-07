@@ -41,6 +41,7 @@ final class core extends Factory
     public config    $config;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
+    public libFileIO $libFileIO;
 
     public array $llm_tools  = [];
     public array $llm_params = [];
@@ -67,6 +68,7 @@ final class core extends Factory
         $this->utils     = utils::new();
         $this->config    = config::new();
         $this->socketMgr = SocketMgr::new();
+        $this->libFileIO = libFileIO::new();
         $this->procMgr   = ProcMgr::new('socket');
 
         $this->agent_config = $this->config->get(true, $reload);
@@ -118,9 +120,8 @@ final class core extends Factory
      */
     public function initModule(string $module_type): void
     {
-        $modules   = [];
-        $libFileIO = libFileIO::new();
-        $dir_list  = $libFileIO->getDirContents($this->app->root_path . DIRECTORY_SEPARATOR . $module_type);
+        $modules  = [];
+        $dir_list = $this->libFileIO->getDirContents($this->app->root_path . DIRECTORY_SEPARATOR . $module_type);
 
         foreach ($dir_list as $dir) {
             if ($dir['is_file']) {
@@ -176,7 +177,7 @@ final class core extends Factory
             $this->llm_tools['parallel_tool_calls'] = true;
         }
 
-        unset($module_type, $modules, $libFileIO, $dir_list, $dir, $json_file, $meta_file, $json_data, $namespace, $module_class, $module_meta, $metadata, $index, $meta);
+        unset($module_type, $modules, $dir_list, $dir, $json_file, $meta_file, $json_data, $namespace, $module_class, $module_meta, $metadata, $index, $meta);
     }
 
     /**

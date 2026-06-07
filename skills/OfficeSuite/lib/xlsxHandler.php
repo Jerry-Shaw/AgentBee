@@ -44,10 +44,6 @@ class xlsxHandler extends Factory
      */
     public function read(string $path): array
     {
-        if (!file_exists($path)) {
-            return ['error' => "File not found: $path"];
-        }
-
         $zip = new \ZipArchive();
         if (true !== $zip->open($path)) {
             return ['error' => "Failed to open XLSX file as a zip archive."];

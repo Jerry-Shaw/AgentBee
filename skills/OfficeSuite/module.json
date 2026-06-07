@@ -1,6 +1,6 @@
 {
   "name": "OfficeSuite",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Document processing module for reading and writing DOCX, XLSX, and PPTX files using native PHP (no external dependencies).",
   "author": "agent self-developed",
   "email": "",

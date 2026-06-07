@@ -25,11 +25,17 @@ namespace skills\OfficeSuite;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
+use skills\OfficeSuite\lib\docxHandler;
+use skills\OfficeSuite\lib\pptxHandler;
+use skills\OfficeSuite\lib\xlsxHandler;
 
 class go extends Factory
 {
     public core $core;
 
+    /**
+     * @throws \ReflectionException
+     */
     public function __construct()
     {
         $this->core = core::new();
@@ -40,9 +46,9 @@ class go extends Factory
      *
      * @param string $type
      *
-     * @return object|null
+     * @return docxHandler|xlsxHandler|pptxHandler|null
      */
-    public function getHandler(string $type): ?object
+    public function getHandler(string $type): docxHandler|xlsxHandler|pptxHandler|null
     {
         $type       = strtolower($type);
         $validTypes = ['docx', 'xlsx', 'pptx'];
@@ -84,7 +90,12 @@ class go extends Factory
     // ---------- DOCX ----------
     public function readDocx(string $path): array
     {
-        $path    = $this->core->securePath($path);
+        $path = $this->core->securePath($path);
+
+        if (!is_file($path)) {
+            return ['error' => "File not found: $path"];
+        }
+
         $handler = $this->getHandler('docx');
 
         if (null === $handler) {
@@ -116,7 +127,12 @@ class go extends Factory
     // ---------- XLSX ----------
     public function readXlsx(string $path): array
     {
-        $path    = $this->core->securePath($path);
+        $path = $this->core->securePath($path);
+
+        if (!is_file($path)) {
+            return ['error' => "File not found: $path"];
+        }
+
         $handler = $this->getHandler('xlsx');
 
         if (null === $handler) {
@@ -147,7 +163,12 @@ class go extends Factory
     // ---------- PPTX ----------
     public function readPptx(string $path): array
     {
-        $path    = $this->core->securePath($path);
+        $path = $this->core->securePath($path);
+
+        if (!is_file($path)) {
+            return ['error' => "File not found: $path"];
+        }
+
         $handler = $this->getHandler('pptx');
 
         if (null === $handler) {

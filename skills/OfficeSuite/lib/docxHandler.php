@@ -44,10 +44,6 @@ class docxHandler extends Factory
      */
     public function read(string $path): array
     {
-        if (!file_exists($path)) {
-            return ['error' => "File not found: $path"];
-        }
-
         $zip = new \ZipArchive();
         if (true !== $zip->open($path)) {
             return ['error' => 'Failed to open DOCX file as a zip archive.'];
@@ -81,201 +77,6 @@ class docxHandler extends Factory
         ];
 
         unset($zip, $xmlContent, $reader, $textParts);
-        return $result;
-    }
-
-    /**
-     * Parse existing document into items (text + images) and extract images to temp folder.
-     *
-     * @param string $path
-     * @param string $tempMediaDir
-     *
-     * @return array
-     */
-    private function parseExistingItems(string $path, string $tempMediaDir): array
-    {
-        $items = [];
-        if (!file_exists($path)) {
-            return $items;
-        }
-
-        $zip = new \ZipArchive();
-        if (true !== $zip->open($path)) {
-            return $items;
-        }
-
-        // Load relationship map
-        $relMap      = [];
-        $relsContent = $zip->getFromName('word/_rels/document.xml.rels');
-        if (false !== $relsContent) {
-            $relReader = new \XMLReader();
-            if (true === $relReader->XML($relsContent)) {
-                while ($relReader->read()) {
-                    if ($relReader->nodeType == \XMLReader::ELEMENT && 'Relationship' === $relReader->name) {
-                        $id     = null;
-                        $target = null;
-                        if ($relReader->hasAttributes) {
-                            while ($relReader->moveToNextAttribute()) {
-                                if ('Id' === $relReader->name) {
-                                    $id = $relReader->value;
-                                }
-                                if ('Target' === $relReader->name) {
-                                    $target = $relReader->value;
-                                }
-                            }
-                            $relReader->moveToElement();
-                        }
-                        if ($id && $target) {
-                            $relMap[$id] = $target;
-                        }
-                    }
-                }
-            }
-            $relReader->close();
-            unset($relReader);
-        }
-        unset($relsContent);
-
-        // Parse document.xml
-        $xmlContent = $zip->getFromName('word/document.xml');
-        if (false === $xmlContent) {
-            $zip->close();
-            return $items;
-        }
-
-        $reader = new \XMLReader();
-        if (false === $reader->XML($xmlContent)) {
-            $reader->close();
-            $zip->close();
-            return $items;
-        }
-
-        $currentText  = '';
-        $imageCounter = 0;
-
-        while ($reader->read()) {
-            if ($reader->nodeType == \XMLReader::ELEMENT) {
-                if ('w:t' === $reader->name) {
-                    $currentText .= $reader->readString() ?? '';
-                } elseif ('w:drawing' === $reader->name) {
-                    if ('' !== $currentText) {
-                        $items[]     = ['type' => 'text', 'content' => $currentText];
-                        $currentText = '';
-                    }
-                    $drawingXml = $reader->readOuterXml();
-                    $imageInfo  = $this->extractImageFromDrawing($drawingXml, $relMap, $zip, $tempMediaDir, ++$imageCounter);
-                    if (null !== $imageInfo) {
-                        $items[] = $imageInfo;
-                    }
-                    unset($drawingXml, $imageInfo);
-                }
-            } elseif ($reader->nodeType == \XMLReader::END_ELEMENT && 'w:p' === $reader->name) {
-                if ('' !== $currentText) {
-                    $items[]     = ['type' => 'text', 'content' => $currentText];
-                    $currentText = '';
-                }
-            }
-        }
-        $reader->close();
-        if ('' !== $currentText) {
-            $items[] = ['type' => 'text', 'content' => $currentText];
-        }
-
-        $zip->close();
-        unset($zip, $xmlContent, $reader, $relMap, $currentText, $imageCounter);
-        return $items;
-    }
-
-    /**
-     * Extract image from drawing XML and save to temp directory.
-     *
-     * @param string      $drawingXml
-     * @param array       $relMap
-     * @param \ZipArchive $zip
-     * @param string      $tempMediaDir
-     * @param int         $imgIdx
-     *
-     * @return array|null
-     */
-    private function extractImageFromDrawing(string $drawingXml, array $relMap, \ZipArchive $zip, string $tempMediaDir, int $imgIdx): ?array
-    {
-        $dom = new \DOMDocument();
-        if (false === $dom->loadXML($drawingXml)) {
-            return null;
-        }
-        $xp = new \DOMXPath($dom);
-        $xp->registerNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
-        $xp->registerNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
-        $xp->registerNamespace('wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing');
-
-        $blipNodes = $xp->query('//a:blip/@r:embed');
-        if (false === $blipNodes || 0 === $blipNodes->length) {
-            return null;
-        }
-        $relId = $blipNodes->item(0)->value;
-        if (!isset($relMap[$relId])) {
-            return null;
-        }
-
-        $imageTarget    = $relMap[$relId];
-        $imagePathInZip = 'word/' . $imageTarget;
-        $imageData      = $zip->getFromName($imagePathInZip);
-        if (false === $imageData) {
-            return null;
-        }
-
-        $ext     = strtolower(pathinfo($imageTarget, PATHINFO_EXTENSION));
-        $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
-        if (!in_array($ext, $allowed, true)) {
-            $ext = 'png';
-        }
-        $tempPath = $tempMediaDir . '/orig_img_' . $imgIdx . '.' . $ext;
-        file_put_contents($tempPath, $imageData);
-
-        // Get dimensions from wp:extent
-        $widthEmu    = 200 * 9525;
-        $heightEmu   = $widthEmu;
-        $extentNodes = $xp->query('//wp:extent');
-        if (false !== $extentNodes && $extentNodes->length > 0) {
-            $widthEmu  = (int)$extentNodes->item(0)->getAttribute('cx');
-            $heightEmu = (int)$extentNodes->item(0)->getAttribute('cy');
-        }
-        $widthPx  = (int)round($widthEmu / 9525);
-        $heightPx = (int)round($heightEmu / 9525);
-
-        $result = [
-            'type'   => 'image',
-            'path'   => $tempPath,
-            'width'  => $widthPx,
-            'height' => $heightPx,
-        ];
-
-        unset($dom, $xp, $blipNodes, $relId, $imageTarget, $imagePathInZip, $imageData);
-        unset($ext, $allowed, $tempPath, $widthEmu, $heightEmu, $extentNodes, $widthPx, $heightPx);
-        return $result;
-    }
-
-    /**
-     * Recursively flatten nested array.
-     *
-     * @param array $data
-     *
-     * @return array
-     */
-    private function flattenData(array $data): array
-    {
-        $result = [];
-        foreach ($data as $item) {
-            if (is_array($item)) {
-                if (isset($item['type']) && 'image' === $item['type']) {
-                    $result[] = $item;
-                } else {
-                    $result = array_merge($result, $this->flattenData($item));
-                }
-            } else {
-                $result[] = $item;
-            }
-        }
         return $result;
     }
 
@@ -539,16 +340,198 @@ class docxHandler extends Factory
     }
 
     /**
-     * Append content to an existing DOCX file.
+     * Parse existing document into items (text + images) and extract images to temp folder.
      *
      * @param string $path
-     * @param array  $data
+     * @param string $tempMediaDir
      *
      * @return array
      */
-    public function append(string $path, array $data): array
+    private function parseExistingItems(string $path, string $tempMediaDir): array
     {
-        return $this->write($path, $data, true);
+        $items = [];
+        if (!file_exists($path)) {
+            return $items;
+        }
+
+        $zip = new \ZipArchive();
+        if (true !== $zip->open($path)) {
+            return $items;
+        }
+
+        // Load relationship map
+        $relMap      = [];
+        $relsContent = $zip->getFromName('word/_rels/document.xml.rels');
+        if (false !== $relsContent) {
+            $relReader = new \XMLReader();
+            if (true === $relReader->XML($relsContent)) {
+                while ($relReader->read()) {
+                    if ($relReader->nodeType == \XMLReader::ELEMENT && 'Relationship' === $relReader->name) {
+                        $id     = null;
+                        $target = null;
+                        if ($relReader->hasAttributes) {
+                            while ($relReader->moveToNextAttribute()) {
+                                if ('Id' === $relReader->name) {
+                                    $id = $relReader->value;
+                                }
+                                if ('Target' === $relReader->name) {
+                                    $target = $relReader->value;
+                                }
+                            }
+                            $relReader->moveToElement();
+                        }
+                        if ($id && $target) {
+                            $relMap[$id] = $target;
+                        }
+                    }
+                }
+            }
+            $relReader->close();
+            unset($relReader);
+        }
+        unset($relsContent);
+
+        // Parse document.xml
+        $xmlContent = $zip->getFromName('word/document.xml');
+        if (false === $xmlContent) {
+            $zip->close();
+            return $items;
+        }
+
+        $reader = new \XMLReader();
+        if (false === $reader->XML($xmlContent)) {
+            $reader->close();
+            $zip->close();
+            return $items;
+        }
+
+        $currentText  = '';
+        $imageCounter = 0;
+
+        while ($reader->read()) {
+            if ($reader->nodeType == \XMLReader::ELEMENT) {
+                if ('w:t' === $reader->name) {
+                    $currentText .= $reader->readString() ?? '';
+                } elseif ('w:drawing' === $reader->name) {
+                    if ('' !== $currentText) {
+                        $items[]     = ['type' => 'text', 'content' => $currentText];
+                        $currentText = '';
+                    }
+                    $drawingXml = $reader->readOuterXml();
+                    $imageInfo  = $this->extractImageFromDrawing($drawingXml, $relMap, $zip, $tempMediaDir, ++$imageCounter);
+                    if (null !== $imageInfo) {
+                        $items[] = $imageInfo;
+                    }
+                    unset($drawingXml, $imageInfo);
+                }
+            } elseif ($reader->nodeType == \XMLReader::END_ELEMENT && 'w:p' === $reader->name) {
+                if ('' !== $currentText) {
+                    $items[]     = ['type' => 'text', 'content' => $currentText];
+                    $currentText = '';
+                }
+            }
+        }
+        $reader->close();
+        if ('' !== $currentText) {
+            $items[] = ['type' => 'text', 'content' => $currentText];
+        }
+
+        $zip->close();
+        unset($zip, $xmlContent, $reader, $relMap, $currentText, $imageCounter);
+        return $items;
+    }
+
+    /**
+     * Extract image from drawing XML and save to temp directory.
+     *
+     * @param string      $drawingXml
+     * @param array       $relMap
+     * @param \ZipArchive $zip
+     * @param string      $tempMediaDir
+     * @param int         $imgIdx
+     *
+     * @return array|null
+     */
+    private function extractImageFromDrawing(string $drawingXml, array $relMap, \ZipArchive $zip, string $tempMediaDir, int $imgIdx): ?array
+    {
+        $dom = new \DOMDocument();
+        if (false === $dom->loadXML($drawingXml)) {
+            return null;
+        }
+        $xp = new \DOMXPath($dom);
+        $xp->registerNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
+        $xp->registerNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+        $xp->registerNamespace('wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing');
+
+        $blipNodes = $xp->query('//a:blip/@r:embed');
+        if (false === $blipNodes || 0 === $blipNodes->length) {
+            return null;
+        }
+        $relId = $blipNodes->item(0)->value;
+        if (!isset($relMap[$relId])) {
+            return null;
+        }
+
+        $imageTarget    = $relMap[$relId];
+        $imagePathInZip = 'word/' . $imageTarget;
+        $imageData      = $zip->getFromName($imagePathInZip);
+        if (false === $imageData) {
+            return null;
+        }
+
+        $ext     = strtolower(pathinfo($imageTarget, PATHINFO_EXTENSION));
+        $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
+        if (!in_array($ext, $allowed, true)) {
+            $ext = 'png';
+        }
+        $tempPath = $tempMediaDir . '/orig_img_' . $imgIdx . '.' . $ext;
+        file_put_contents($tempPath, $imageData);
+
+        // Get dimensions from wp:extent
+        $widthEmu    = 200 * 9525;
+        $heightEmu   = $widthEmu;
+        $extentNodes = $xp->query('//wp:extent');
+        if (false !== $extentNodes && $extentNodes->length > 0) {
+            $widthEmu  = (int)$extentNodes->item(0)->getAttribute('cx');
+            $heightEmu = (int)$extentNodes->item(0)->getAttribute('cy');
+        }
+        $widthPx  = (int)round($widthEmu / 9525);
+        $heightPx = (int)round($heightEmu / 9525);
+
+        $result = [
+            'type'   => 'image',
+            'path'   => $tempPath,
+            'width'  => $widthPx,
+            'height' => $heightPx,
+        ];
+
+        unset($dom, $xp, $blipNodes, $relId, $imageTarget, $imagePathInZip, $imageData);
+        unset($ext, $allowed, $tempPath, $widthEmu, $heightEmu, $extentNodes, $widthPx, $heightPx);
+        return $result;
+    }
+
+    /**
+     * Recursively flatten nested array.
+     *
+     * @param array $data
+     *
+     * @return array
+     */
+    private function flattenData(array $data): array
+    {
+        $result = [];
+        foreach ($data as $item) {
+            if (is_array($item)) {
+                if (isset($item['type']) && 'image' === $item['type']) {
+                    $result[] = $item;
+                } else {
+                    $result = array_merge($result, $this->flattenData($item));
+                }
+            } else {
+                $result[] = $item;
+            }
+        }
+        return $result;
     }
 
     /**

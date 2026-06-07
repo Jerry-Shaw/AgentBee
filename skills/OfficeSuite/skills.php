@@ -90,15 +90,15 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'readPptx',
-                'description' => '读取PPTX文件所有幻灯片文本。返回{"status":"success","slides":[{"number":1,"title":"...","content":"..."}]}或{"error":"..."}',
+                'description' => '读取PPTX所有幻灯片文本和图片。返回{status,slides[{number,title,content,images[{path,width,height,x,y,ext}]}],images_temp_dir}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'path' => ['type' => 'string', 'description' => 'PPTX文件路径']
                     ],
                     'required'   => ['path']
-                ],
-            ],
+                ]
+            ]
         ],
         [
             'type'     => 'function',

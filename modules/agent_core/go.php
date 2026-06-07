@@ -127,25 +127,27 @@ class go extends Factory
      */
     public function runProcWorker(): void
     {
-        $worker_status = $this->core->procMgr->getStatus(core::PROC_IDX_OPENAI);
+        $worker_status = $this->core->procMgr->getStatus($this->core->openai_idx);
 
         if (0 < $worker_status) {
             return;
         }
 
-        $this->core->procMgr->close(core::PROC_IDX_OPENAI);
+        $this->core->procMgr->close($this->core->openai_idx);
 
-        $this->core->procMgr->command([
-            $this->core->OSMgr->getPhpPath(),
-            $this->core->app->script_path,
-            '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['worker_name']
-        ])->run(core::PROC_IDX_OPENAI);
+        $this->core->openai_idx = $this->core->procMgr->command(
+            [
+                $this->core->OSMgr->getPhpPath(),
+                $this->core->app->script_path,
+                '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['worker_name']
+            ]
+        )->run($this->core->openai_idx);
 
-        $worker_pid = $this->core->procMgr->getPid(core::PROC_IDX_OPENAI);
+        $worker_pid = $this->core->procMgr->getPid($this->core->openai_idx);
         $this->utils->debug('ProcWorker started with pid: ' . $worker_pid, 'trace');
         $this->utils->debug('Register streamWorkerHandler', 'debug');
         $this->core->socketMgr->addExternalProc(
-            $this->core->procMgr->getProc(core::PROC_IDX_OPENAI),
+            $this->core->procMgr->getProc($this->core->openai_idx),
             [$this, 'streamWorkerHandler'],
             [$this, 'streamWorkerHandler']
         );

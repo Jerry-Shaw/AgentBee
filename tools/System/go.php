@@ -82,14 +82,15 @@ class go extends Factory
         $active  = time();
         $procMgr = $this->core->procMgr;
 
-        $procMgr
+        $proc_idx = $procMgr
             ->command([$program, ...$argv])
             ->setWorkDir($work_path)
-            ->run(core::PROC_IDX_EXEC);
+            ->run();
 
-        $proc_pid = $procMgr->getPid(core::PROC_IDX_EXEC);
+        $proc_pid = $procMgr->getPid($proc_idx);
 
         $procMgr->awaitProc(
+            $proc_idx,
             function (string $output) use (&$active, &$result): void
             {
                 $active           = time();

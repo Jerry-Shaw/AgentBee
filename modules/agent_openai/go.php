@@ -81,8 +81,8 @@ class go extends Factory
     public function reload(): void
     {
         $this->init(true);
-        $this->setShmop($this->core->procMgr->getPid(core::PROC_IDX_OPENAI));
-        $this->core->procMgr->writeProc(core::PROC_IDX_OPENAI, self::CMD_RELOAD);
+        $this->setShmop($this->core->procMgr->getPid($this->core->openai_idx));
+        $this->core->procMgr->writeProc($this->core->openai_idx, self::CMD_RELOAD);
     }
 
     /**
@@ -128,7 +128,7 @@ class go extends Factory
         ];
 
         $this->libOpenAI->resumeStream();
-        $this->core->procMgr->writeProc(core::PROC_IDX_OPENAI, json_encode($task));
+        $this->core->procMgr->writeProc($this->core->openai_idx, json_encode($task));
 
         unset($socket_id, $message_metadata, $session_history);
     }

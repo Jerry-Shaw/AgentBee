@@ -34,14 +34,13 @@ final class core extends Factory
 {
     use System;
 
-    public const PROC_IDX_OPENAI = 0;
-    public const PROC_IDX_EXEC   = 1;
-
     public utils     $utils;
     public config    $config;
     public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
     public libFileIO $libFileIO;
+
+    public int $openai_idx = 0;
 
     public array $llm_tools  = [];
     public array $llm_params = [];

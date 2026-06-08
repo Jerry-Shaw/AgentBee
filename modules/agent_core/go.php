@@ -148,7 +148,6 @@ class go extends Factory
         $this->utils->debug('Register streamWorkerHandler', 'debug');
         $this->core->socketMgr->addExternalProc(
             $this->core->procMgr->getProc($this->core->openai_idx),
-            [$this, 'streamWorkerHandler'],
             [$this, 'streamWorkerHandler']
         );
 

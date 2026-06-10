@@ -100,7 +100,7 @@ class go extends Factory
         ini_set('memory_limit', $memory_limit);
         $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
 
-        $this->runProcWorker();
+        $this->core->runProcWorker($this->core->openai_idx, [$this, 'streamWorkerHandler']);
 
         $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
@@ -119,40 +119,6 @@ class go extends Factory
                 ->listenTo($server_host, true);
         } catch (\Throwable) {
         }
-    }
-
-    /**
-     * @return void
-     * @throws \Exception
-     */
-    public function runProcWorker(): void
-    {
-        $worker_status = $this->core->procMgr->getStatus($this->core->openai_idx);
-
-        if (0 < $worker_status) {
-            return;
-        }
-
-        $this->core->procMgr->close($this->core->openai_idx);
-
-        $this->core->openai_idx = $this->core->procMgr->command(
-            [
-                $this->core->OSMgr->getPhpPath(),
-                $this->core->app->script_path,
-                '-c=' . $this->core->agent_config['agent_llm']['provider'] . '/' . $this->core->agent_config['agent_llm']['worker_name']
-            ]
-        )->run($this->core->openai_idx);
-
-        $worker_pid = $this->core->procMgr->getPid($this->core->openai_idx);
-        $this->utils->debug('ProcWorker started with pid: ' . $worker_pid, 'trace');
-        $this->utils->debug('Register streamWorkerHandler', 'debug');
-        $this->core->socketMgr->addExternalProc(
-            $this->core->procMgr->getProc($this->core->openai_idx),
-            [$this, 'streamWorkerHandler']
-        );
-
-        $this->utils->debug('Create shared memory for libOpenAI', 'debug');
-        $this->core->agent_llm->setShmop($worker_pid);
     }
 
     /**
@@ -454,10 +420,10 @@ class go extends Factory
         }
 
         if (!empty($llm_data)) {
-            $this->runProcWorker();
             $this->in_process = true;
-            $this->utils->debug('UserMessage: Send message to LLM', 'debug');
             $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
+            $this->utils->debug('UserMessage: Send message to LLM', 'debug');
+            $this->core->runProcWorker($this->core->openai_idx, [$this, 'streamWorkerHandler']);
             $this->core->agent_llm->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
         }
 

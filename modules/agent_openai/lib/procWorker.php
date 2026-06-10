@@ -237,7 +237,7 @@ class procWorker extends Factory
 
         // Normal content
         if (isset($delta['content']) && '' !== $delta['content']) {
-            if ('<|channel>' === $delta['content']) {
+            if ('<|channel>thought' === $delta['content']) {
                 $this->message_type = 'think';
             } elseif ('<channel|>' === $delta['content']) {
                 $this->message_type = 'content';
@@ -247,6 +247,7 @@ class procWorker extends Factory
                 } elseif ('think' === $this->message_type) {
                     $reasons_content .= $delta['content'];
                 }
+
                 $this->sendMsg($socket_id, 'stream', $this->message_type, $message_metadata, $delta['content']);
             }
         }

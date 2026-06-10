@@ -180,6 +180,48 @@ final class core extends Factory
     }
 
     /**
+     * @param int      $proc_idx
+     * @param callable $output_handler
+     *
+     * @return int
+     * @throws \Exception
+     */
+    public function runProcWorker(int $proc_idx, callable $output_handler): int
+    {
+        $worker_status = $this->procMgr->getStatus($proc_idx);
+
+        if (0 < $worker_status) {
+            return $proc_idx;
+        }
+
+        $this->procMgr->close($proc_idx);
+
+        $proc_idx = $this->procMgr->command(
+            [
+                $this->OSMgr->getPhpPath(),
+                $this->app->script_path,
+                '-c=' . $this->agent_config['agent_llm']['provider'] . '/' . $this->agent_config['agent_llm']['worker_name']
+            ]
+        )->run($proc_idx);
+
+        $worker_pid = $this->procMgr->getPid($proc_idx);
+
+        $this->utils->debug('ProcWorker started with pid: ' . $worker_pid, 'trace');
+        $this->utils->debug('Register Output Handler', 'debug');
+
+        $this->socketMgr->addExternalProc(
+            $this->procMgr->getProc($proc_idx),
+            $output_handler
+        );
+
+        $this->utils->debug('Create shared memory for libOpenAI', 'debug');
+        $this->agent_modules['agent_llm']->setShmop($worker_pid);
+
+        unset($output_handler, $worker_status, $worker_pid);
+        return $proc_idx;
+    }
+
+    /**
      * Add a message to session history.
      *
      * @param array $content

@@ -21,9 +21,9 @@
  * limitations under the License.
  */
 
-namespace skills\OfficeSuite;
+namespace tools\OfficeSuite;
 
-class skills
+class tools
 {
     public const META = [
         [

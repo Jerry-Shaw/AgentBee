@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace skills\WebCrawler;
+namespace tools\WebCrawler;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;

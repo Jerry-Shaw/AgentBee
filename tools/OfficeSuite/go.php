@@ -21,13 +21,13 @@
  * limitations under the License.
  */
 
-namespace skills\OfficeSuite;
+namespace tools\OfficeSuite;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
-use skills\OfficeSuite\lib\docxHandler;
-use skills\OfficeSuite\lib\pptxHandler;
-use skills\OfficeSuite\lib\xlsxHandler;
+use tools\OfficeSuite\lib\docxHandler;
+use tools\OfficeSuite\lib\pptxHandler;
+use tools\OfficeSuite\lib\xlsxHandler;
 
 class go extends Factory
 {

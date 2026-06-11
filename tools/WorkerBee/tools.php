@@ -27,15 +27,15 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程(独立LLM会话，可并行)。异步，结果稍后推送。建议按需分配角色协同完成任务。',
+                'description' => '创建Worker子进程(独立LLM会话，可并行)。异步，结果稍后推送。建议按需分配角色协同完成任务。注意：协同模式调用，worker_name不可重复。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'name'   => ['type' => 'string', 'description' => 'Worker名称，如reviewer'],
-                        'role'   => ['type' => 'string', 'description' => 'Worker角色，如"代码审查员"'],
-                        'prompt' => ['type' => 'string', 'description' => '系统指令：角色、目标、边界']
+                        'worker_name'   => ['type' => 'string', 'description' => 'Worker名称，须唯一'],
+                        'worker_role'   => ['type' => 'string', 'description' => 'Worker角色，如"代码审查员"'],
+                        'system_prompt' => ['type' => 'string', 'description' => '系统指令：角色、目标、边界']
                     ],
-                    'required'   => ['name', 'role', 'prompt']
+                    'required'   => ['worker_name', 'worker_role', 'system_prompt']
                 ],
             ],
         ],
@@ -47,10 +47,10 @@ class tools
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_id' => ['type' => 'string', 'description' => 'Worker ID'],
-                        'message'   => ['type' => 'string', 'description' => '消息内容']
+                        'worker_name' => ['type' => 'string', 'description' => 'Worker名称'],
+                        'message'     => ['type' => 'string', 'description' => '消息内容']
                     ],
-                    'required'   => ['worker_id', 'message']
+                    'required'   => ['worker_name', 'message']
                 ],
             ],
         ],
@@ -62,9 +62,9 @@ class tools
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_id' => ['type' => 'string', 'description' => 'Worker ID']
+                        'worker_name' => ['type' => 'string', 'description' => 'Worker名称']
                     ],
-                    'required'   => ['worker_id']
+                    'required'   => ['worker_name']
                 ],
             ],
         ],

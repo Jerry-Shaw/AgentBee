@@ -27,40 +27,40 @@ class go extends Factory
     /**
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
-     * @param string $name
-     * @param string $role
-     * @param string $prompt
+     * @param string $worker_name
+     * @param string $worker_role
+     * @param string $system_prompt
      *
      * @return string[]
      */
-    public function start(string $name, string $role, string $prompt): array
+    public function start(string $worker_name, string $worker_role, string $system_prompt): array
     {
-        return ['status' => 'pending', 'action' => 'start', 'name' => $name, 'role' => $role, 'prompt' => $prompt];
+        return ['status' => 'pending', 'action' => 'start', 'worker_name' => $worker_name, 'worker_role' => $worker_role, 'system_prompt' => $system_prompt];
     }
 
     /**
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
-     * @param int    $worker_id
+     * @param string $worker_name
      * @param string $message
      *
      * @return string[]
      */
-    public function talk(int $worker_id, string $message): array
+    public function talk(string $worker_name, string $message): array
     {
-        return ['status' => 'pending', 'action' => 'talk', 'worker_id' => $worker_id, 'message' => $message];
+        return ['status' => 'pending', 'action' => 'talk', 'worker_name' => $worker_name, 'message' => $message];
     }
 
     /**
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
-     * @param int $worker_id
+     * @param string $worker_name
      *
      * @return string[]
      */
-    public function close(int $worker_id): array
+    public function close(string $worker_name): array
     {
-        return ['status' => 'pending', 'action' => 'close', 'worker_id' => $worker_id];
+        return ['status' => 'pending', 'action' => 'close', 'worker_name' => $worker_name];
     }
 
     /**

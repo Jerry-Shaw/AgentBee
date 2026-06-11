@@ -273,6 +273,7 @@ class go extends Factory
                             'sessionId'  => 'beeWorker-' . uniqid('', true),
                             'messageId'  => 'beeWorker-' . uniqid('', true),
                             'talk_count' => count($session_history),
+                            'isSubTalk'  => 1,
                         ],
                         $session_history,
                         $this->libOpenAI

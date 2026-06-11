@@ -278,6 +278,8 @@ class go extends Factory
                                         $this->core->procMgr->writeProc($payload['data']['worker_id'], json_encode(['cmd' => 'close'], JSON_FORMAT));
                                         $this->core->procMgr->close($payload['data']['worker_id']);
                                         unset($this->child_workers[$payload['data']['worker_id']]);
+
+                                        $this->message_buffers[] = ['type' => 'close', 'isSubTalk' => 1, 'data' => $worker_info];
                                     }
 
                                     $this->onsend_messages[] = '[WorkerBee] WorkerID:' . $payload['data']['worker_id'] . ' 进程已终止';

@@ -221,6 +221,10 @@ class go extends Factory
                                         [$this, 'streamWorkerHandler']
                                     );
 
+                                    $this->utils->debug('WorkerBee started: ' . $payload['data']['worker_name'] . ' (WorkerID:' . $proc_idx . ', ' . $payload['data']['worker_role'] . ')', 'trace');
+
+                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 已就绪 (角色: ' . $payload['data']['worker_role'] . ')，等待指令';
+
                                     $start_datetime = date('Y-m-d H:i:s');
 
                                     $this->child_workers[$payload['data']['worker_name']] = [
@@ -240,10 +244,6 @@ class go extends Factory
                                         'worker_role'   => $payload['data']['worker_role'],
                                         'system_prompt' => $payload['data']['system_prompt'],
                                     ], JSON_FORMAT));
-
-                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 已就绪 (角色: ' . $payload['data']['worker_role'] . ')，等待指令';
-
-                                    $this->utils->debug('WorkerBee started: ' . $payload['data']['worker_name'] . ' (WorkerID:' . $proc_idx . ', ' . $payload['data']['worker_role'] . ')', 'trace');
                                     break;
 
                                 case 'talk':

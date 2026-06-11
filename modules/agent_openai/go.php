@@ -218,7 +218,6 @@ class go extends Factory
         }
 
         $socket_id       = '';
-        $worker_id       = '';
         $worker_name     = '';
         $worker_role     = '';
         $session_history = [];
@@ -247,7 +246,6 @@ class go extends Factory
             switch ($data['cmd']) {
                 case 'start':
                     $socket_id   = $data['socket_id'] ?? '';
-                    $worker_id   = $data['worker_id'] ?? '';
                     $worker_name = $data['worker_name'] ?? '';
                     $worker_role = $data['worker_role'] ?? '';
 
@@ -267,13 +265,13 @@ class go extends Factory
                         $socket_id,
                         [
                             'sender'     => __FUNCTION__,
-                            'workerID'   => $worker_id,
+                            'isSubTalk'  => 1,
                             'workerName' => $worker_name,
                             'workerRole' => $worker_role,
                             'sessionId'  => 'WorkerBee-' . uniqid('', true),
                             'messageId'  => 'WorkerBee-' . uniqid('', true),
                             'talk_count' => count($session_history),
-                            'isSubTalk'  => 1,
+                            'socket_id'  => $socket_id,
                         ],
                         $session_history,
                         $this->libOpenAI

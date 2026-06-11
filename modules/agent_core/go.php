@@ -287,7 +287,7 @@ class go extends Factory
                                         $this->core->procMgr->close($worker_info['proc_idx']);
                                         unset($this->child_workers[$payload['data']['worker_name']]);
 
-                                        $this->message_buffers[] = ['type' => 'close', 'isSubTalk' => 1, 'data' => $worker_info];
+                                        $this->message_buffers[] = json_encode(['type' => 'close', 'isSubTalk' => 1, 'data' => $worker_info], JSON_FORMAT);
 
                                         $this->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
                                     } else {

@@ -209,9 +209,9 @@ class go extends Factory
                                 case 'start':
                                     if (isset($this->child_workers[$payload['data']['worker_name']])) {
                                         // WorkerBee already exists, change name or talk
-                                        $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $this->child_workers[$payload['data']['worker_name']]['worker_role'] . ')';
-
                                         $this->utils->debug('WorkerBee already exists: ' . $payload['data']['worker_name'] . ' | ' . $this->child_workers[$payload['data']['worker_name']]['worker_role'] . ' already exists!', 'trace');
+
+                                        $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $this->child_workers[$payload['data']['worker_name']]['worker_role'] . ')';
                                         break;
                                     }
 
@@ -221,9 +221,9 @@ class go extends Factory
                                         [$this, 'streamWorkerHandler']
                                     );
 
-                                    $this->utils->debug('WorkerBee started: ' . $payload['data']['worker_name'] . ' (WorkerID:' . $proc_idx . ', ' . $payload['data']['worker_role'] . ')', 'trace');
+                                    $this->utils->debug('WorkerBee started: ' . $payload['data']['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload['data']['worker_role'] . ')', 'trace');
 
-                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 已就绪 (角色: ' . $payload['data']['worker_role'] . ')，等待指令';
+                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" | ' . $payload['data']['worker_role'] . '，已就绪，等待指令';
 
                                     $start_datetime = date('Y-m-d H:i:s');
 
@@ -251,7 +251,7 @@ class go extends Factory
 
                                     if (empty($worker_info) || 0 === $this->core->procMgr->getStatus($worker_info['proc_idx'])) {
                                         // WorkerBee died, notice main worker
-                                        $this->onsend_messages[] = '[WorkerBee] ' . $payload['data']['worker_name'] . ' 进程已终止，消息发送失败';
+                                        $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 进程已终止，消息发送失败';
                                         break;
                                     }
 
@@ -294,7 +294,7 @@ class go extends Factory
                                         $this->utils->debug('WorkerBee not found: ' . $worker_info['worker_name'], 'trace');
                                     }
 
-                                    $this->onsend_messages[] = '[WorkerBee] ' . $payload['data']['worker_name'] . ' 进程已终止';
+                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 进程已终止';
                                     break;
 
                                 case 'list':
@@ -304,8 +304,8 @@ class go extends Factory
                                     foreach ($this->child_workers as $worker) {
                                         $elapsed = $now - strtotime($worker['last_talk']);
 
-                                        $lines[] = '- ' . $worker['worker_name']
-                                            . ' (ID:' . $worker['proc_idx'] . ')'
+                                        $lines[] = '- "' . $worker['worker_name']
+                                            . '" (ID:' . $worker['proc_idx'] . ')'
                                             . ' | 角色:' . $worker['worker_role']
                                             . ' | 状态:' . $worker['status']
                                             . ' | 对话:' . $worker['talk_count'] . '轮'
@@ -348,14 +348,14 @@ class go extends Factory
                             $limit_count   = $max_history * 3;
 
                             if ($this->core->agent_config['agent_llm']['child_worker'] === $payload['sender'] && '' !== $payload['data']) {
-                                $this->onsend_messages[] = '[WorkerBee] 来自 [' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
+                                $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
 
                                 $this->child_workers[$payload['data']['workerName']]['status']     = 'idle';
                                 $this->child_workers[$payload['data']['workerName']]['last_talk']  = date('Y-m-d H:i:s');
                                 $this->child_workers[$payload['data']['workerName']]['talk_count'] = $payload['talk_count'];
 
                                 if ($payload['talk_count'] > $warning_count) {
-                                    $this->onsend_messages[] = '[WorkerBee] ' . $payload['workerName'] . ' (角色: ' . $payload['workerRole'] . ') 对话已达上限，请保存重要内容后关闭该Worker';
+                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker';
                                     $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_history . ')', 'trace');
                                 }
                             }

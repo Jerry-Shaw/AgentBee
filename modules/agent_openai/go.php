@@ -252,7 +252,7 @@ class go extends Factory
                     $worker_role = $data['worker_role'] ?? '';
 
                     $session_history = [
-                        ['role' => 'system', 'content' => '你是' . $worker_name . '，' . $worker_role . "\n\n" . $data['prompt']]
+                        ['role' => 'system', 'content' => '你是' . $worker_name . '，' . $worker_role . "\n\n" . $data['system_prompt']]
                     ];
                     break;
 

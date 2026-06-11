@@ -207,7 +207,7 @@ final class core extends Factory
 
         $worker_pid = $this->procMgr->getPid($proc_idx);
 
-        $this->utils->debug('ProcWorker started with pid: ' . $worker_pid, 'trace');
+        $this->utils->debug($worker_name . ' started with pid: ' . $worker_pid, 'trace');
         $this->utils->debug('Register Output Handler', 'debug');
 
         $this->socketMgr->addExternalProc(
@@ -215,8 +215,10 @@ final class core extends Factory
             $output_handler
         );
 
-        $this->utils->debug('Create shared memory for libOpenAI', 'debug');
-        $this->agent_modules['agent_llm']->setShmop($worker_pid);
+        if ($proc_idx === $this->openai_idx) {
+            $this->utils->debug('Create shared memory for ' . $worker_name, 'debug');
+            $this->agent_modules['agent_llm']->setShmop($worker_pid);
+        }
 
         unset($worker_name, $output_handler, $worker_status, $worker_pid);
         return $proc_idx;

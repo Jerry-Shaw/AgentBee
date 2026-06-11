@@ -150,6 +150,11 @@ class procWorker extends Factory
                         $image_loader = [];
 
                         foreach ($tool_results as $result) {
+                            if (str_starts_with($result['function_name'], 'WorkerBee/')) {
+                                $result_data = json_decode($result['content'], true);
+                                $this->sendMsg($socket_id, 'context', 'WorkerBee', $message_metadata, $result_data['data']);
+                            }
+
                             if ('System/readImage' === $result['function_name']) {
                                 $result_data = json_decode($result['content'], true);
 
@@ -197,9 +202,9 @@ class procWorker extends Factory
         $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
 
         if (empty($tool_calls_buffer)) {
-            $this->sendMsg($socket_id, 'end', 'end', $message_metadata);
+            $this->sendMsg($socket_id, 'end', 'end', $message_metadata, $assistant_content);
         } else {
-            $this->sendMsg($socket_id, 'end', 'tools', $message_metadata);
+            $this->sendMsg($socket_id, 'end', 'tools', $message_metadata, $tool_calls_buffer);
         }
 
         unset($socket_id, $message_metadata, $session_history, $libOpenAI);

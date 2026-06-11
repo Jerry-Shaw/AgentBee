@@ -181,12 +181,13 @@ final class core extends Factory
 
     /**
      * @param int      $proc_idx
+     * @param string   $worker_name
      * @param callable $output_handler
      *
      * @return int
      * @throws \Exception
      */
-    public function runProcWorker(int $proc_idx, callable $output_handler): int
+    public function runProcWorker(int $proc_idx, string $worker_name, callable $output_handler): int
     {
         $worker_status = $this->procMgr->getStatus($proc_idx);
 
@@ -200,7 +201,7 @@ final class core extends Factory
             [
                 $this->OSMgr->getPhpPath(),
                 $this->app->script_path,
-                '-c=' . $this->agent_config['agent_llm']['provider'] . '/' . $this->agent_config['agent_llm']['worker_name']
+                '-c=' . $this->agent_config['agent_llm']['provider'] . '/' . $worker_name
             ]
         )->run($proc_idx);
 
@@ -217,7 +218,7 @@ final class core extends Factory
         $this->utils->debug('Create shared memory for libOpenAI', 'debug');
         $this->agent_modules['agent_llm']->setShmop($worker_pid);
 
-        unset($output_handler, $worker_status, $worker_pid);
+        unset($worker_name, $output_handler, $worker_status, $worker_pid);
         return $proc_idx;
     }
 
@@ -407,9 +408,9 @@ final class core extends Factory
     public function securePath(string $input_path): string
     {
         $sandbox_mode = $this->agent_config['sandbox_mode'] ?? true;
-        $input_path   = strtr($input_path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
+        $input_path   = strtr($input_path, ['\\' => DIRECTORY_SEPARATOR, '/' => DIRECTORY_SEPARATOR]);
         $work_path    = rtrim($this->agent_config['workspace_path'], '\\/');
-        $work_path    = strtr($work_path, '\\/', DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR);
+        $work_path    = strtr($work_path, ['\\' => DIRECTORY_SEPARATOR, '/' => DIRECTORY_SEPARATOR]);
 
         if ($sandbox_mode) {
             if (str_starts_with($input_path, $work_path)) {

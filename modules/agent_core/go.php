@@ -31,8 +31,13 @@ class go extends Factory
     public utils   $utils;
     public message $message;
 
+    public int $child_idx = 100;
+
     public bool $in_process    = false;
     public bool $clean_warning = false;
+
+    public array $child_workers  = [];
+    public array $stream_workers = [];
 
     public array $socket_session = [];
     public array $stream_buffers = [];
@@ -73,7 +78,7 @@ class go extends Factory
         $this->utils->debug('Loading Providers...', 'debug');
         $this->core->initProvider();
 
-        $this->utils->debug('Model ID: ' . $this->core->agent_config['agent_llm']['model'] ?? 'NONE', 'trace');
+        $this->utils->debug('Model ID: ' . ($this->core->agent_config['agent_llm']['model'] ?? 'NONE'), 'trace');
         $this->utils->debug('SandBox mode: ' . ($this->core->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
 
         $workspace_path = $this->core->agent_config['workspace_path'] ?? '';
@@ -100,7 +105,7 @@ class go extends Factory
         ini_set('memory_limit', $memory_limit);
         $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
 
-        $this->core->runProcWorker($this->core->openai_idx, [$this, 'streamWorkerHandler']);
+        $this->core->runProcWorker($this->core->openai_idx, $this->core->agent_config['agent_llm']['main_worker'], [$this, 'streamWorkerHandler']);
 
         $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
@@ -196,7 +201,102 @@ class go extends Factory
                     break;
 
                 case 'context':
-                    $this->coming_messages = array_merge($this->coming_messages, $payload['data']);
+                    switch ($payload_type) {
+                        case 'readImage':
+                            $this->coming_messages = array_merge($this->coming_messages, $payload['data']);
+                            break;
+
+                        case 'WorkerBee':
+                            switch ($payload['data']['action']) {
+                                case 'start':
+                                    $proc_idx = $this->core->runProcWorker(
+                                        $this->child_idx++,
+                                        $this->core->agent_config['agent_llm']['child_worker'],
+                                        [$this, 'streamWorkerHandler']
+                                    );
+
+                                    $start_datetime = date('Y-m-d H:i:s');
+
+                                    $this->child_workers[$proc_idx] = [
+                                        'worker_id'  => $proc_idx,
+                                        'name'       => $payload['data']['name'],
+                                        'role'       => $payload['data']['role'],
+                                        'system'     => $payload['data']['prompt'],
+                                        'status'     => 'started',
+                                        'create_at'  => $start_datetime,
+                                        'last_talk'  => $start_datetime,
+                                        'talk_count' => 0
+                                    ];
+
+                                    $this->core->procMgr->writeProc($proc_idx, json_encode([
+                                        'cmd'         => 'start',
+                                        'worker_id'   => $proc_idx,
+                                        'worker_name' => $payload['data']['name'],
+                                        'worker_role' => $payload['data']['role'],
+                                        'prompt'      => $payload['data']['prompt'],
+                                    ], JSON_FORMAT));
+                                    break;
+
+                                case 'talk':
+                                    $proc_idx = $this->child_workers[$payload['data']['worker_id']] ?? 0;
+
+                                    if (0 < $proc_idx) {
+                                        $this->core->procMgr->writeProc(
+                                            $proc_idx,
+                                            json_encode([
+                                                'cmd'     => 'talk',
+                                                'message' => $payload['data']['message'],
+                                            ], JSON_FORMAT)
+                                        );
+
+                                        $stream_msg = json_encode([
+                                            'type'       => 'content',
+                                            'sender'     => __FUNCTION__,
+                                            'workerName' => AGENT_NAME,
+                                            'workerRole' => 'Assistant',
+                                            'sessionId'  => 'default',
+                                            'messageId'  => 'task-' . microtime(true),
+                                            'data'       => $payload['data']['message']
+                                        ], JSON_FORMAT);
+
+                                        $this->message_buffers[] = $stream_msg;
+                                    }
+                                    break;
+
+                                case 'close':
+                                    $worker_id = $payload['data']['worker_id'];
+                                    $proc_idx  = $this->child_workers[$worker_id] ?? 0;
+
+                                    if (0 < $proc_idx) {
+                                        $this->core->procMgr->writeProc($proc_idx, json_encode(['cmd' => 'close'], JSON_FORMAT));
+                                        unset($this->child_workers[$worker_id]);
+                                    }
+                                    break;
+
+                                case 'list':
+                                    $list = [];
+                                    foreach ($this->child_workers as $wid => $idx) {
+                                        $list[] = ['worker_id' => $wid, 'proc_idx' => $idx];
+                                    }
+
+                                    $stream_msg = json_encode([
+                                        'type'      => 'stream',
+                                        'payload'   => [
+                                            'type' => 'content',
+                                            'data' => json_encode($list, JSON_FORMAT),
+                                        ],
+                                        'socket_id' => $message['socket_id'],
+                                    ], JSON_FORMAT);
+
+                                    if (isset($this->socket_session[$message['socket_id']])) {
+                                        $this->core->sendMessage($message['socket_id'], $stream_msg);
+                                    } else {
+                                        $this->message_buffers[] = $stream_msg;
+                                    }
+                                    break;
+                            }
+                            break;
+                    }
                     break;
 
                 case 'end':
@@ -222,6 +322,12 @@ class go extends Factory
 
                         case 'end':
                             $this->in_process = false;
+
+                            if ($this->core->agent_config['agent_llm']['child_worker'] === $payload['sender'] && '' !== $payload['data']) {
+                                $worker_message = '[' . $payload['sender'] . ': ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ']' . "\n" . $payload['data'];
+
+                                $this->onsend_messages[] = $worker_message;
+                            }
 
                             $current_count = count($current_history);
                             $max_history   = $this->core->agent_config['agent_memory']['max_history'];
@@ -384,8 +490,10 @@ class go extends Factory
 
             // LLM action
             $this->socket_session[$socket_id] = [
-                'sessionId' => $data['sessionId'],
-                'messageId' => $data['messageId']
+                'sessionId'   => $data['sessionId'],
+                'messageId'   => $data['messageId'],
+                'sender_name' => AGENT_NAME,
+                'sender_role' => 'Your Assistant',
             ];
 
             if (!$this->in_process) {
@@ -423,7 +531,7 @@ class go extends Factory
             $this->in_process = true;
             $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
             $this->utils->debug('UserMessage: Send message to LLM', 'debug');
-            $this->core->runProcWorker($this->core->openai_idx, [$this, 'streamWorkerHandler']);
+            $this->core->runProcWorker($this->core->openai_idx, $this->core->agent_config['agent_llm']['main_worker'], [$this, 'streamWorkerHandler']);
             $this->core->agent_llm->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
         }
 
@@ -440,6 +548,10 @@ class go extends Factory
      */
     public function onSendString(string $socket_id): array
     {
+        if ($this->in_process) {
+            return [];
+        }
+
         if (!empty($this->message_buffers)) {
             while (!is_null($buffer = array_shift($this->message_buffers))) {
                 $this->core->sendMessage($socket_id, $buffer);

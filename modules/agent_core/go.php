@@ -283,13 +283,13 @@ class go extends Factory
                                     $worker_info = $this->child_workers[$payload['data']['worker_name']] ?? [];
 
                                     if (!empty($worker_info) && 0 < $this->core->procMgr->getStatus($worker_info['proc_idx'])) {
-                                        $this->core->procMgr->writeProc($worker_info['proc_idx'], json_encode(['cmd' => 'close'], JSON_FORMAT));
-                                        $this->core->procMgr->close($worker_info['proc_idx']);
-                                        unset($this->child_workers[$payload['data']['worker_name']]);
+                                        $this->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
 
                                         $this->message_buffers[] = json_encode(['type' => 'close', 'isSubTalk' => 1, 'data' => $worker_info], JSON_FORMAT);
 
-                                        $this->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
+                                        $this->core->procMgr->writeProc($worker_info['proc_idx'], json_encode(['cmd' => 'close'], JSON_FORMAT));
+                                        $this->core->procMgr->close($worker_info['proc_idx']);
+                                        unset($this->child_workers[$payload['data']['worker_name']]);
                                     } else {
                                         $this->utils->debug('WorkerBee not found: ' . $worker_info['worker_name'], 'trace');
                                     }

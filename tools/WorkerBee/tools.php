@@ -27,13 +27,13 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建 Worker 子进程（独立 LLM 会话，可并行）。异步执行，结果通过流式输出推送。',
+                'description' => '创建Worker子进程(独立LLM会话，可并行)。异步，结果稍后推送。建议按需分配角色协同完成任务。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'name'   => ['type' => 'string', 'description' => '名称，如 reviewer'],
-                        'role'   => ['type' => 'string', 'description' => '角色，如 "代码审查员"'],
-                        'prompt' => ['type' => 'string', 'description' => '系统指令：角色身份、工作目标、行为边界']
+                        'name'   => ['type' => 'string', 'description' => 'Worker名称，如reviewer'],
+                        'role'   => ['type' => 'string', 'description' => 'Worker角色，如"代码审查员"'],
+                        'prompt' => ['type' => 'string', 'description' => '系统指令：角色、目标、边界']
                     ],
                     'required'   => ['name', 'role', 'prompt']
                 ],
@@ -43,7 +43,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向 Worker 发送消息。异步执行，结果通过流式输出推送。',
+                'description' => '向Worker发送消息。异步，结果稍后推送。建议逐句发送并等待回复，避免连续多条导致崩溃。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -58,7 +58,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '终止 Worker 子进程，释放资源。',
+                'description' => '终止Worker进程并释放资源。建议任务完成或上下文过长时主动保存记忆后调用。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -72,7 +72,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '列出所有 Worker 及其状态。异步执行，结果通过流式输出推送。'
+                'description' => '列出所有Worker及其状态。异步，结果稍后推送。'
             ],
         ]
     ];

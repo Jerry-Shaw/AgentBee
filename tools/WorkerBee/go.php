@@ -41,12 +41,12 @@ class go extends Factory
     /**
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
-     * @param string $worker_id
+     * @param int    $worker_id
      * @param string $message
      *
      * @return string[]
      */
-    public function talk(string $worker_id, string $message): array
+    public function talk(int $worker_id, string $message): array
     {
         return ['status' => 'pending', 'action' => 'talk', 'worker_id' => $worker_id, 'message' => $message];
     }
@@ -54,11 +54,11 @@ class go extends Factory
     /**
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
-     * @param string $worker_id
+     * @param int $worker_id
      *
      * @return string[]
      */
-    public function close(string $worker_id): array
+    public function close(int $worker_id): array
     {
         return ['status' => 'pending', 'action' => 'close', 'worker_id' => $worker_id];
     }

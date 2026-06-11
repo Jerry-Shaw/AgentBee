@@ -148,14 +148,20 @@ class go extends Factory
     }
 
     /**
-     * Worker process main loop.
+     * Main Worker process
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function procWorker(): void
+    public function mainWorker(): void
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
+
+        $mainWorker = [
+            'sender'     => __FUNCTION__,
+            'workerName' => AGENT_NAME,
+            'workerRole' => 'Assistant',
+        ];
 
         $this->setShmop(getmypid());
 
@@ -182,12 +188,99 @@ class go extends Factory
 
             $this->procWorker->talk(
                 $job_data['socket_id'],
-                $job_data['msg_meta'],
+                $mainWorker + $job_data['msg_meta'],
                 $job_data['history'],
                 $this->libOpenAI
             );
 
             unset($job_line, $job_data);
+        }
+    }
+
+    /**
+     * Child Worker process
+     *
+     * @return void
+     */
+    public function beeWorker(): void
+    {
+        ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
+
+        // Remove WorkerBee tools to prevent recursion
+        if (!empty($this->core->llm_tools['tools'])) {
+            unset($this->core->agent_tools['Worker']);
+            $this->core->llm_tools['tools'] = array_values(
+                array_filter(
+                    $this->core->llm_tools['tools'],
+                    fn(array $tool): bool => !str_starts_with($tool['function']['name'], 'WorkerBee/')
+                )
+            );
+        }
+
+        $socket_id       = '';
+        $worker_id       = '';
+        $worker_name     = '';
+        $worker_role     = '';
+        $session_history = [];
+
+        $this->setShmop(getmypid());
+
+        while (true) {
+            $line = fgets(STDIN);
+
+            if (false === $line) {
+                break;
+            }
+
+            $line = trim($line);
+
+            if ('' === $line) {
+                continue;
+            }
+
+            $data = json_decode($line, true);
+
+            if (!is_array($data)) {
+                continue;
+            }
+
+            switch ($data['cmd']) {
+                case 'start':
+                    $socket_id   = $data['socket_id'] ?? '';
+                    $worker_id   = $data['worker_id'] ?? '';
+                    $worker_name = $data['worker_name'] ?? '';
+                    $worker_role = $data['worker_role'] ?? '';
+
+                    $session_history = [
+                        ['role' => 'system', 'content' => '你是' . $worker_name . '，' . $worker_role . "\n\n" . $data['prompt']]
+                    ];
+                    break;
+
+                case 'talk':
+                    if ('' === ($data['message'] ?? '')) {
+                        break;
+                    }
+
+                    $session_history[] = ['role' => 'user', 'content' => $data['message']];
+
+                    $this->procWorker->talk(
+                        $socket_id,
+                        [
+                            'sender'     => __FUNCTION__,
+                            'workerID'   => $worker_id,
+                            'workerName' => $worker_name,
+                            'workerRole' => $worker_role,
+                            'sessionId'  => 'workerBee-' . $worker_id,
+                            'messageId'  => 'workerBee-' . uniqid('', true),
+                        ],
+                        $session_history,
+                        $this->libOpenAI
+                    );
+                    break;
+
+                case 'close':
+                    break 2;
+            }
         }
     }
 }

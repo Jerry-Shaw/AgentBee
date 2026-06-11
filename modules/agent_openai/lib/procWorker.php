@@ -152,6 +152,8 @@ class procWorker extends Factory
                         foreach ($tool_results as $result) {
                             if (str_starts_with($result['function_name'], 'WorkerBee/')) {
                                 $result_data = json_decode($result['content'], true);
+
+                                $result_data['socket_id'] = $socket_id;
                                 $this->sendMsg($socket_id, 'context', 'WorkerBee', $message_metadata, $result_data['data']);
                             }
 
@@ -183,7 +185,7 @@ class procWorker extends Factory
                         }
                     }
 
-                    unset($assistant_message, $session_history, $tool_results, $current_history, $image_loader, $result, $tool_history);
+                    unset($assistant_message, $session_history, $tool_results, $current_history, $image_loader, $result, $result_data, $tool_history);
                 }
             } catch (\Throwable $exception) {
                 $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $exception->getMessage());

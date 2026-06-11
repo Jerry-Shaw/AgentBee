@@ -221,78 +221,84 @@ class go extends Factory
                                         'worker_id'  => $proc_idx,
                                         'name'       => $payload['data']['name'],
                                         'role'       => $payload['data']['role'],
-                                        'system'     => $payload['data']['prompt'],
-                                        'status'     => 'started',
-                                        'create_at'  => $start_datetime,
+                                        'status'     => 'idle',
                                         'last_talk'  => $start_datetime,
                                         'talk_count' => 0
                                     ];
 
                                     $this->core->procMgr->writeProc($proc_idx, json_encode([
                                         'cmd'         => 'start',
+                                        'socket_id'   => $payload['data']['socket_id'],
                                         'worker_id'   => $proc_idx,
                                         'worker_name' => $payload['data']['name'],
                                         'worker_role' => $payload['data']['role'],
                                         'prompt'      => $payload['data']['prompt'],
                                     ], JSON_FORMAT));
+
+                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['name'] . '" 已就绪 (WorkerID:' . $proc_idx . ', ' . $payload['data']['role'] . ')，等待指令';
                                     break;
 
                                 case 'talk':
-                                    $proc_idx = $this->child_workers[$payload['data']['worker_id']] ?? 0;
+                                    $worker_info = $this->child_workers[$payload['data']['worker_id']] ?? [];
 
-                                    if (0 < $proc_idx) {
-                                        $this->core->procMgr->writeProc(
-                                            $proc_idx,
-                                            json_encode([
-                                                'cmd'     => 'talk',
-                                                'message' => $payload['data']['message'],
-                                            ], JSON_FORMAT)
-                                        );
-
-                                        $stream_msg = json_encode([
-                                            'type'       => 'content',
-                                            'sender'     => __FUNCTION__,
-                                            'workerName' => AGENT_NAME,
-                                            'workerRole' => 'Assistant',
-                                            'sessionId'  => 'default',
-                                            'messageId'  => 'task-' . microtime(true),
-                                            'data'       => $payload['data']['message']
-                                        ], JSON_FORMAT);
-
-                                        $this->message_buffers[] = $stream_msg;
+                                    if (empty($worker_info) || 0 === $this->core->procMgr->getStatus($payload['data']['worker_id'])) {
+                                        // WorkerBee died, notice main worker
+                                        $this->onsend_messages[] = '[WorkerBee] WorkerID:' . $payload['data']['worker_id'] . ' 进程已终止，消息发送失败';
+                                        break;
                                     }
+
+                                    $this->core->procMgr->writeProc(
+                                        $payload['data']['worker_id'],
+                                        json_encode([
+                                            'cmd'     => 'talk',
+                                            'message' => $payload['data']['message'],
+                                        ], JSON_FORMAT)
+                                    );
+
+                                    $this->child_workers[$payload['data']['worker_id']]['status'] = 'processing';
+
+                                    $stream_msg = json_encode([
+                                        'type'       => 'content',
+                                        'sender'     => $this->core->agent_config['agent_llm']['main_worker'],
+                                        'workerName' => AGENT_NAME,
+                                        'workerRole' => 'Assistant',
+                                        'sessionId'  => 'subSession-' . uniqid('', true),
+                                        'messageId'  => 'subMessage-' . uniqid('', true),
+                                        'isSubTalk'  => 1,
+                                        'data'       => $payload['data']['message']
+                                    ], JSON_FORMAT);
+
+                                    $this->message_buffers[] = $stream_msg;
                                     break;
 
                                 case 'close':
-                                    $worker_id = $payload['data']['worker_id'];
-                                    $proc_idx  = $this->child_workers[$worker_id] ?? 0;
+                                    $worker_info = $this->child_workers[$payload['data']['worker_id']] ?? [];
 
-                                    if (0 < $proc_idx) {
-                                        $this->core->procMgr->writeProc($proc_idx, json_encode(['cmd' => 'close'], JSON_FORMAT));
-                                        unset($this->child_workers[$worker_id]);
+                                    if (!empty($worker_info) && 0 < $this->core->procMgr->getStatus($payload['data']['worker_id'])) {
+                                        $this->core->procMgr->writeProc($payload['data']['worker_id'], json_encode(['cmd' => 'close'], JSON_FORMAT));
+                                        $this->core->procMgr->close($payload['data']['worker_id']);
+                                        unset($this->child_workers[$payload['data']['worker_id']]);
                                     }
+
+                                    $this->onsend_messages[] = '[WorkerBee] WorkerID:' . $payload['data']['worker_id'] . ' 进程已终止';
                                     break;
 
                                 case 'list':
-                                    $list = [];
-                                    foreach ($this->child_workers as $wid => $idx) {
-                                        $list[] = ['worker_id' => $wid, 'proc_idx' => $idx];
+                                    $now   = time();
+                                    $lines = ['[WorkerBee] 当前活跃Worker列表：'];
+
+                                    foreach ($this->child_workers as $worker) {
+                                        $elapsed = $now - strtotime($worker['last_talk']);
+
+                                        $lines[] = '- WorkerID:' . $worker['worker_id']
+                                            . ' | ' . $worker['name']
+                                            . ' | ' . $worker['role']
+                                            . ' | ' . $worker['status']
+                                            . ' | 对话' . $worker['talk_count'] . '轮'
+                                            . ' | 沉默' . $elapsed . '秒';
                                     }
 
-                                    $stream_msg = json_encode([
-                                        'type'      => 'stream',
-                                        'payload'   => [
-                                            'type' => 'content',
-                                            'data' => json_encode($list, JSON_FORMAT),
-                                        ],
-                                        'socket_id' => $message['socket_id'],
-                                    ], JSON_FORMAT);
-
-                                    if (isset($this->socket_session[$message['socket_id']])) {
-                                        $this->core->sendMessage($message['socket_id'], $stream_msg);
-                                    } else {
-                                        $this->message_buffers[] = $stream_msg;
-                                    }
+                                    $this->onsend_messages[] = implode("\n", $lines);
                                     break;
                             }
                             break;
@@ -323,16 +329,23 @@ class go extends Factory
                         case 'end':
                             $this->in_process = false;
 
-                            if ($this->core->agent_config['agent_llm']['child_worker'] === $payload['sender'] && '' !== $payload['data']) {
-                                $worker_message = '[' . $payload['sender'] . ': ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ']' . "\n" . $payload['data'];
-
-                                $this->onsend_messages[] = $worker_message;
-                            }
-
-                            $current_count = count($current_history);
                             $max_history   = $this->core->agent_config['agent_memory']['max_history'];
                             $warning_count = $max_history * 2;
                             $limit_count   = $max_history * 3;
+
+                            if ($this->core->agent_config['agent_llm']['child_worker'] === $payload['sender'] && '' !== $payload['data']) {
+                                $this->onsend_messages[] = '[' . $payload['sender'] . ': ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ']' . "\n" . $payload['data'];
+
+                                $this->child_workers[$payload['data']['worker_id']]['status']     = 'idle';
+                                $this->child_workers[$payload['data']['worker_id']]['last_talk']  = date('Y-m-d H:i:s');
+                                $this->child_workers[$payload['data']['worker_id']]['talk_count'] = $payload['talk_count'];
+
+                                if ($payload['talk_count'] > $warning_count) {
+                                    $this->onsend_messages[] = '[WorkerBee] WorkerID:' . $payload['workerID'] . ' | ' . $payload['workerName'] . ' (' . $payload['workerRole'] . ') 对话已达上限，请保存重要内容后关闭该Worker';
+                                }
+                            }
+
+                            $current_count = count($current_history);
 
                             if ($current_count < $warning_count) {
                                 $this->clean_warning = false;

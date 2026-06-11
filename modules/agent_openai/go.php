@@ -270,8 +270,9 @@ class go extends Factory
                             'workerID'   => $worker_id,
                             'workerName' => $worker_name,
                             'workerRole' => $worker_role,
-                            'sessionId'  => 'workerBee-' . $worker_id,
-                            'messageId'  => 'workerBee-' . uniqid('', true),
+                            'sessionId'  => 'beeWorker-' . uniqid('', true),
+                            'messageId'  => 'beeWorker-' . uniqid('', true),
+                            'talk_count' => count($session_history),
                         ],
                         $session_history,
                         $this->libOpenAI

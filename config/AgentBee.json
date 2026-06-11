@@ -47,10 +47,6 @@
     "provider": "tools/Memory",
     "max_history": 50
   },
-  "agent_worker": {
-    "enabled": true,
-    "max_workers": 5
-  },
   "workspace_path": "",
   "sandbox_mode": false,
   "memory_limit": "4G",

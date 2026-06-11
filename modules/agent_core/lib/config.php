@@ -194,10 +194,6 @@ class config extends Factory
                 'provider'    => 'tools/Memory',
                 'max_history' => 50,
             ],
-            'agent_worker'   => [
-                'enabled'     => true,
-                'max_workers' => 5,
-            ],
             'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
             'sandbox_mode'   => false,
             'memory_limit'   => '4G',

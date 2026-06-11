@@ -229,6 +229,7 @@ class go extends Factory
 
                                     $this->child_workers[$payload['data']['worker_name']] = [
                                         'proc_idx'    => $proc_idx,
+                                        'socket_id'   => $payload['data']['socket_id'],
                                         'worker_name' => $payload['data']['worker_name'],
                                         'worker_role' => $payload['data']['worker_role'],
                                         'status'      => 'idle',
@@ -255,17 +256,14 @@ class go extends Factory
                                         break;
                                     }
 
-                                    $this->core->procMgr->writeProc(
-                                        $worker_info['proc_idx'],
-                                        json_encode([
-                                            'cmd'     => 'talk',
-                                            'message' => $payload['data']['message'],
-                                        ], JSON_FORMAT)
-                                    );
+                                    if ('processing' === $this->child_workers[$payload['data']['worker_name']]['status']) {
+                                        $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
+                                        break;
+                                    }
 
                                     $this->child_workers[$payload['data']['worker_name']]['status'] = 'processing';
 
-                                    $stream_msg = json_encode([
+                                    $worker_message = json_encode([
                                         'type'       => 'content',
                                         'sender'     => $this->core->agent_config['agent_llm']['main_worker'],
                                         'workerName' => AGENT_NAME,
@@ -276,7 +274,20 @@ class go extends Factory
                                         'data'       => $payload['data']['message']
                                     ], JSON_FORMAT);
 
-                                    $this->message_buffers[] = $stream_msg;
+                                    if (isset($this->socket_session[$worker_info['socket_id']])) {
+                                        $this->core->sendMessage($worker_info['socket_id'], $worker_message);
+                                    } else {
+                                        $this->utils->debug('Client offline, message queued', 'trace');
+                                        $this->message_buffers[] = $worker_message;
+                                    }
+
+                                    $this->core->procMgr->writeProc(
+                                        $worker_info['proc_idx'],
+                                        json_encode([
+                                            'cmd'     => 'talk',
+                                            'message' => $payload['data']['message'],
+                                        ], JSON_FORMAT)
+                                    );
                                     break;
 
                                 case 'close':
@@ -348,15 +359,16 @@ class go extends Factory
                             $limit_count   = $max_history * 3;
 
                             if ($this->core->agent_config['agent_llm']['child_worker'] === $payload['sender'] && '' !== $payload['data']) {
+                                $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ' replied', 'trace');
                                 $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
 
-                                $this->child_workers[$payload['data']['workerName']]['status']     = 'idle';
-                                $this->child_workers[$payload['data']['workerName']]['last_talk']  = date('Y-m-d H:i:s');
-                                $this->child_workers[$payload['data']['workerName']]['talk_count'] = $payload['talk_count'];
+                                $this->child_workers[$payload['workerName']]['status']     = 'idle';
+                                $this->child_workers[$payload['workerName']]['last_talk']  = date('Y-m-d H:i:s');
+                                $this->child_workers[$payload['workerName']]['talk_count'] = $payload['talk_count'];
 
                                 if ($payload['talk_count'] > $warning_count) {
-                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker';
                                     $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_history . ')', 'trace');
+                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker';
                                 }
                             }
 

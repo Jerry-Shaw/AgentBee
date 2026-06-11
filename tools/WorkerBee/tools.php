@@ -27,7 +27,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程(独立LLM会话，可并行)。异步，结果稍后推送。建议按需分配角色协同完成任务。注意：协同模式调用，worker_name不可重复。',
+                'description' => '创建Worker子进程(独立LLM会话，可并行)。可共享/操作全局记忆(创建时请知晓)。异步，结果稍后推送。建议分配角色协同。worker_name须唯一。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -43,7 +43,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker发送消息。异步，结果稍后推送。建议逐句发送并等待回复，避免连续多条导致崩溃。',
+                'description' => '向Worker发送消息。异步，结果稍后推送。必须逐句发送并等待回复，禁止连续多条。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

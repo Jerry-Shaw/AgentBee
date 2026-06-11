@@ -153,7 +153,7 @@ class procWorker extends Factory
                             if (str_starts_with($result['function_name'], 'WorkerBee/')) {
                                 $result_data = json_decode($result['content'], true);
 
-                                $result_data['socket_id'] = $socket_id;
+                                $result_data['data']['socket_id'] = $socket_id;
                                 $this->sendMsg($socket_id, 'context', 'WorkerBee', $message_metadata, $result_data['data']);
                             }
 

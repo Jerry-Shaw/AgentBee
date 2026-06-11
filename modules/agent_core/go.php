@@ -236,6 +236,8 @@ class go extends Factory
                                     ], JSON_FORMAT));
 
                                     $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['name'] . '" 已就绪 (WorkerID:' . $proc_idx . ', ' . $payload['data']['role'] . ')，等待指令';
+
+                                    $this->utils->debug('WorkerBee started: ' . $payload['data']['name'] . ' (WorkerID:' . $proc_idx . ', ' . $payload['data']['role'] . ')', 'trace');
                                     break;
 
                                 case 'talk':
@@ -280,6 +282,10 @@ class go extends Factory
                                         unset($this->child_workers[$payload['data']['worker_id']]);
 
                                         $this->message_buffers[] = ['type' => 'close', 'isSubTalk' => 1, 'data' => $worker_info];
+
+                                        $this->utils->debug('WorkerBee closed: ' . $worker_info['name'] . ' (WorkerID:' . $worker_info['worker_id'] . ', ' . $worker_info['role'] . ')', 'trace');
+                                    } else {
+                                        $this->utils->debug('WorkerBee closed: #' . $payload['data']['worker_id'], 'trace');
                                     }
 
                                     $this->onsend_messages[] = '[WorkerBee] WorkerID:' . $payload['data']['worker_id'] . ' 进程已终止';
@@ -344,6 +350,8 @@ class go extends Factory
 
                                 if ($payload['talk_count'] > $warning_count) {
                                     $this->onsend_messages[] = '[WorkerBee] WorkerID:' . $payload['workerID'] . ' | ' . $payload['workerName'] . ' (' . $payload['workerRole'] . ') 对话已达上限，请保存重要内容后关闭该Worker';
+
+                                    $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_history . ')', 'trace');
                                 }
                             }
 

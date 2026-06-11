@@ -1,59 +1,59 @@
 {
-    "agent_server": {
-        "host": "127.0.0.1",
-        "port": 8686,
-        "ping_interval": 60
-    },
-    "agent_llm": {
-        "api_url": "http://127.0.0.1:1234/v1",
-        "api_key": "sk-lm-ru6XiZDE:WImxJO82hxm5L76fNcaK",
-        "model": "qwen3.6-35b-a3b-apex",
-        "org_id": "",
-        "hw_hash": "",
-        "provider": "modules/agent_openai",
-        "main_worker": "mainWorker",
-        "child_worker": "beeWorker",
-        "timeout": 7200,
-        "keep_reasons": true,
-        "params": {
-            "max_tokens": 131072,
-            "temperature": 0.8,
-            "min_p": 0,
-            "top_p": 0.95,
-            "top_k": 40,
-            "frequency_penalty": 0,
-            "presence_penalty": 1,
-            "repetition_penalty": 1,
-            "enable_thinking": false,
-            "stop": [
-                "<|im_end|>",
-                "<|endoftext|>"
-            ],
-            "chat_template_kwargs": {
-                "enable_thinking": false
-            },
-            "extra_body": {
-                "enable_thinking": false
-            },
-            "thinking": {
-                "type": "disabled"
-            }
-        }
-    },
-    "agent_task": {
-        "provider": "tools/Memory"
-    },
-    "agent_memory": {
-        "provider": "tools/Memory",
-        "max_history": 50
-    },
-    "agent_worker": {
-        "enabled": true,
-        "max_workers": 5
-    },
-    "workspace_path": "",
-    "sandbox_mode": false,
-    "memory_limit": "4G",
-    "agent_debug": "trace",
-    "socket_debug": false
+  "agent_server": {
+    "host": "127.0.0.1",
+    "port": 8686,
+    "ping_interval": 60
+  },
+  "agent_llm": {
+    "api_url": "http://127.0.0.1:1234/v1",
+    "api_key": "sk-lm-ru6XiZDE:WImxJO82hxm5L76fNcaK",
+    "model": "qwen3.6-35b-a3b-apex",
+    "org_id": "",
+    "hw_hash": "",
+    "provider": "modules/agent_openai",
+    "main_worker": "WorkerMain",
+    "child_worker": "WorkerBee",
+    "timeout": 7200,
+    "keep_reasons": true,
+    "params": {
+      "max_tokens": 131072,
+      "temperature": 0.8,
+      "min_p": 0,
+      "top_p": 0.95,
+      "top_k": 40,
+      "frequency_penalty": 0,
+      "presence_penalty": 1,
+      "repetition_penalty": 1,
+      "enable_thinking": false,
+      "stop": [
+        "<|im_end|>",
+        "<|endoftext|>"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
+      "extra_body": {
+        "enable_thinking": false
+      },
+      "thinking": {
+        "type": "disabled"
+      }
+    }
+  },
+  "agent_task": {
+    "provider": "tools/Memory"
+  },
+  "agent_memory": {
+    "provider": "tools/Memory",
+    "max_history": 50
+  },
+  "agent_worker": {
+    "enabled": true,
+    "max_workers": 5
+  },
+  "workspace_path": "",
+  "sandbox_mode": false,
+  "memory_limit": "4G",
+  "agent_debug": "trace",
+  "socket_debug": false
 }

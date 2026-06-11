@@ -153,11 +153,11 @@ class go extends Factory
      * @return void
      * @throws \ReflectionException
      */
-    public function mainWorker(): void
+    public function WorkerMain(): void
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
-        $mainWorker = [
+        $WorkerMain = [
             'sender'     => __FUNCTION__,
             'workerName' => AGENT_NAME,
             'workerRole' => 'Assistant',
@@ -188,7 +188,7 @@ class go extends Factory
 
             $this->procWorker->talk(
                 $job_data['socket_id'],
-                $mainWorker + $job_data['msg_meta'],
+                $WorkerMain + $job_data['msg_meta'],
                 $job_data['history'],
                 $this->libOpenAI
             );
@@ -202,7 +202,7 @@ class go extends Factory
      *
      * @return void
      */
-    public function beeWorker(): void
+    public function WorkerBee(): void
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
@@ -270,8 +270,8 @@ class go extends Factory
                             'workerID'   => $worker_id,
                             'workerName' => $worker_name,
                             'workerRole' => $worker_role,
-                            'sessionId'  => 'beeWorker-' . uniqid('', true),
-                            'messageId'  => 'beeWorker-' . uniqid('', true),
+                            'sessionId'  => 'WorkerBee-' . uniqid('', true),
+                            'messageId'  => 'WorkerBee-' . uniqid('', true),
                             'talk_count' => count($session_history),
                             'isSubTalk'  => 1,
                         ],

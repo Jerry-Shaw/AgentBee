@@ -158,8 +158,8 @@ class config extends Factory
                 'org_id'       => '',
                 'hw_hash'      => '',
                 'provider'     => 'modules/agent_openai',
-                'main_worker'  => 'mainWorker',
-                'child_worker' => 'beeWorker',
+                'main_worker'  => 'WorkerMain',
+                'child_worker' => 'WorkerBee',
                 'timeout'      => 7200,
                 'keep_reasons' => true,
                 'params'       => [

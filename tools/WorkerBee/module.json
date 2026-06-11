@@ -1,0 +1,13 @@
+{
+  "name": "WorkerBee",
+  "version": "1.0.0",
+  "description": "WorkerBee tool placeholders. Methods are intercepted by procWorker and forwarded to the main process for actual execution. No business logic here — purely transparent pass-through declarations.",
+  "author": "秋水之冰",
+  "email": "27206617@qq.com",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.2"
+  }
+}

@@ -21,6 +21,7 @@
 namespace modules\agent_openai;
 
 use modules\agent_core\core;
+use modules\agent_core\lib\utils;
 use modules\agent_openai\lib\procWorker;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libOpenAI;
@@ -29,7 +30,8 @@ class go extends Factory
 {
     const CMD_RELOAD = '__RELOAD__';
 
-    public core $core;
+    public core  $core;
+    public utils $utils;
 
     public libOpenAI $libOpenAI;
 
@@ -41,6 +43,7 @@ class go extends Factory
     public function __construct()
     {
         $this->core       = core::new();
+        $this->utils      = utils::new();
         $this->procWorker = procWorker::new();
 
         $this->init();
@@ -77,6 +80,7 @@ class go extends Factory
     /**
      * @return void
      * @throws \ReflectionException
+     * @throws \Exception
      */
     public function reload(): void
     {
@@ -121,14 +125,14 @@ class go extends Factory
      */
     public function chat(string $socket_id, array $message_metadata, array $session_history): void
     {
-        $task = [
+        $message = [
             'socket_id' => $socket_id,
             'msg_meta'  => $message_metadata,
             'history'   => $session_history,
         ];
 
         $this->libOpenAI->resumeStream();
-        $this->core->procMgr->writeProc($this->core->openai_idx, json_encode($task));
+        $this->core->procMgr->writeProc($this->core->openai_idx, json_encode($message));
 
         unset($socket_id, $message_metadata, $session_history);
     }
@@ -157,12 +161,6 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
-        $WorkerMain = [
-            'sender'     => __FUNCTION__,
-            'workerName' => AGENT_NAME,
-            'workerRole' => 'Assistant',
-        ];
-
         $this->setShmop(getmypid());
 
         while (true) {
@@ -188,7 +186,7 @@ class go extends Factory
 
             $this->procWorker->talk(
                 $job_data['socket_id'],
-                $WorkerMain + $job_data['msg_meta'],
+                $job_data['msg_meta'],
                 $job_data['history'],
                 $this->libOpenAI
             );
@@ -228,8 +226,6 @@ class go extends Factory
         $this->libOpenAI->setModelParams($this->core->llm_params + $this->core->llm_tools);
 
         $socket_id       = '';
-        $worker_name     = '';
-        $worker_role     = '';
         $session_history = [];
 
         $this->setShmop(getmypid());
@@ -255,9 +251,9 @@ class go extends Factory
 
             switch ($data['cmd']) {
                 case 'start':
-                    $socket_id   = $data['socket_id'] ?? '';
-                    $worker_name = $data['worker_name'] ?? '';
-                    $worker_role = $data['worker_role'] ?? '';
+                    $socket_id   = $data['message']['socket_id'];
+                    $worker_name = $data['msg_meta']['workerName'];
+                    $worker_role = $data['msg_meta']['workerRole'];
 
                     $php_path  = $this->core->OSMgr->getPhpPath();
                     $work_path = $this->core->agent_config['workspace_path'];
@@ -278,8 +274,18 @@ class go extends Factory
                             '- Name: ' . $worker_name . "\n" .
                             '- Role: ' . $worker_role . "\n" .
                             '- ' . $sand_box_prompt . "\n\n" .
-                            '## 用户指令' . "\n" . $data['system_prompt']
+                            '## 用户指令' . "\n" . $data['message']['system_prompt']
                     ];
+
+                    $session_history[] = ['role' => 'user', 'content' => '仅输出（不要添加任何其他文字）：Name | Role | 沙箱: 启用/禁用 | 已就绪'];
+                    $message_mate      = $data['msg_meta'] + ['talk_count' => count($session_history), 'socket_id' => $socket_id];
+
+                    $this->procWorker->talk(
+                        $socket_id,
+                        $message_mate,
+                        $session_history,
+                        $this->libOpenAI
+                    );
                     break;
 
                 case 'talk':
@@ -288,19 +294,11 @@ class go extends Factory
                     }
 
                     $session_history[] = ['role' => 'user', 'content' => $data['message']];
+                    $message_mate      = $data['msg_meta'] + ['talk_count' => count($session_history), 'socket_id' => $socket_id];
 
                     $this->procWorker->talk(
                         $socket_id,
-                        [
-                            'sender'     => __FUNCTION__,
-                            'isSubTalk'  => 1,
-                            'workerName' => $worker_name,
-                            'workerRole' => $worker_role,
-                            'sessionId'  => 'WorkerBee-' . uniqid('', true),
-                            'messageId'  => 'WorkerBee-' . uniqid('', true),
-                            'talk_count' => count($session_history),
-                            'socket_id'  => $socket_id,
-                        ],
+                        $message_mate,
                         $session_history,
                         $this->libOpenAI
                     );

@@ -24,14 +24,39 @@ use Nervsys\Core\Factory;
 
 class utils extends Factory
 {
-    public array $agent_config;
+    public string $session_id;
+    public array  $agent_config;
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
+        $this->session_id   = hash('md5', uniqid('', true));
         $this->agent_config = config::new()->get();
+    }
+
+    /**
+     * @param string $sender
+     * @param string $worker_name
+     * @param string $worker_role
+     * @param int    $is_sub_talk
+     *
+     * @return array
+     */
+    public function getMessageMarker(string $sender, string $worker_name, string $worker_role, int $is_sub_talk = 0): array
+    {
+        $marker = [
+            'sender'     => $sender,
+            'isSubTalk'  => $is_sub_talk,
+            'workerName' => $worker_name,
+            'workerRole' => $worker_role,
+            'sessionId'  => $this->session_id,
+            'messageId'  => $worker_name . '-' . hash('md5', uniqid(microtime(), true)),
+        ];
+
+        unset($sender, $worker_name, $worker_role, $is_sub_talk);
+        return $marker;
     }
 
     /**

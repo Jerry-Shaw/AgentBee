@@ -240,12 +240,18 @@ class go extends Factory
                                     $this->core->procMgr->writeProc(
                                         $proc_idx,
                                         json_encode([
-                                            'cmd'           => 'start',
-                                            'proc_idx'      => $proc_idx,
-                                            'socket_id'     => $payload['data']['socket_id'],
-                                            'worker_name'   => $payload['data']['worker_name'],
-                                            'worker_role'   => $payload['data']['worker_role'],
-                                            'system_prompt' => $payload['data']['system_prompt'],
+                                            'cmd'      => 'start',
+                                            'message'  => [
+                                                'proc_idx'      => $proc_idx,
+                                                'socket_id'     => $payload['data']['socket_id'],
+                                                'system_prompt' => $payload['data']['system_prompt'],
+                                            ],
+                                            'msg_meta' => $this->utils->getMessageMarker(
+                                                $this->core->agent_config['agent_llm']['child_worker'],
+                                                $payload['data']['worker_name'],
+                                                $payload['data']['worker_role'],
+                                                1
+                                            ),
                                         ], JSON_FORMAT)
                                     );
                                     break;
@@ -267,16 +273,14 @@ class go extends Factory
 
                                     $this->child_workers[$payload['data']['worker_name']]['status'] = 'processing';
 
-                                    $worker_message = json_encode([
-                                        'type'       => 'content',
-                                        'sender'     => $this->core->agent_config['agent_llm']['main_worker'],
-                                        'workerName' => AGENT_NAME,
-                                        'workerRole' => 'Assistant',
-                                        'sessionId'  => 'subSession-' . uniqid('', true),
-                                        'messageId'  => 'subMessage-' . uniqid('', true),
-                                        'isSubTalk'  => 1,
-                                        'data'       => $payload['data']['message']
-                                    ], JSON_FORMAT);
+                                    $worker_message = json_encode(
+                                        $this->utils->getMessageMarker(
+                                            $this->core->agent_config['agent_llm']['main_worker'],
+                                            AGENT_NAME,
+                                            'Assistant',
+                                            1
+                                        ) + ['type' => 'content', 'data' => $payload['data']['message']
+                                        ], JSON_FORMAT);
 
                                     if (isset($this->socket_session[$worker_info['socket_id']])) {
                                         $this->core->sendMessage($worker_info['socket_id'], $worker_message);
@@ -290,8 +294,14 @@ class go extends Factory
                                     $this->core->procMgr->writeProc(
                                         $worker_info['proc_idx'],
                                         json_encode([
-                                            'cmd'     => 'talk',
-                                            'message' => $payload['data']['message'],
+                                            'cmd'      => 'talk',
+                                            'message'  => $payload['data']['message'],
+                                            'msg_meta' => $this->utils->getMessageMarker(
+                                                $this->core->agent_config['agent_llm']['child_worker'],
+                                                $payload['data']['worker_name'],
+                                                $payload['data']['worker_role'],
+                                                1
+                                            ),
                                         ], JSON_FORMAT)
                                     );
                                     break;
@@ -348,10 +358,12 @@ class go extends Factory
                                 $message['socket_id'],
                                 array_intersect_key(
                                     $payload,
-                                    [
-                                        'sessionId' => '',
-                                        'messageId' => '',
-                                    ]
+                                    $this->utils->getMessageMarker(
+                                        $this->core->agent_config['agent_llm']['main_worker'],
+                                        AGENT_NAME,
+                                        'Assistant',
+                                        0
+                                    )
                                 ),
                                 $current_history
                             );
@@ -456,10 +468,12 @@ class go extends Factory
 
         $this->core->agent_llm->chat(
             $socket_id,
-            [
-                'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
-                'messageId' => 'task-' . microtime(true),
-            ],
+            $this->utils->getMessageMarker(
+                $this->core->agent_config['agent_llm']['main_worker'],
+                AGENT_NAME,
+                'Assistant',
+                0
+            ),
             $current_history
         );
 
@@ -489,6 +503,13 @@ class go extends Factory
         if ($is_binary) {
             $message = $this->message->process_binary($socket_id, $message);
         }
+
+        $this->socket_session[$socket_id] = $this->utils->getMessageMarker(
+            $this->core->agent_config['agent_llm']['main_worker'],
+            AGENT_NAME,
+            'Assistant',
+            0
+        );
 
         $end_data = [];
         $llm_data = [];
@@ -534,14 +555,6 @@ class go extends Factory
                 return;
             }
 
-            // LLM action
-            $this->socket_session[$socket_id] = [
-                'sessionId'   => $data['sessionId'],
-                'messageId'   => $data['messageId'],
-                'sender_name' => AGENT_NAME,
-                'sender_role' => 'Your Assistant',
-            ];
-
             if (!$this->in_process) {
                 $llm_data = $result['content'];
 
@@ -567,7 +580,12 @@ class go extends Factory
             $end_data[] = $data;
         }
 
-        $message_metadata = array_pop($end_data);
+        $message_metadata = $this->utils->getMessageMarker(
+            $this->core->agent_config['agent_llm']['main_worker'],
+            AGENT_NAME,
+            'Assistant',
+            0
+        );
 
         foreach ($end_data as $end_packet) {
             $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $end_packet));
@@ -627,10 +645,12 @@ class go extends Factory
 
             $this->core->agent_llm->chat(
                 $socket_id,
-                [
-                    'sessionId' => $this->socket_session[$socket_id]['sessionId'] ?? 'default',
-                    'messageId' => 'system-' . microtime(true),
-                ],
+                $this->utils->getMessageMarker(
+                    $this->core->agent_config['agent_llm']['main_worker'],
+                    AGENT_NAME,
+                    'Assistant',
+                    0
+                ),
                 $this->core->getSessionHistory()
             );
 

@@ -296,8 +296,8 @@ class go extends Factory
                                             'message'  => $payload['data']['message'],
                                             'msg_meta' => $this->utils->getMessageMarker(
                                                 $this->core->agent_config['agent_llm']['child_worker'],
-                                                $payload['data']['worker_name'],
-                                                $payload['data']['worker_role'],
+                                                $worker_info['worker_name'],
+                                                $worker_info['worker_role'],
                                                 1
                                             ),
                                         ], JSON_FORMAT)

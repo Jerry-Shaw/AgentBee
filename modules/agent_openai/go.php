@@ -248,14 +248,15 @@ class go extends Factory
                 continue;
             }
 
-            $worker_history = $data['history'] ?? [];
-            $message_mate   = $data['msg_meta'] + ['talk_count' => count($worker_history), 'socket_id' => $socket_id];
 
             switch ($data['cmd']) {
                 case 'start':
                     $socket_id = $data['socket_id'];
 
                 case 'talk':
+                    $worker_history = $data['history'];
+                    $message_mate   = $data['msg_meta'] + ['talk_count' => count($worker_history), 'socket_id' => $socket_id];
+
                     $this->procWorker->talk(
                         $socket_id,
                         $message_mate,

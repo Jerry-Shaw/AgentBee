@@ -203,9 +203,9 @@ class go extends Factory
                     if (isset($payload['data'])) {
                         switch ($payload_type) {
                             case 'add':
-                                if ($payload['sender'] === $this->core->agent_config['agent_llm']['main_worker']) {
+                                if (0 === $payload['isSubTalk']) {
                                     $this->core->addSessionHistory($payload['data']);
-                                } elseif ($payload['sender'] === $this->core->agent_config['agent_llm']['child_worker']) {
+                                } elseif (1 === $payload['isSubTalk'] && $payload['sender'] === $this->core->agent_config['agent_llm']['child_worker']) {
                                     $this->addWorkerHistory($payload['workerName'], $payload['data']);
                                 }
                                 break;
@@ -409,7 +409,7 @@ class go extends Factory
                                     'sessionId'  => $payload['sessionId'],
                                     'messageId'  => $payload['messageId']
                                 ],
-                                $current_history
+                                0 === $payload['isSubTalk'] ? $current_history : $this->child_workers[$payload['workerName']]['history']
                             );
                             break;
 

@@ -209,14 +209,23 @@ class go extends Factory
 
         // Remove WorkerBee tools to prevent recursion
         if (!empty($this->core->llm_tools['tools'])) {
+            unset($this->core->agent_tools['Memory']);
             unset($this->core->agent_tools['WorkerBee']);
             $this->core->llm_tools['tools'] = array_values(
                 array_filter(
                     $this->core->llm_tools['tools'],
-                    fn(array $tool): bool => !str_starts_with($tool['function']['name'], 'WorkerBee/')
+                    function (array $item): bool
+                    {
+                        if (!str_starts_with($item['function']['name'], 'Memory/') && !str_starts_with($item['function']['name'], 'WorkerBee/')) {
+                            return true;
+                        }
+                        return false;
+                    }
                 )
             );
         }
+
+        $this->libOpenAI->setModelParams($this->core->llm_params + $this->core->llm_tools);
 
         $socket_id       = '';
         $worker_name     = '';
@@ -250,14 +259,27 @@ class go extends Factory
                     $worker_name = $data['worker_name'] ?? '';
                     $worker_role = $data['worker_role'] ?? '';
 
-                    $system_default = $this->core->getSystemDefault($this->core->agent_config['sandbox_mode']);
+                    $php_path  = $this->core->OSMgr->getPhpPath();
+                    $work_path = $this->core->agent_config['workspace_path'];
 
-                    $system_default['content'] .= '[Worker 元数据]' . "\n"
-                        . '- Name: ' . $worker_name . "\n"
-                        . '- Role: ' . $worker_role . "\n\n"
-                        . '[用户指令]' . "\n" . $data['system_prompt'];
+                    if ($this->core->agent_config['sandbox_mode']) {
+                        $sand_box_prompt = '- **沙箱开**:所有文件以 `' . $work_path . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
+                    } else {
+                        $sand_box_prompt = '- **沙箱关**:按绝对路径，优先项目目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
+                    }
 
-                    $session_history = [$system_default];
+                    $session_history[] = [
+                        'role'    => 'system',
+                        'content' => '## 系统' . "\n" .
+                            '`OS:' . php_uname() . '` | `PHP:' . PHP_VERSION . '(' . $php_path . ')` | `CWD:' . getcwd() . '`' . "\n" .
+                            '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $work_path . '`' . "\n" .
+                            '`框架:' . NS_ROOT . '` | `模块:' . $this->core->app->root_path . '/modules/` | `Tools:' . $this->core->app->root_path . '/tools/` | `Skills:' . $this->core->app->root_path . '/skills/` | `日志:' . $this->core->app->log_path . '`' . "\n" .
+                            '## Worker 元数据' . "\n" .
+                            '- Name: ' . $worker_name . "\n" .
+                            '- Role: ' . $worker_role . "\n" .
+                            '- ' . $sand_box_prompt . "\n\n" .
+                            '## 用户指令' . "\n" . $data['system_prompt']
+                    ];
                     break;
 
                 case 'talk':

@@ -237,14 +237,17 @@ class go extends Factory
                                         'talk_count'  => 0
                                     ];
 
-                                    $this->core->procMgr->writeProc($proc_idx, json_encode([
-                                        'cmd'           => 'start',
-                                        'proc_idx'      => $proc_idx,
-                                        'socket_id'     => $payload['data']['socket_id'],
-                                        'worker_name'   => $payload['data']['worker_name'],
-                                        'worker_role'   => $payload['data']['worker_role'],
-                                        'system_prompt' => $payload['data']['system_prompt'],
-                                    ], JSON_FORMAT));
+                                    $this->core->procMgr->writeProc(
+                                        $proc_idx,
+                                        json_encode([
+                                            'cmd'           => 'start',
+                                            'proc_idx'      => $proc_idx,
+                                            'socket_id'     => $payload['data']['socket_id'],
+                                            'worker_name'   => $payload['data']['worker_name'],
+                                            'worker_role'   => $payload['data']['worker_role'],
+                                            'system_prompt' => $payload['data']['system_prompt'],
+                                        ], JSON_FORMAT)
+                                    );
                                     break;
 
                                 case 'talk':

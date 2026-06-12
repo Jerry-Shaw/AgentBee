@@ -27,7 +27,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程(独立LLM会话，可并行)。可共享/操作全局记忆(创建时请知晓)。异步，结果稍后推送。大型任务可启用多Worker分工协作。worker_name须唯一。',
+                'description' => '创建Worker子进程(独立LLM会话，可并行)。异步，结果稍后推送。大型任务可启用多Worker分工协作。worker_name须唯一。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

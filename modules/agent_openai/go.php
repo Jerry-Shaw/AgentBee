@@ -225,8 +225,7 @@ class go extends Factory
 
         $this->libOpenAI->setModelParams($this->core->llm_params + $this->core->llm_tools);
 
-        $socket_id       = '';
-        $session_history = [];
+        $socket_id = '';
 
         $this->setShmop(getmypid());
 
@@ -249,57 +248,18 @@ class go extends Factory
                 continue;
             }
 
+            $worker_history = $data['history'];
+            $message_mate   = $data['msg_meta'] + ['talk_count' => count($worker_history), 'socket_id' => $socket_id];
+
             switch ($data['cmd']) {
                 case 'start':
-                    $socket_id   = $data['message']['socket_id'];
-                    $worker_name = $data['msg_meta']['workerName'];
-                    $worker_role = $data['msg_meta']['workerRole'];
-
-                    $php_path  = $this->core->OSMgr->getPhpPath();
-                    $work_path = $this->core->agent_config['workspace_path'];
-
-                    if ($this->core->agent_config['sandbox_mode']) {
-                        $sand_box_prompt = '- **开启**:所有文件以 `' . $work_path . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
-                    } else {
-                        $sand_box_prompt = '- **关闭**:按绝对路径，优先项目根目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
-                    }
-
-                    $session_history[] = [
-                        'role'    => 'system',
-                        'content' => '## 系统' . "\n" .
-                            '`OS:' . php_uname() . '` | `PHP:' . PHP_VERSION . '(' . $php_path . ')` | `CWD:' . getcwd() . '`' . "\n" .
-                            '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $work_path . '`' . "\n" .
-                            '`框架:' . NS_ROOT . '` | `模块:' . $this->core->app->root_path . '/modules/` | `Tools:' . $this->core->app->root_path . '/tools/` | `Skills:' . $this->core->app->root_path . '/skills/` | `日志:' . $this->core->app->log_path . '`' . "\n" .
-                            '## Worker 元数据' . "\n" .
-                            '- 名称: ' . $worker_name . "\n" .
-                            '- 角色: ' . $worker_role . "\n" .
-                            '- 沙箱: ' . $sand_box_prompt . "\n\n" .
-                            '## 用户指令' . "\n" . $data['message']['system_prompt']
-                    ];
-
-                    $session_history[] = ['role' => 'user', 'content' => '用一句话概述你的名字，角色，并回复“已就绪”'];
-                    $message_mate      = $data['msg_meta'] + ['talk_count' => count($session_history), 'socket_id' => $socket_id];
-
-                    $this->procWorker->talk(
-                        $socket_id,
-                        $message_mate,
-                        $session_history,
-                        $this->libOpenAI
-                    );
-                    break;
+                    $socket_id = $data['socket_id'];
 
                 case 'talk':
-                    if ('' === ($data['message'] ?? '')) {
-                        break;
-                    }
-
-                    $session_history[] = ['role' => 'user', 'content' => $data['message']];
-                    $message_mate      = $data['msg_meta'] + ['talk_count' => count($session_history), 'socket_id' => $socket_id];
-
                     $this->procWorker->talk(
                         $socket_id,
                         $message_mate,
-                        $session_history,
+                        $worker_history,
                         $this->libOpenAI
                     );
                     break;

@@ -125,6 +125,21 @@ class go extends Factory
     }
 
     /**
+     * @param string $worker_name
+     * @param array  $content
+     *
+     * @return void
+     */
+    public function addWorkerHistory(string $worker_name, array $content): void
+    {
+        if (isset($this->child_workers[$worker_name])) {
+            $this->child_workers[$worker_name]['history'][] = $content;
+        }
+
+        unset($worker_name, $content);
+    }
+
+    /**
      * Callback for external stream (stdout from worker).
      *
      * @param string $external_stream_id
@@ -188,7 +203,11 @@ class go extends Factory
                     if (isset($payload['data'])) {
                         switch ($payload_type) {
                             case 'add':
-                                $this->core->addSessionHistory($payload['data']);
+                                if ($payload['sender'] === $this->core->agent_config['agent_llm']['main_worker']) {
+                                    $this->core->addSessionHistory($payload['data']);
+                                } elseif ($payload['sender'] === $this->core->agent_config['agent_llm']['child_worker']) {
+                                    $this->addWorkerHistory($payload['workerName'], $payload['data']);
+                                }
                                 break;
 
                             case 'sync':
@@ -223,26 +242,51 @@ class go extends Factory
 
                                     $this->utils->debug('WorkerBee started: ' . $payload['data']['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload['data']['worker_role'] . ')', 'trace');
 
+                                    if ($this->core->agent_config['sandbox_mode']) {
+                                        $sand_box_prompt = '- **开启**:所有文件以 `' . $this->core->agent_config['workspace_path'] . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
+                                    } else {
+                                        $sand_box_prompt = '- **关闭**:按绝对路径，优先项目根目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
+                                    }
+
                                     $this->child_workers[$payload['data']['worker_name']] = [
                                         'proc_idx'    => $proc_idx,
                                         'socket_id'   => $payload['data']['socket_id'],
                                         'worker_name' => $payload['data']['worker_name'],
                                         'worker_role' => $payload['data']['worker_role'],
-                                        'status'      => 'idle',
+                                        'status'      => 'processing',
                                         'last_talk'   => date('Y-m-d H:i:s'),
-                                        'talk_count'  => 0
+                                        'talk_count'  => 0,
+                                        'history'     => []
                                     ];
+
+                                    $this->addWorkerHistory(
+                                        $payload['data']['worker_name'],
+                                        [
+                                            'role'    => 'system',
+                                            'content' => '## 系统' . "\n" .
+                                                '`OS:' . php_uname() . '` | `PHP:' . PHP_VERSION . ' (' . $this->core->OSMgr->getPhpPath() . ')` | `CWD:' . getcwd() . '`' . "\n" .
+                                                '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $this->core->agent_config['workspace_path'] . '`' . "\n" .
+                                                '`框架:' . NS_ROOT . '` | `模块:' . $this->core->app->root_path . '/modules/` | `Tools:' . $this->core->app->root_path . '/tools/` | `Skills:' . $this->core->app->root_path . '/skills/` | `日志:' . $this->core->app->log_path . '`' . "\n" .
+                                                '## Worker 元数据' . "\n" .
+                                                '- 名称: ' . $payload['data']['worker_name'] . "\n" .
+                                                '- 角色: ' . $payload['data']['worker_role'] . "\n" .
+                                                '- 沙箱: ' . $sand_box_prompt . "\n\n" .
+                                                '## 用户指令' . "\n" . $payload['data']['system_prompt']
+                                        ]
+                                    );
+
+                                    $this->addWorkerHistory(
+                                        $payload['data']['worker_name'],
+                                        ['role' => 'user', 'content' => '用一句话概述你的名字，角色，并回复“已就绪”']
+                                    );
 
                                     $this->core->procMgr->writeProc(
                                         $proc_idx,
                                         json_encode([
-                                            'cmd'      => 'start',
-                                            'message'  => [
-                                                'proc_idx'      => $proc_idx,
-                                                'socket_id'     => $payload['data']['socket_id'],
-                                                'system_prompt' => $payload['data']['system_prompt'],
-                                            ],
-                                            'msg_meta' => $this->utils->getMessageMarker(
+                                            'cmd'       => 'start',
+                                            'socket_id' => $payload['data']['socket_id'],
+                                            'history'   => $this->child_workers[$payload['data']['worker_name']]['history'],
+                                            'msg_meta'  => $this->utils->getMessageMarker(
                                                 $this->core->agent_config['agent_llm']['child_worker'],
                                                 $payload['data']['worker_name'],
                                                 $payload['data']['worker_role'],
@@ -289,11 +333,16 @@ class go extends Factory
 
                                     $this->utils->debug('WorkerBee: ' . $payload['data']['worker_name'] . ' is working', 'trace');
 
+                                    $this->addWorkerHistory(
+                                        $payload['data']['worker_name'],
+                                        ['role' => 'user', 'content' => $payload['data']['message']]
+                                    );
+
                                     $this->core->procMgr->writeProc(
                                         $worker_info['proc_idx'],
                                         json_encode([
                                             'cmd'      => 'talk',
-                                            'message'  => $payload['data']['message'],
+                                            'history'  => $this->child_workers[$payload['data']['worker_name']]['history'],
                                             'msg_meta' => $this->utils->getMessageMarker(
                                                 $this->core->agent_config['agent_llm']['child_worker'],
                                                 $worker_info['worker_name'],
@@ -348,7 +397,7 @@ class go extends Factory
                     switch ($payload_type) {
                         case 'tools':
                             $this->in_process = true;
-                            $this->utils->debug('streamWorkerHandler: LLM Tool calls', 'trace');
+                            $this->utils->debug($payload['sender'] . '|' . $payload['workerName'] . ': LLM Tool calls', 'trace');
 
                             $this->core->agent_llm->chat(
                                 $message['socket_id'],

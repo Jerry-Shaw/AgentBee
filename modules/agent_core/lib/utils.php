@@ -52,7 +52,7 @@ class utils extends Factory
             'workerName' => $worker_name,
             'workerRole' => $worker_role,
             'sessionId'  => $this->session_id,
-            'messageId'  => $worker_name . '-' . hash('md5', uniqid(microtime(), true)),
+            'messageId'  => hash('md5', uniqid(microtime(), true)),
         ];
 
         unset($sender, $worker_name, $worker_role, $is_sub_talk);

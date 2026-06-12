@@ -277,7 +277,7 @@ class go extends Factory
                             '## 用户指令' . "\n" . $data['message']['system_prompt']
                     ];
 
-                    $session_history[] = ['role' => 'user', 'content' => '用实际信息报告：格式为"你的名称 | 你的角色 | 沙箱:启用或禁用 | 已就绪"。只输出一行。'];
+                    $session_history[] = ['role' => 'user', 'content' => '用一句话概述你的名字，角色，并回复“已就绪”'];
                     $message_mate      = $data['msg_meta'] + ['talk_count' => count($session_history), 'socket_id' => $socket_id];
 
                     $this->procWorker->talk(

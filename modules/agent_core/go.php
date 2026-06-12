@@ -257,6 +257,7 @@ class go extends Factory
                                     }
 
                                     if ('processing' === $this->child_workers[$payload['data']['worker_name']]['status']) {
+                                        $this->utils->debug('WorkerBee: ' . $payload['data']['worker_name'] . ' is busy', 'trace');
                                         $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
                                         break;
                                     }
@@ -280,6 +281,8 @@ class go extends Factory
                                         $this->utils->debug('Client offline, message queued', 'trace');
                                         $this->message_buffers[] = $worker_message;
                                     }
+
+                                    $this->utils->debug('WorkerBee: ' . $payload['data']['worker_name'] . ' is working', 'trace');
 
                                     $this->core->procMgr->writeProc(
                                         $worker_info['proc_idx'],

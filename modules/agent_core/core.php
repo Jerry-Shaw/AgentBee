@@ -545,9 +545,9 @@ final class core extends Factory
 
         $prompts[] = '## 安全';
         if ($sandbox_mode) {
-            $prompts[] = '- **沙箱开**:所有文件以 `' . $work_path . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
+            $prompts[] = '- **沙箱开启**:所有文件以 `' . $work_path . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
         } else {
-            $prompts[] = '- **沙箱关**:按绝对路径，优先项目目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
+            $prompts[] = '- **沙箱关闭**:按绝对路径，优先项目根目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
         }
         $prompts[] = '- **危险操作**(删/执行命令):先告知风险等确认。';
         $prompts[] = '- **绝对禁止**:`rm -rf /, dd, shutdown`；改系统配置(/etc/, C:\\Windows\\System32\\)；改Agent核心脚本(`' . $this->app->root_path . '/modules/agent_*/`)；装/卸软件；泄露敏感信息。';

@@ -259,9 +259,9 @@ class go extends Factory
                     $work_path = $this->core->agent_config['workspace_path'];
 
                     if ($this->core->agent_config['sandbox_mode']) {
-                        $sand_box_prompt = '- **沙箱开**:所有文件以 `' . $work_path . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
+                        $sand_box_prompt = '- **开启**:所有文件以 `' . $work_path . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
                     } else {
-                        $sand_box_prompt = '- **沙箱关**:按绝对路径，优先项目目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
+                        $sand_box_prompt = '- **关闭**:按绝对路径，优先项目根目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
                     }
 
                     $session_history[] = [
@@ -271,13 +271,13 @@ class go extends Factory
                             '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $work_path . '`' . "\n" .
                             '`框架:' . NS_ROOT . '` | `模块:' . $this->core->app->root_path . '/modules/` | `Tools:' . $this->core->app->root_path . '/tools/` | `Skills:' . $this->core->app->root_path . '/skills/` | `日志:' . $this->core->app->log_path . '`' . "\n" .
                             '## Worker 元数据' . "\n" .
-                            '- Name: ' . $worker_name . "\n" .
-                            '- Role: ' . $worker_role . "\n" .
-                            '- ' . $sand_box_prompt . "\n\n" .
+                            '- 名称: ' . $worker_name . "\n" .
+                            '- 角色: ' . $worker_role . "\n" .
+                            '- 沙箱: ' . $sand_box_prompt . "\n\n" .
                             '## 用户指令' . "\n" . $data['message']['system_prompt']
                     ];
 
-                    $session_history[] = ['role' => 'user', 'content' => '仅输出（不要添加任何其他文字）：Name | Role | 沙箱: 启用/禁用 | 已就绪'];
+                    $session_history[] = ['role' => 'user', 'content' => '用实际信息报告：格式为"你的名称 | 你的角色 | 沙箱:启用或禁用 | 已就绪"。只输出一行。'];
                     $message_mate      = $data['msg_meta'] + ['talk_count' => count($session_history), 'socket_id' => $socket_id];
 
                     $this->procWorker->talk(

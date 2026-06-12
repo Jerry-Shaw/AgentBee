@@ -223,17 +223,13 @@ class go extends Factory
 
                                     $this->utils->debug('WorkerBee started: ' . $payload['data']['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload['data']['worker_role'] . ')', 'trace');
 
-                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" | ' . $payload['data']['worker_role'] . '，已就绪，等待指令';
-
-                                    $start_datetime = date('Y-m-d H:i:s');
-
                                     $this->child_workers[$payload['data']['worker_name']] = [
                                         'proc_idx'    => $proc_idx,
                                         'socket_id'   => $payload['data']['socket_id'],
                                         'worker_name' => $payload['data']['worker_name'],
                                         'worker_role' => $payload['data']['worker_role'],
                                         'status'      => 'idle',
-                                        'last_talk'   => $start_datetime,
+                                        'last_talk'   => date('Y-m-d H:i:s'),
                                         'talk_count'  => 0
                                     ];
 
@@ -279,13 +275,15 @@ class go extends Factory
                                             AGENT_NAME,
                                             'Assistant',
                                             1
-                                        ) + ['type' => 'content', 'data' => $payload['data']['message']
+                                        ) + [
+                                            'type' => 'content',
+                                            'data' => $payload['data']['message']
                                         ], JSON_FORMAT);
 
                                     if (isset($this->socket_session[$worker_info['socket_id']])) {
                                         $this->core->sendMessage($worker_info['socket_id'], $worker_message);
                                     } else {
-                                        $this->utils->debug('Client offline, message queued', 'trace');
+                                        $this->utils->debug('Client offline, message from ' . AGENT_NAME . ' queued', 'trace');
                                         $this->message_buffers[] = $worker_message;
                                     }
 
@@ -311,8 +309,6 @@ class go extends Factory
 
                                     if (!empty($worker_info) && 0 < $this->core->procMgr->getStatus($worker_info['proc_idx'])) {
                                         $this->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
-
-                                        $this->message_buffers[] = json_encode(['type' => 'close', 'isSubTalk' => 1, 'data' => $worker_info], JSON_FORMAT);
 
                                         $this->core->procMgr->writeProc($worker_info['proc_idx'], json_encode(['cmd' => 'close'], JSON_FORMAT));
                                         $this->core->procMgr->close($worker_info['proc_idx']);

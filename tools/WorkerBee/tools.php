@@ -33,7 +33,7 @@ class tools
                     'properties' => [
                         'worker_name'   => ['type' => 'string', 'description' => 'Worker名称，须唯一'],
                         'worker_role'   => ['type' => 'string', 'description' => 'Worker角色，如"代码审查员"'],
-                        'system_prompt' => ['type' => 'string', 'description' => '系统指令：角色、目标、边界']
+                        'system_prompt' => ['type' => 'string', 'description' => '系统指令：角色/目标/边界/安全等。禁止具体任务（如"分析代码"），任务请用 talk。']
                     ],
                     'required'   => ['worker_name', 'worker_role', 'system_prompt']
                 ],

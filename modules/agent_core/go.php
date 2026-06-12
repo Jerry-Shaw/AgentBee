@@ -352,15 +352,14 @@ class go extends Factory
 
                             $this->core->agent_llm->chat(
                                 $message['socket_id'],
-                                array_intersect_key(
-                                    $payload,
-                                    $this->utils->getMessageMarker(
-                                        $this->core->agent_config['agent_llm']['main_worker'],
-                                        AGENT_NAME,
-                                        'Assistant',
-                                        0
-                                    )
-                                ),
+                                [
+                                    'sender'     => $payload['sender'],
+                                    'isSubTalk'  => $payload['isSubTalk'],
+                                    'workerName' => $payload['workerName'],
+                                    'workerRole' => $payload['workerRole'],
+                                    'sessionId'  => $payload['sessionId'],
+                                    'messageId'  => $payload['messageId']
+                                ],
                                 $current_history
                             );
                             break;

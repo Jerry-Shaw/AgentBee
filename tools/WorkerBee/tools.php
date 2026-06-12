@@ -27,7 +27,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程(独立LLM会话，可并行)。可共享/操作全局记忆(创建时请知晓)。异步，结果稍后推送。建议分配角色协同。worker_name须唯一。',
+                'description' => '创建Worker子进程(独立LLM会话，可并行)。可共享/操作全局记忆(创建时请知晓)。异步，结果稍后推送。大型任务可启用多Worker分工协作。worker_name须唯一。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -43,7 +43,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker发送消息。异步，结果稍后推送。必须逐句发送并等待回复，禁止连续多条。',
+                'description' => '向Worker发送消息。异步，结果稍后推送。必须逐句发送并等待回复，禁止连续多条。若长时间无回复，可考虑重启进程。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -58,7 +58,7 @@ class tools
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '终止Worker进程并释放资源。建议任务完成或上下文过长时主动保存记忆后调用。',
+                'description' => '终止Worker进程并释放资源。建议任务完成或上下文过长时主动保存记忆后调用。若需继续，请重启同名Worker并发送摘要恢复上下文。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

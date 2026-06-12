@@ -366,9 +366,9 @@ class go extends Factory
                                 $this->child_workers[$payload['workerName']]['last_talk']  = date('Y-m-d H:i:s');
                                 $this->child_workers[$payload['workerName']]['talk_count'] = $payload['talk_count'];
 
-                                if ($payload['talk_count'] > $warning_count) {
+                                if ($payload['talk_count'] > $limit_count) {
                                     $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_history . ')', 'trace');
-                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker';
+                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker，必要时可重启继续任务。';
                                 }
                             }
 

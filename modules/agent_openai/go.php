@@ -201,6 +201,7 @@ class go extends Factory
      * Child Worker process
      *
      * @return void
+     * @throws \Exception
      */
     public function WorkerBee(): void
     {
@@ -208,7 +209,7 @@ class go extends Factory
 
         // Remove WorkerBee tools to prevent recursion
         if (!empty($this->core->llm_tools['tools'])) {
-            unset($this->core->agent_tools['Worker']);
+            unset($this->core->agent_tools['WorkerBee']);
             $this->core->llm_tools['tools'] = array_values(
                 array_filter(
                     $this->core->llm_tools['tools'],
@@ -249,15 +250,14 @@ class go extends Factory
                     $worker_name = $data['worker_name'] ?? '';
                     $worker_role = $data['worker_role'] ?? '';
 
-                    $session_history = [
-                        [
-                            'role'    => 'system',
-                            'content' => '[Worker 元数据]' . "\n"
-                                . '- Name: ' . $worker_name . "\n"
-                                . '- Role: ' . $worker_role . "\n\n"
-                                . '[用户指令]' . "\n" . $data['system_prompt']
-                        ]
-                    ];
+                    $system_default = $this->core->getSystemDefault($this->core->agent_config['sandbox_mode']);
+
+                    $system_default['content'] .= '[Worker 元数据]' . "\n"
+                        . '- Name: ' . $worker_name . "\n"
+                        . '- Role: ' . $worker_role . "\n\n"
+                        . '[用户指令]' . "\n" . $data['system_prompt'];
+
+                    $session_history = [$system_default];
                     break;
 
                 case 'talk':

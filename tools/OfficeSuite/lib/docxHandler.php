@@ -36,11 +36,7 @@ class docxHandler extends Factory
     }
 
     /**
-     * Read simple text content from .docx.
-     *
-     * @param string $path
-     *
-     * @return array
+     * Read content from DOCX file (text + images).
      */
     public function read(string $path): array
     {
@@ -49,499 +45,727 @@ class docxHandler extends Factory
             return ['error' => 'Failed to open DOCX file as a zip archive.'];
         }
 
-        $xmlContent = $zip->getFromName('word/document.xml');
-        if (false === $xmlContent) {
+        $xml_content = $zip->getFromName('word/document.xml');
+        if (false === $xml_content) {
             $zip->close();
+            unset($zip, $xml_content);
             return ['error' => 'Could not find document.xml'];
         }
 
-        $textParts = [];
-        $reader    = new \XMLReader();
-        if (true === $reader->XML($xmlContent)) {
+        // Extract plain text
+        $text_parts = [];
+        $reader     = new \XMLReader();
+        if (true === $reader->XML($xml_content)) {
             while ($reader->read()) {
-                if ($reader->nodeType == \XMLReader::ELEMENT && 'w:t' === $reader->name) {
+                if (\XMLReader::ELEMENT === $reader->nodeType && 'w:t' === $reader->name) {
                     $text = $reader->readString() ?? '';
                     if ('' !== trim($text)) {
-                        $textParts[] = trim($text);
+                        $text_parts[] = trim($text);
                     }
+                    unset($text);
                 }
             }
         }
         $reader->close();
+        $plain_text = implode(' ', $text_parts);
+        unset($text_parts, $reader);
+
+        // Extract images
+        $temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/docx_read_' . uniqid('', true);
+        if (!mkdir($temp_dir, 0755, true)) {
+            $zip->close();
+            return ['error' => 'Cannot create temporary directory for images'];
+        }
+
+        $images = $this->extractImagesFromDocx($zip, $xml_content, $temp_dir);
         $zip->close();
 
         $result = [
-            'status'  => 'success',
-            'file'    => basename($path),
-            'content' => implode(' ', $textParts)
+            'status'          => 'success',
+            'file'            => basename($path),
+            'content'         => $plain_text,
+            'images'          => $images,
+            'images_temp_dir' => $temp_dir,
         ];
 
-        unset($zip, $xmlContent, $reader, $textParts);
+        unset($zip, $xml_content, $plain_text, $images, $temp_dir, $path);
         return $result;
     }
 
     /**
-     * Write DOCX with append option (preserves images in append mode).
-     *
-     * @param string $path
-     * @param array  $data
-     * @param bool   $append
-     *
-     * @return array
+     * Write structured DOCX (overwrite).
      */
-    public function write(string $path, array $data, bool $append = false): array
+    public function writeStructured(string $path, array $structured_items): array
     {
-        $tempDir = null;
+        return $this->writeStructuredInternal($path, $structured_items, false);
+    }
+
+    /**
+     * Append structured content to existing DOCX file (preserves original content and images).
+     */
+    public function appendStructured(string $path, array $structured_items): array
+    {
+        if (!file_exists($path)) {
+            return $this->writeStructured($path, $structured_items);
+        }
+        return $this->writeStructuredInternal($path, $structured_items, true);
+    }
+
+    /**
+     * Internal write method (overwrite or append).
+     */
+    private function writeStructuredInternal(string $path, array $structured_items, bool $append): array
+    {
+        $temp_dir        = null;
+        $append_temp_dir = null;
         try {
-            // Flatten incoming data
-            $data = $this->flattenData($data);
-
-            // Normalize new items
-            $newItems = [];
-            foreach ($data as $item) {
-                if (is_array($item) && isset($item['type']) && 'image' === $item['type']) {
-                    $imgPath = $item['content'] ?? '';
-                    if (!file_exists($imgPath)) {
-                        return ['error' => "Image not found: $imgPath"];
-                    }
-                    $newItems[] = [
-                        'type'   => 'image',
-                        'path'   => $imgPath,
-                        'width'  => $item['width'] ?? 200,
-                        'height' => $item['height'] ?? null,
-                    ];
-                } else {
-                    $newItems[] = ['type' => 'text', 'content' => trim((string)$item)];
-                }
-            }
-
-            $tempDir = $this->core->agent_config['workspace_path'] . '/temp/docx_' . uniqid();
-            if (!mkdir($tempDir, 0755, true)) {
-                return ['error' => 'Failed to create temp dir'];
-            }
-            mkdir($tempDir . '/word', 0755, true);
-            mkdir($tempDir . '/word/_rels', 0755, true);
-            mkdir($tempDir . '/_rels', 0755, true);
-            mkdir($tempDir . '/word/media', 0755, true);
-
-            $mediaDir = $tempDir . '/word/media';
-            $items    = [];
-
-            if ($append && file_exists($path)) {
-                $existing = $this->parseExistingItems($path, $mediaDir);
-                $items    = array_merge($existing, $newItems);
-                unset($existing);
-            } else {
-                $items = $newItems;
-            }
-
-            if (empty($items)) {
+            if (empty($structured_items)) {
                 return ['error' => 'No content to write.'];
             }
 
-            // Copy all images to final media folder and assign unique ids
-            $finalItems   = [];
-            $imageCounter = 1;
+            $temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/docx_' . uniqid('', true);
+            if (!mkdir($temp_dir, 0755, true)) {
+                return ['error' => 'Failed to create temp dir'];
+            }
+            mkdir($temp_dir . '/word', 0755, true);
+            mkdir($temp_dir . '/word/_rels', 0755, true);
+            mkdir($temp_dir . '/_rels', 0755, true);
+            mkdir($temp_dir . '/word/media', 0755, true);
 
-            foreach ($items as $item) {
-                if ('text' === $item['type']) {
-                    $finalItems[] = $item;
-                } else {
-                    $ext     = strtolower(pathinfo($item['path'], PATHINFO_EXTENSION));
-                    $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
-                    if (!in_array($ext, $allowed, true)) {
-                        $ext = 'png';
-                    }
-                    $newName = 'image' . $imageCounter . '.' . $ext;
-                    $dest    = $mediaDir . '/' . $newName;
-
-                    if (0 !== strpos($item['path'], $tempDir)) {
-                        copy($item['path'], $dest);
-                    } else {
-                        rename($item['path'], $dest);
-                    }
-
-                    $finalItems[] = [
-                        'type'   => 'image',
-                        'path'   => $dest,
-                        'width'  => $item['width'],
-                        'height' => $item['height'],
-                        'rel_id' => 'rId' . $imageCounter
-                    ];
-                    $imageCounter++;
-                    unset($ext, $allowed, $newName, $dest);
+            if ($append) {
+                $append_temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/docx_append_' . uniqid('', true);
+                if (!mkdir($append_temp_dir, 0755, true)) {
+                    return ['error' => 'Failed to create temp dir for append'];
                 }
+                $existing_items = $this->extractStructuredItemsFromDocx($path, $append_temp_dir);
+                if (isset($existing_items['error'])) {
+                    $this->rrmdir($append_temp_dir);
+                    return $existing_items;
+                }
+                $structured_items = array_merge($existing_items, $structured_items);
             }
 
-            // Build [Content_Types].xml
-            $ct = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
-            $ct .= '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' . "\n";
-            $ct .= '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' . "\n";
-            $ct .= '  <Default Extension="xml" ContentType="application/xml"/>' . "\n";
-            $ct .= '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' . "\n";
+            $media_dir     = $temp_dir . '/word/media';
+            $rels_entries  = [];
+            $image_counter = 1;
+            $body_xml      = '';
 
-            $imageExts = [];
-            foreach ($finalItems as $it) {
-                if ('image' === $it['type']) {
-                    $e = pathinfo($it['path'], PATHINFO_EXTENSION);
+            foreach ($structured_items as $item) {
+                switch ($item['type']) {
+                    case 'heading':
+                        $body_xml .= $this->generateHeadingXml($item['text'], $item['level']);
+                        break;
+                    case 'paragraph':
+                        $body_xml .= $this->generateParagraphXml(
+                            $item['text'],
+                            $item['bold'] ?? false,
+                            $item['italic'] ?? false,
+                            $item['fontSize'] ?? null,
+                            $item['align'] ?? 'left',
+                            $item['firstLineIndent'] ?? null,
+                            $item['lineSpacing'] ?? null,
+                            $item['beforeSpacing'] ?? null,
+                            $item['afterSpacing'] ?? null,
+                            $item['fontFamily'] ?? null,
+                            $item['fontFamilyEastAsia'] ?? null,
+                            $item['color'] ?? null,
+                            $item['underline'] ?? null
+                        );
+                        break;
+                    case 'image':
+                        $src = $item['path'];
+                        if (!file_exists($src)) {
+                            throw new \Exception('Image not found: ' . $src);
+                        }
+                        $ext     = strtolower(pathinfo($src, PATHINFO_EXTENSION));
+                        $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
+                        if (!in_array($ext, $allowed, true)) {
+                            $ext = 'png';
+                        }
+                        $dest_name = 'image' . $image_counter . '.' . $ext;
+                        $dest_path = $media_dir . '/' . $dest_name;
+                        copy($src, $dest_path);
+
+                        $width_px  = $item['width'] ?? 200;
+                        $height_px = $item['height'];
+                        if (null === $height_px) {
+                            $info = getimagesize($dest_path);
+                            if (false !== $info) {
+                                $height_px = (int)round($width_px * $info[1] / $info[0]);
+                            } else {
+                                $height_px = $width_px;
+                            }
+                            unset($info);
+                        }
+                        $align = $item['align'] ?? 'center';
+
+                        $rel_id         = 'rId' . $image_counter;
+                        $rels_entries[] = [
+                            'Id'     => $rel_id,
+                            'Target' => 'media/' . $dest_name,
+                            'Type'   => 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
+                        ];
+                        $body_xml       .= $this->generateImageXml($dest_path, $width_px, $height_px, $rel_id, $align);
+                        $image_counter++;
+                        unset($src, $ext, $allowed, $dest_name, $dest_path, $width_px, $height_px, $align, $rel_id);
+                        break;
+                }
+                unset($item);
+            }
+
+            $document_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $document_xml .= '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' . "\n";
+            $document_xml .= '  <w:body>' . "\n";
+            $document_xml .= $body_xml;
+            $document_xml .= '    <w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>' . "\n";
+            $document_xml .= '  </w:body>' . "\n";
+            $document_xml .= '</w:document>';
+            file_put_contents($temp_dir . '/word/document.xml', $document_xml);
+            unset($document_xml);
+
+            $this->writeStyles($temp_dir);
+
+            // Write [Content_Types].xml
+            $ct         = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $ct         .= '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' . "\n";
+            $ct         .= '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' . "\n";
+            $ct         .= '  <Default Extension="xml" ContentType="application/xml"/>' . "\n";
+            $image_exts = [];
+            foreach ($structured_items as $item) {
+                if ('image' === $item['type']) {
+                    $e = pathinfo($item['path'], PATHINFO_EXTENSION);
                     if ('jpg' === $e) {
-                        $imageExts['jpg'] = 'image/jpeg';
+                        $image_exts['jpg'] = 'image/jpeg';
                     } elseif ('jpeg' === $e) {
-                        $imageExts['jpeg'] = 'image/jpeg';
+                        $image_exts['jpeg'] = 'image/jpeg';
                     } elseif ('png' === $e) {
-                        $imageExts['png'] = 'image/png';
+                        $image_exts['png'] = 'image/png';
                     } elseif ('gif' === $e) {
-                        $imageExts['gif'] = 'image/gif';
+                        $image_exts['gif'] = 'image/gif';
                     } elseif ('bmp' === $e) {
-                        $imageExts['bmp'] = 'image/bmp';
+                        $image_exts['bmp'] = 'image/bmp';
                     }
+                    unset($e);
                 }
             }
-            foreach ($imageExts as $ext => $mime) {
+            foreach ($image_exts as $ext => $mime) {
                 $ct .= '  <Default Extension="' . $ext . '" ContentType="' . $mime . '"/>' . "\n";
             }
+            $ct .= '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' . "\n";
+            $ct .= '  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' . "\n";
             $ct .= '</Types>';
-            file_put_contents($tempDir . '/[Content_Types].xml', $ct);
-            unset($ct, $imageExts, $e);
+            file_put_contents($temp_dir . '/[Content_Types].xml', $ct);
+            unset($ct, $image_exts, $ext, $mime);
 
-            // _rels/.rels
+            // Write _rels/.rels
             $rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
             $rels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
             $rels .= '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' . "\n";
+            $rels .= '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="word/styles.xml"/>' . "\n";
             $rels .= '</Relationships>';
-            file_put_contents($tempDir . '/_rels/.rels', $rels);
+            file_put_contents($temp_dir . '/_rels/.rels', $rels);
             unset($rels);
 
-            // word/document.xml
-            $docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
-            $docXml .= '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' . "\n";
-            $docXml .= '  <w:body>' . "\n";
-
-            $relsEntries = [];
-            $counter     = 1;
-
-            foreach ($finalItems as $it) {
-                if ('text' === $it['type']) {
-                    $text = $it['content'];
-                    if ('' === $text) {
-                        $docXml .= '    <w:p/>' . "\n";
-                    } else {
-                        $esc    = htmlspecialchars($text, ENT_XML1, 'UTF-8');
-                        $docXml .= '    <w:p><w:r><w:t xml:space="preserve">' . $esc . '</w:t></w:r></w:p>' . "\n";
-                        unset($esc);
-                    }
-                    unset($text);
-                } else {
-                    $imgPath  = $it['path'];
-                    $widthPx  = $it['width'];
-                    $heightPx = $it['height'] ?? $widthPx;
-                    if (null === $heightPx) {
-                        $info = getimagesize($imgPath);
-                        if (false !== $info) {
-                            $origW = $info[0];
-                            $origH = $info[1];
-                            if ($origW > 0) {
-                                $heightPx = (int)round($widthPx * $origH / $origW);
-                            } else {
-                                $heightPx = $widthPx;
-                            }
-                        } else {
-                            $heightPx = $widthPx;
-                        }
-                        unset($info, $origW, $origH);
-                    }
-                    $widthEmu  = $widthPx * 9525;
-                    $heightEmu = $heightPx * 9525;
-
-                    $relId         = 'rId' . $counter;
-                    $relsEntries[] = [
-                        'Id'     => $relId,
-                        'Target' => 'media/' . basename($imgPath),
-                        'Type'   => 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
-                    ];
-
-                    $docXml .= '    <w:p>';
-                    $docXml .= '      <w:r>';
-                    $docXml .= '        <w:drawing>';
-                    $docXml .= '          <wp:inline distT="0" distB="0" distL="0" distR="0">';
-                    $docXml .= '            <wp:extent cx="' . $widthEmu . '" cy="' . $heightEmu . '"/>';
-                    $docXml .= '            <wp:docPr id="' . $counter . '" name="Picture ' . $counter . '"/>';
-                    $docXml .= '            <a:graphic>';
-                    $docXml .= '              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">';
-                    $docXml .= '                <pic:pic>';
-                    $docXml .= '                  <pic:nvPicPr>';
-                    $docXml .= '                    <pic:cNvPr id="0" name="Picture ' . $counter . '"/>';
-                    $docXml .= '                    <pic:cNvPicPr/>';
-                    $docXml .= '                  </pic:nvPicPr>';
-                    $docXml .= '                  <pic:blipFill>';
-                    $docXml .= '                    <a:blip r:embed="' . $relId . '"/>';
-                    $docXml .= '                    <a:stretch><a:fillRect/></a:stretch>';
-                    $docXml .= '                  </pic:blipFill>';
-                    $docXml .= '                  <pic:spPr>';
-                    $docXml .= '                    <a:xfrm>';
-                    $docXml .= '                      <a:off x="0" y="0"/>';
-                    $docXml .= '                      <a:ext cx="' . $widthEmu . '" cy="' . $heightEmu . '"/>';
-                    $docXml .= '                    </a:xfrm>';
-                    $docXml .= '                    <a:prstGeom prst="rect"/>';
-                    $docXml .= '                  </pic:spPr>';
-                    $docXml .= '                </pic:pic>';
-                    $docXml .= '              </a:graphicData>';
-                    $docXml .= '            </a:graphic>';
-                    $docXml .= '          </wp:inline>';
-                    $docXml .= '        </w:drawing>';
-                    $docXml .= '      </w:r>';
-                    $docXml .= '    </w:p>' . "\n";
-
-                    $counter++;
-                    unset($imgPath, $widthPx, $heightPx, $widthEmu, $heightEmu, $relId);
-                }
+            // Write word/_rels/document.xml.rels
+            $doc_rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $doc_rels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
+            foreach ($rels_entries as $rel) {
+                $doc_rels .= '  <Relationship Id="' . $rel['Id'] . '" Type="' . $rel['Type'] . '" Target="' . $rel['Target'] . '"/>' . "\n";
             }
+            $doc_rels .= '</Relationships>';
+            file_put_contents($temp_dir . '/word/_rels/document.xml.rels', $doc_rels);
+            unset($doc_rels, $rels_entries);
 
-            $docXml .= '    <w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>' . "\n";
-            $docXml .= '  </w:body>' . "\n";
-            $docXml .= '</w:document>';
-            file_put_contents($tempDir . '/word/document.xml', $docXml);
-            unset($docXml);
-
-            // word/_rels/document.xml.rels
-            $docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
-            $docRels .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . "\n";
-            foreach ($relsEntries as $rel) {
-                $docRels .= '  <Relationship Id="' . $rel['Id'] . '" Type="' . $rel['Type'] . '" Target="' . $rel['Target'] . '"/>' . "\n";
-            }
-            $docRels .= '</Relationships>';
-            file_put_contents($tempDir . '/word/_rels/document.xml.rels', $docRels);
-            unset($docRels, $relsEntries);
-
-            // Create final zip
+            // Create final ZIP
             if (!is_dir(dirname($path))) {
                 mkdir(dirname($path), 0755, true);
             }
             $zip = new \ZipArchive();
             if (true !== $zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE)) {
-                $this->rrmdir($tempDir);
+                $this->rrmdir($temp_dir);
+                if ($append_temp_dir && is_dir($append_temp_dir)) {
+                    $this->rrmdir($append_temp_dir);
+                }
+                unset($temp_dir, $zip, $structured_items, $media_dir, $image_counter, $body_xml);
                 return ['error' => 'Failed to create ZIP archive'];
             }
-            $this->addDirToZip($zip, $tempDir, '');
+            $this->addDirToZip($zip, $temp_dir, '');
             $zip->close();
             unset($zip);
 
-            $this->rrmdir($tempDir);
-            $result = ['status' => 'success', 'path' => $path, 'message' => 'DOCX written with ' . count($finalItems) . ' items'];
+            $this->rrmdir($temp_dir);
+            if ($append_temp_dir && is_dir($append_temp_dir)) {
+                $this->rrmdir($append_temp_dir);
+            }
+            $result = ['status' => 'success', 'path' => $path, 'message' => 'DOCX written with structured data'];
 
-            unset($tempDir, $mediaDir, $items, $newItems, $finalItems, $imageCounter, $counter);
+            unset($temp_dir, $append_temp_dir, $structured_items, $media_dir, $image_counter, $body_xml, $path);
             return $result;
         } catch (\Exception $e) {
-            if (null !== $tempDir && is_dir($tempDir)) {
-                $this->rrmdir($tempDir);
+            if ($temp_dir && is_dir($temp_dir)) {
+                $this->rrmdir($temp_dir);
             }
-            return ['error' => 'Write failed: ' . $e->getMessage()];
+            if ($append_temp_dir && is_dir($append_temp_dir)) {
+                $this->rrmdir($append_temp_dir);
+            }
+            $error = ['error' => 'Write failed: ' . $e->getMessage()];
+            unset($temp_dir, $append_temp_dir, $e);
+            return $error;
         }
     }
 
     /**
-     * Parse existing document into items (text + images) and extract images to temp folder.
+     * Extract existing structured items (heading, paragraph, image) from an existing DOCX file.
+     * Used for append operation.
      *
-     * @param string $path
-     * @param string $tempMediaDir
+     * @param string $path     DOCX file path
+     * @param string $temp_dir Temporary directory to store extracted images (will be cleaned by caller)
      *
      * @return array
      */
-    private function parseExistingItems(string $path, string $tempMediaDir): array
+    private function extractStructuredItemsFromDocx(string $path, string $temp_dir): array
     {
         $items = [];
-        if (!file_exists($path)) {
-            return $items;
-        }
 
         $zip = new \ZipArchive();
         if (true !== $zip->open($path)) {
-            return $items;
+            return ['error' => 'Failed to open DOCX file for reading existing content'];
         }
 
-        // Load relationship map
-        $relMap      = [];
-        $relsContent = $zip->getFromName('word/_rels/document.xml.rels');
-        if (false !== $relsContent) {
-            $relReader = new \XMLReader();
-            if (true === $relReader->XML($relsContent)) {
-                while ($relReader->read()) {
-                    if ($relReader->nodeType == \XMLReader::ELEMENT && 'Relationship' === $relReader->name) {
+        $xml_content = $zip->getFromName('word/document.xml');
+        if (false === $xml_content) {
+            $zip->close();
+            return ['error' => 'Could not find document.xml in existing file'];
+        }
+
+        // Load relationships to map rId to image target
+        $rels_content = $zip->getFromName('word/_rels/document.xml.rels');
+        $rel_map      = [];
+        if (false !== $rels_content) {
+            $rel_reader = new \XMLReader();
+            if (true === $rel_reader->XML($rels_content)) {
+                while ($rel_reader->read()) {
+                    if (\XMLReader::ELEMENT === $rel_reader->nodeType && 'Relationship' === $rel_reader->name) {
                         $id     = null;
                         $target = null;
-                        if ($relReader->hasAttributes) {
-                            while ($relReader->moveToNextAttribute()) {
-                                if ('Id' === $relReader->name) {
-                                    $id = $relReader->value;
-                                }
-                                if ('Target' === $relReader->name) {
-                                    $target = $relReader->value;
+                        if ($rel_reader->hasAttributes) {
+                            while ($rel_reader->moveToNextAttribute()) {
+                                if ('Id' === $rel_reader->name) {
+                                    $id = $rel_reader->value;
+                                } elseif ('Target' === $rel_reader->name) {
+                                    $target = $rel_reader->value;
                                 }
                             }
-                            $relReader->moveToElement();
+                            $rel_reader->moveToElement();
                         }
-                        if ($id && $target) {
-                            $relMap[$id] = $target;
+                        if ($id && $target && false !== strpos($target, 'media/')) {
+                            $rel_map[$id] = $target;
                         }
                     }
                 }
             }
-            $relReader->close();
-            unset($relReader);
+            $rel_reader->close();
+            unset($rel_reader);
         }
-        unset($relsContent);
+        unset($rels_content);
 
         // Parse document.xml
-        $xmlContent = $zip->getFromName('word/document.xml');
-        if (false === $xmlContent) {
-            $zip->close();
-            return $items;
-        }
-
-        $reader = new \XMLReader();
-        if (false === $reader->XML($xmlContent)) {
-            $reader->close();
-            $zip->close();
-            return $items;
-        }
-
-        $currentText  = '';
-        $imageCounter = 0;
-
-        while ($reader->read()) {
-            if ($reader->nodeType == \XMLReader::ELEMENT) {
-                if ('w:t' === $reader->name) {
-                    $currentText .= $reader->readString() ?? '';
-                } elseif ('w:drawing' === $reader->name) {
-                    if ('' !== $currentText) {
-                        $items[]     = ['type' => 'text', 'content' => $currentText];
-                        $currentText = '';
-                    }
-                    $drawingXml = $reader->readOuterXml();
-                    $imageInfo  = $this->extractImageFromDrawing($drawingXml, $relMap, $zip, $tempMediaDir, ++$imageCounter);
-                    if (null !== $imageInfo) {
-                        $items[] = $imageInfo;
-                    }
-                    unset($drawingXml, $imageInfo);
-                }
-            } elseif ($reader->nodeType == \XMLReader::END_ELEMENT && 'w:p' === $reader->name) {
-                if ('' !== $currentText) {
-                    $items[]     = ['type' => 'text', 'content' => $currentText];
-                    $currentText = '';
-                }
-            }
-        }
-        $reader->close();
-        if ('' !== $currentText) {
-            $items[] = ['type' => 'text', 'content' => $currentText];
-        }
-
-        $zip->close();
-        unset($zip, $xmlContent, $reader, $relMap, $currentText, $imageCounter);
-        return $items;
-    }
-
-    /**
-     * Extract image from drawing XML and save to temp directory.
-     *
-     * @param string      $drawingXml
-     * @param array       $relMap
-     * @param \ZipArchive $zip
-     * @param string      $tempMediaDir
-     * @param int         $imgIdx
-     *
-     * @return array|null
-     */
-    private function extractImageFromDrawing(string $drawingXml, array $relMap, \ZipArchive $zip, string $tempMediaDir, int $imgIdx): ?array
-    {
         $dom = new \DOMDocument();
-        if (false === $dom->loadXML($drawingXml)) {
-            return null;
+        if (false === $dom->loadXML($xml_content)) {
+            $zip->close();
+            return ['error' => 'Failed to parse document.xml of existing file'];
         }
         $xp = new \DOMXPath($dom);
+        $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         $xp->registerNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
         $xp->registerNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
         $xp->registerNamespace('wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing');
 
-        $blipNodes = $xp->query('//a:blip/@r:embed');
-        if (false === $blipNodes || 0 === $blipNodes->length) {
-            return null;
-        }
-        $relId = $blipNodes->item(0)->value;
-        if (!isset($relMap[$relId])) {
-            return null;
-        }
-
-        $imageTarget    = $relMap[$relId];
-        $imagePathInZip = 'word/' . $imageTarget;
-        $imageData      = $zip->getFromName($imagePathInZip);
-        if (false === $imageData) {
-            return null;
-        }
-
-        $ext     = strtolower(pathinfo($imageTarget, PATHINFO_EXTENSION));
-        $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
-        if (!in_array($ext, $allowed, true)) {
-            $ext = 'png';
-        }
-        $tempPath = $tempMediaDir . '/orig_img_' . $imgIdx . '.' . $ext;
-        file_put_contents($tempPath, $imageData);
-
-        // Get dimensions from wp:extent
-        $widthEmu    = 200 * 9525;
-        $heightEmu   = $widthEmu;
-        $extentNodes = $xp->query('//wp:extent');
-        if (false !== $extentNodes && $extentNodes->length > 0) {
-            $widthEmu  = (int)$extentNodes->item(0)->getAttribute('cx');
-            $heightEmu = (int)$extentNodes->item(0)->getAttribute('cy');
-        }
-        $widthPx  = (int)round($widthEmu / 9525);
-        $heightPx = (int)round($heightEmu / 9525);
-
-        $result = [
-            'type'   => 'image',
-            'path'   => $tempPath,
-            'width'  => $widthPx,
-            'height' => $heightPx,
-        ];
-
-        unset($dom, $xp, $blipNodes, $relId, $imageTarget, $imagePathInZip, $imageData);
-        unset($ext, $allowed, $tempPath, $widthEmu, $heightEmu, $extentNodes, $widthPx, $heightPx);
-        return $result;
-    }
-
-    /**
-     * Recursively flatten nested array.
-     *
-     * @param array $data
-     *
-     * @return array
-     */
-    private function flattenData(array $data): array
-    {
-        $result = [];
-        foreach ($data as $item) {
-            if (is_array($item)) {
-                if (isset($item['type']) && 'image' === $item['type']) {
-                    $result[] = $item;
+        $paragraphs = $xp->query('//w:p');
+        if (false !== $paragraphs) {
+            foreach ($paragraphs as $para) {
+                // Check if paragraph contains a drawing (image)
+                $drawings = $xp->query('.//w:drawing', $para);
+                if (false !== $drawings && $drawings->length > 0) {
+                    // Process image
+                    foreach ($drawings as $drawing) {
+                        $blip_nodes = $xp->query('.//a:blip/@r:embed', $drawing);
+                        if (false !== $blip_nodes && $blip_nodes->length > 0) {
+                            $r_id = $blip_nodes->item(0)->value;
+                            if (isset($rel_map[$r_id])) {
+                                $image_target   = $rel_map[$r_id];
+                                $image_zip_path = 'word/' . $image_target;
+                                $image_data     = $zip->getFromName($image_zip_path);
+                                if (false !== $image_data) {
+                                    $ext     = strtolower(pathinfo($image_target, PATHINFO_EXTENSION));
+                                    $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
+                                    if (false === in_array($ext, $allowed, true)) {
+                                        $ext = 'png';
+                                    }
+                                    $temp_image_path = $temp_dir . '/img_' . uniqid() . '.' . $ext;
+                                    file_put_contents($temp_image_path, $image_data);
+                                    // Get dimensions
+                                    $width_px     = 200;
+                                    $height_px    = 200;
+                                    $extent_nodes = $xp->query('.//wp:extent', $drawing);
+                                    if (false !== $extent_nodes && $extent_nodes->length > 0) {
+                                        $cx = (int)$extent_nodes->item(0)->getAttribute('cx');
+                                        $cy = (int)$extent_nodes->item(0)->getAttribute('cy');
+                                        if ($cx > 0 && $cy > 0) {
+                                            $width_px  = (int)round($cx / 9525);
+                                            $height_px = (int)round($cy / 9525);
+                                        }
+                                    }
+                                    $items[] = [
+                                        'type'   => 'image',
+                                        'path'   => $temp_image_path,
+                                        'width'  => $width_px,
+                                        'height' => $height_px,
+                                        'align'  => 'center', // default, alignment info not preserved
+                                    ];
+                                }
+                            }
+                        }
+                    }
                 } else {
-                    $result = array_merge($result, $this->flattenData($item));
+                    // Text paragraph
+                    $text_nodes = $xp->query('.//w:t', $para);
+                    $text       = '';
+                    foreach ($text_nodes as $t_node) {
+                        $text .= $t_node->nodeValue;
+                    }
+                    $text = trim($text);
+                    if ('' !== $text) {
+                        // Check if it's a heading (has pStyle)
+                        $p_style_nodes = $xp->query('.//w:pStyle', $para);
+                        if (false !== $p_style_nodes && $p_style_nodes->length > 0) {
+                            $style_val = $p_style_nodes->item(0)->getAttribute('w:val');
+                            if (preg_match('/Heading(\d+)/', $style_val, $matches)) {
+                                $level   = (int)$matches[1];
+                                $items[] = [
+                                    'type'  => 'heading',
+                                    'level' => $level,
+                                    'text'  => $text,
+                                ];
+                                continue;
+                            }
+                        }
+                        $items[] = [
+                            'type' => 'paragraph',
+                            'text' => $text,
+                        ];
+                    }
                 }
-            } else {
-                $result[] = $item;
             }
         }
-        return $result;
+
+        $zip->close();
+        unset($zip, $dom, $xp);
+
+        return $items;
     }
 
     /**
-     * Helper to add directory recursively to zip.
-     *
-     * @param \ZipArchive $zip
-     * @param string      $dir
-     * @param string      $prefix
-     *
-     * @return void
+     * Extract images from DOCX document.xml and save to temp directory.
+     */
+    private function extractImagesFromDocx(\ZipArchive $zip, string $document_xml, string $temp_dir): array
+    {
+        $images = [];
+
+        $rels_content = $zip->getFromName('word/_rels/document.xml.rels');
+        if (false === $rels_content) {
+            return $images;
+        }
+
+        $rel_map    = [];
+        $rel_reader = new \XMLReader();
+        if (true === $rel_reader->XML($rels_content)) {
+            while ($rel_reader->read()) {
+                if (\XMLReader::ELEMENT === $rel_reader->nodeType && 'Relationship' === $rel_reader->name) {
+                    $id     = null;
+                    $target = null;
+                    if ($rel_reader->hasAttributes) {
+                        while ($rel_reader->moveToNextAttribute()) {
+                            if ('Id' === $rel_reader->name) {
+                                $id = $rel_reader->value;
+                            } elseif ('Target' === $rel_reader->name) {
+                                $target = $rel_reader->value;
+                            }
+                        }
+                        $rel_reader->moveToElement();
+                    }
+                    if ($id && $target && false !== strpos($target, 'media/')) {
+                        $rel_map[$id] = $target;
+                    }
+                }
+            }
+        }
+        $rel_reader->close();
+        unset($rels_content, $rel_reader);
+
+        if (empty($rel_map)) {
+            return $images;
+        }
+
+        $dom = new \DOMDocument();
+        if (false === $dom->loadXML($document_xml)) {
+            return $images;
+        }
+        $xp = new \DOMXPath($dom);
+        $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+        $xp->registerNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
+        $xp->registerNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+        $xp->registerNamespace('wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing');
+
+        $drawings = $xp->query('//w:drawing');
+        if (false === $drawings || 0 === $drawings->length) {
+            return $images;
+        }
+
+        $image_counter = 1;
+        foreach ($drawings as $drawing) {
+            $blip_nodes = $xp->query('.//a:blip/@r:embed', $drawing);
+            if (false === $blip_nodes || 0 === $blip_nodes->length) {
+                continue;
+            }
+            $r_id = $blip_nodes->item(0)->value;
+            if (!isset($rel_map[$r_id])) {
+                continue;
+            }
+            $image_target   = $rel_map[$r_id];
+            $image_zip_path = 'word/' . $image_target;
+            $image_data     = $zip->getFromName($image_zip_path);
+            if (false === $image_data) {
+                continue;
+            }
+
+            $ext     = strtolower(pathinfo($image_target, PATHINFO_EXTENSION));
+            $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
+            if (false === in_array($ext, $allowed, true)) {
+                $ext = 'png';
+            }
+            $image_filename  = 'img_' . $image_counter . '.' . $ext;
+            $image_full_path = $temp_dir . '/' . $image_filename;
+            file_put_contents($image_full_path, $image_data);
+
+            $width_px     = 200;
+            $height_px    = 200;
+            $extent_nodes = $xp->query('.//wp:extent', $drawing);
+            if (false !== $extent_nodes && $extent_nodes->length > 0) {
+                $cx = (int)$extent_nodes->item(0)->getAttribute('cx');
+                $cy = (int)$extent_nodes->item(0)->getAttribute('cy');
+                if ($cx > 0 && $cy > 0) {
+                    $width_px  = (int)round($cx / 9525);
+                    $height_px = (int)round($cy / 9525);
+                }
+            } else {
+                $info = getimagesize($image_full_path);
+                if (false !== $info) {
+                    $width_px  = $info[0];
+                    $height_px = $info[1];
+                }
+            }
+
+            $images[] = [
+                'path'   => $image_full_path,
+                'width'  => $width_px,
+                'height' => $height_px,
+                'ext'    => $ext,
+            ];
+            $image_counter++;
+            unset($blip_nodes, $r_id, $image_target, $image_zip_path, $image_data, $ext, $image_filename, $image_full_path, $width_px, $height_px, $extent_nodes, $cx, $cy);
+        }
+
+        unset($dom, $xp, $drawings, $rel_map);
+        return $images;
+    }
+
+    /**
+     * Generate word/styles.xml with Heading1-6 definitions.
+     */
+    private function writeStyles(string $temp_dir): void
+    {
+        $styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+        $styles .= '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' . "\n";
+        $styles .= '  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:eastAsia="宋体"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' . "\n";
+        for ($i = 1; $i <= 6; $i++) {
+            $font_size = 28 - ($i - 1) * 2;
+            $font_size = max(16, $font_size);
+            $styles    .= '  <w:style w:type="paragraph" w:styleId="Heading' . $i . '">' . "\n";
+            $styles    .= '    <w:name w:val="heading ' . $i . '"/>' . "\n";
+            $styles    .= '    <w:basedOn w:val="Normal"/>' . "\n";
+            $styles    .= '    <w:next w:val="Normal"/>' . "\n";
+            $styles    .= '    <w:uiPriority w:val="' . (9 - $i) . '"/>' . "\n";
+            $styles    .= '    <w:qFormat/>' . "\n";
+            $styles    .= '    <w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="240" w:after="60" w:line="480" w:lineRule="auto"/></w:pPr>' . "\n";
+            $styles    .= '    <w:rPr>' . "\n";
+            $styles    .= '      <w:b/>' . "\n";
+            $styles    .= '      <w:sz w:val="' . ($font_size * 2) . '"/>' . "\n";
+            $styles    .= '    </w:rPr>' . "\n";
+            $styles    .= '  </w:style>' . "\n";
+        }
+        $styles .= '</w:styles>';
+        file_put_contents($temp_dir . '/word/styles.xml', $styles);
+        unset($styles);
+    }
+
+    /**
+     * Generate heading XML.
+     */
+    private function generateHeadingXml(string $text, int $level): string
+    {
+        $esc = htmlspecialchars($text, ENT_XML1, 'UTF-8');
+        $xml = '    <w:p>' . "\n";
+        $xml .= '      <w:pPr>' . "\n";
+        $xml .= '        <w:pStyle w:val="Heading' . $level . '"/>' . "\n";
+        $xml .= '        <w:spacing w:line="480" w:lineRule="auto"/>' . "\n";
+        $xml .= '      </w:pPr>' . "\n";
+        $xml .= '      <w:r>' . "\n";
+        $xml .= '        <w:t xml:space="preserve">' . $esc . '</w:t>' . "\n";
+        $xml .= '      </w:r>' . "\n";
+        $xml .= '    </w:p>' . "\n";
+        unset($text, $level, $esc);
+        return $xml;
+    }
+
+    /**
+     * Generate paragraph XML with full style support.
+     */
+    private function generateParagraphXml(
+        string  $text,
+        bool    $bold = false,
+        bool    $italic = false,
+        ?int    $font_size = null,
+        string  $align = 'left',
+        ?int    $first_line_indent = null,
+        ?float  $line_spacing = null,
+        ?int    $before_spacing = null,
+        ?int    $after_spacing = null,
+        ?string $font_family = null,
+        ?string $font_family_east_asia = null,
+        ?string $color = null,
+        ?string $underline = null
+    ): string
+    {
+        $esc = htmlspecialchars($text, ENT_XML1, 'UTF-8');
+
+        $align_map = [
+            'left'    => 'left',
+            'center'  => 'center',
+            'right'   => 'right',
+            'justify' => 'both'
+        ];
+        $jc        = $align_map[$align] ?? 'left';
+
+        $p_pr = '      <w:pPr>' . "\n";
+        $p_pr .= '        <w:jc w:val="' . $jc . '"/>' . "\n";
+
+        if (null !== $line_spacing && 0 < $line_spacing) {
+            $line_val = (int)round($line_spacing * 240);
+            $p_pr     .= '        <w:spacing w:line="' . $line_val . '" w:lineRule="auto"/>' . "\n";
+        } else {
+            $p_pr .= '        <w:spacing w:line="240" w:lineRule="auto"/>' . "\n";
+        }
+
+        if (null !== $before_spacing && 0 < $before_spacing) {
+            $p_pr .= '        <w:spacing w:before="' . $before_spacing . '"/>' . "\n";
+        }
+        if (null !== $after_spacing && 0 < $after_spacing) {
+            $p_pr .= '        <w:spacing w:after="' . $after_spacing . '"/>' . "\n";
+        }
+
+        if (null !== $first_line_indent && 0 !== $first_line_indent) {
+            $p_pr .= '        <w:ind w:firstLine="' . $first_line_indent . '"/>' . "\n";
+        }
+
+        $p_pr .= '      </w:pPr>' . "\n";
+
+        $r_pr = '        <w:rPr>' . "\n";
+        if ($bold) {
+            $r_pr .= '          <w:b/>' . "\n";
+        }
+        if ($italic) {
+            $r_pr .= '          <w:i/>' . "\n";
+        }
+        if (null !== $font_size && 0 < $font_size) {
+            $r_pr .= '          <w:sz w:val="' . ($font_size * 2) . '"/>' . "\n";
+        }
+        if (null !== $font_family || null !== $font_family_east_asia) {
+            $ascii     = $font_family ?? 'Arial';
+            $east_asia = $font_family_east_asia ?? '宋体';
+            $r_pr      .= '          <w:rFonts w:ascii="' . $ascii . '" w:eastAsia="' . $east_asia . '"/>' . "\n";
+        }
+        if (null !== $color && preg_match('/^[0-9A-Fa-f]{6}$/', $color)) {
+            $r_pr .= '          <w:color w:val="' . $color . '"/>' . "\n";
+        }
+        if (null !== $underline) {
+            $r_pr .= '          <w:u w:val="' . $underline . '"/>' . "\n";
+        }
+        $r_pr .= '        </w:rPr>' . "\n";
+
+        $xml = '    <w:p>' . "\n";
+        $xml .= $p_pr;
+        $xml .= '      <w:r>' . "\n";
+        $xml .= $r_pr;
+        $xml .= '        <w:t xml:space="preserve">' . $esc . '</w:t>' . "\n";
+        $xml .= '      </w:r>' . "\n";
+        $xml .= '    </w:p>' . "\n";
+
+        unset($text, $bold, $italic, $font_size, $align, $first_line_indent, $line_spacing, $before_spacing, $after_spacing, $font_family, $font_family_east_asia, $color, $underline, $esc, $align_map, $jc, $p_pr, $r_pr);
+        return $xml;
+    }
+
+    /**
+     * Generate image XML.
+     */
+    private function generateImageXml(string $image_path, int $width_px, int $height_px, string $rel_id, string $align): string
+    {
+        $width_emu  = $width_px * 9525;
+        $height_emu = $height_px * 9525;
+        $align_map  = [
+            'left'   => 'left',
+            'center' => 'center',
+            'right'  => 'right'
+        ];
+        $align_val  = $align_map[$align] ?? 'center';
+        $xml        = '    <w:p>' . "\n";
+        $xml        .= '      <w:pPr><w:jc w:val="' . $align_val . '"/></w:pPr>' . "\n";
+        $xml        .= '      <w:r>' . "\n";
+        $xml        .= '        <w:drawing>' . "\n";
+        $xml        .= '          <wp:inline distT="0" distB="0" distL="0" distR="0">' . "\n";
+        $xml        .= '            <wp:extent cx="' . $width_emu . '" cy="' . $height_emu . '"/>' . "\n";
+        $xml        .= '            <wp:docPr id="1" name="Picture"/>' . "\n";
+        $xml        .= '            <a:graphic>' . "\n";
+        $xml        .= '              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' . "\n";
+        $xml        .= '                <pic:pic>' . "\n";
+        $xml        .= '                  <pic:nvPicPr>' . "\n";
+        $xml        .= '                    <pic:cNvPr id="0" name="Picture"/>' . "\n";
+        $xml        .= '                    <pic:cNvPicPr/>' . "\n";
+        $xml        .= '                  </pic:nvPicPr>' . "\n";
+        $xml        .= '                  <pic:blipFill>' . "\n";
+        $xml        .= '                    <a:blip r:embed="' . $rel_id . '"/>' . "\n";
+        $xml        .= '                    <a:stretch><a:fillRect/></a:stretch>' . "\n";
+        $xml        .= '                  </pic:blipFill>' . "\n";
+        $xml        .= '                  <pic:spPr>' . "\n";
+        $xml        .= '                    <a:xfrm>' . "\n";
+        $xml        .= '                      <a:off x="0" y="0"/>' . "\n";
+        $xml        .= '                      <a:ext cx="' . $width_emu . '" cy="' . $height_emu . '"/>' . "\n";
+        $xml        .= '                    </a:xfrm>' . "\n";
+        $xml        .= '                    <a:prstGeom prst="rect"/>' . "\n";
+        $xml        .= '                  </pic:spPr>' . "\n";
+        $xml        .= '                </pic:pic>' . "\n";
+        $xml        .= '              </a:graphicData>' . "\n";
+        $xml        .= '            </a:graphic>' . "\n";
+        $xml        .= '          </wp:inline>' . "\n";
+        $xml        .= '        </w:drawing>' . "\n";
+        $xml        .= '      </w:r>' . "\n";
+        $xml        .= '    </w:p>' . "\n";
+        unset($image_path, $width_px, $height_px, $rel_id, $align, $width_emu, $height_emu, $align_val);
+        return $xml;
+    }
+
+    /**
+     * Recursively add directory to zip.
      */
     private function addDirToZip(\ZipArchive $zip, string $dir, string $prefix): void
     {
@@ -550,24 +774,20 @@ class docxHandler extends Factory
             if ('.' === $f || '..' === $f) {
                 continue;
             }
-            $full    = $dir . '/' . $f;
-            $zipPath = $prefix . $f;
+            $full     = $dir . '/' . $f;
+            $zip_path = $prefix . $f;
             if (is_dir($full)) {
-                $this->addDirToZip($zip, $full, $zipPath . '/');
+                $this->addDirToZip($zip, $full, $zip_path . '/');
             } else {
-                $zip->addFile($full, $zipPath);
+                $zip->addFile($full, $zip_path);
             }
-            unset($full, $zipPath);
+            unset($full, $zip_path);
         }
-        unset($files);
+        unset($files, $dir, $prefix);
     }
 
     /**
-     * Recursive remove directory.
-     *
-     * @param string $dir
-     *
-     * @return void
+     * Recursively remove directory.
      */
     private function rrmdir(string $dir): void
     {
@@ -585,6 +805,6 @@ class docxHandler extends Factory
             unset($full);
         }
         rmdir($dir);
-        unset($files);
+        unset($files, $dir);
     }
 }

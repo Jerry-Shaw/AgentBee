@@ -168,14 +168,6 @@ class pptxHandler extends Factory
             $title   = implode(' ', array_unique($title_texts));
             $content = implode("\n", array_filter(array_map('trim', $content_texts)));
 
-            if ('' === $title && !empty($content)) {
-                $lines = explode("\n", $content);
-                if (count($lines) > 1 && strlen($lines[0]) < 200) {
-                    $title   = array_shift($lines);
-                    $content = implode("\n", $lines);
-                }
-            }
-
             if (strlen($title) > 500) {
                 $title = substr($title, 0, 500);
             }
@@ -352,7 +344,11 @@ class pptxHandler extends Factory
                         $ext = 'png';
                     }
                     $image_filename = 'image' . $image_counter . '.' . $ext;
-                    $dest           = $target_media_dir . '/' . $image_filename;
+                    $media_dir      = $temp_dir . '/ppt/media';
+                    if (!is_dir($media_dir)) {
+                        mkdir($media_dir, 0755, true);
+                    }
+                    $dest = $media_dir . '/' . $image_filename;
                     copy($image_path, $dest);
                     $image_rid   = 'rId' . (100 + $image_counter);
                     $image_props = [
@@ -484,7 +480,11 @@ class pptxHandler extends Factory
                         $ext = 'png';
                     }
                     $image_filename = 'image' . $image_counter . '.' . $ext;
-                    $dest           = $temp_dir . '/ppt/media/' . $image_filename;
+                    $media_dir      = $temp_dir . '/ppt/media';
+                    if (!is_dir($media_dir)) {
+                        mkdir($media_dir, 0755, true);
+                    }
+                    $dest = $media_dir . '/' . $image_filename;
                     copy($image_path, $dest);
                     $image_rid   = 'rId' . (100 + $image_counter);
                     $image_props = [

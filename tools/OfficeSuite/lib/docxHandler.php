@@ -132,7 +132,7 @@ class docxHandler extends Factory
             mkdir($temp_dir . '/_rels', 0755, true);
             mkdir($temp_dir . '/word/media', 0755, true);
 
-            if ($append) {
+            if ($append && file_exists($path) && 0 < filesize($path)) {
                 $append_temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/docx_append_' . uniqid('', true);
                 if (!mkdir($append_temp_dir, 0755, true)) {
                     return ['error' => 'Failed to create temp dir for append'];
@@ -186,9 +186,12 @@ class docxHandler extends Factory
                         $dest_path = $media_dir . '/' . $dest_name;
                         copy($src, $dest_path);
 
-                        $width_px  = $item['width'] ?? 200;
-                        $height_px = $item['height'];
-                        if (null === $height_px) {
+                        $width_px = $item['width'] ?? 200;
+                        if ($width_px <= 0) {
+                            $width_px = 200;
+                        }
+                        $height_px = $item['height'] ?? null;
+                        if (null === $height_px || $height_px <= 0) {
                             $info = getimagesize($dest_path);
                             if (false !== $info) {
                                 $height_px = (int)round($width_px * $info[1] / $info[0]);
@@ -197,6 +200,10 @@ class docxHandler extends Factory
                             }
                             unset($info);
                         }
+                        if ($height_px <= 0) {
+                            $height_px = $width_px;
+                        }
+
                         $align = $item['align'] ?? 'center';
 
                         $rel_id         = 'rId' . $image_counter;
@@ -419,9 +426,9 @@ class docxHandler extends Factory
                                     $items[] = [
                                         'type'   => 'image',
                                         'path'   => $temp_image_path,
-                                        'width'  => $width_px,
-                                        'height' => $height_px,
-                                        'align'  => 'center', // default, alignment info not preserved
+                                        'width'  => (0 < $width_px) ? $width_px : 200,
+                                        'height' => (0 < $height_px) ? $height_px : null,
+                                        'align'  => 'center',
                                     ];
                                 }
                             }

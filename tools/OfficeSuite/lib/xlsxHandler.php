@@ -107,8 +107,13 @@ class xlsxHandler extends Factory
                             if (\XMLReader::ELEMENT === $reader->nodeType && 'v' === $reader->name) {
                                 $raw_value = $reader->readString() ?? '';
                                 if ('s' === $type) {
-                                    $idx   = (int)$raw_value;
-                                    $value = $shared_strings[$idx] ?? '';
+                                    $raw_value = $reader->readString() ?? '';
+                                    if ('' === $raw_value) {
+                                        $value = '';
+                                    } else {
+                                        $idx   = (int)$raw_value;
+                                        $value = $shared_strings[$idx] ?? '';
+                                    }
                                 } elseif ('inlineStr' === $type) {
                                     $value = '';
                                 } else {
@@ -458,18 +463,24 @@ class xlsxHandler extends Factory
             $col_num = 0;
             foreach ($row as $cell) {
                 $col_letter = $this->indexToColumn($col_num);
-                if (null === $cell) {
+                if (null === $cell || '' === $cell) {
                     $col_num++;
                     continue;
                 }
                 $xml->startElement('c');
                 $xml->writeAttribute('r', $col_letter . $row_num);
-                if (is_numeric($cell)) {
+
+                if (is_bool($cell)) {
+                    $xml->writeAttribute('t', 'n');
+                    $xml->startElement('v');
+                    $xml->text($cell ? '1' : '0');
+                    $xml->endElement();
+                } elseif (is_numeric($cell)) {
                     $xml->writeAttribute('t', 'n');
                     $xml->startElement('v');
                     $xml->text((string)$cell);
                     $xml->endElement();
-                } elseif (is_string($cell) && '' !== $cell) {
+                } elseif (is_string($cell)) {
                     if (isset($string_index[$cell])) {
                         $xml->writeAttribute('t', 's');
                         $xml->startElement('v');
@@ -484,11 +495,10 @@ class xlsxHandler extends Factory
                         $xml->endElement();
                     }
                 }
-                $xml->endElement();
+                $xml->endElement(); // c
                 $col_num++;
-                unset($col_letter);
             }
-            $xml->endElement();
+            $xml->endElement(); // row
             $row_num++;
         }
 

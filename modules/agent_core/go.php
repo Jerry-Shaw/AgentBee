@@ -259,19 +259,34 @@ class go extends Factory
                                         'history'     => []
                                     ];
 
+                                    $prompts  = [];
+                                    $php_path = $this->core->OSMgr->getPhpPath();
+
+                                    $prompts[] = '## 系统';
+                                    $prompts[] = '`OS:' . php_uname() . '` | `PHP:' . PHP_VERSION . ' (' . $php_path . ')` | `CWD:' . getcwd() . '`';
+                                    $prompts[] = '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $this->core->agent_config['workspace_path'] . '`';
+                                    $prompts[] = '`框架:' . NS_ROOT . '` | `模块:' . $this->core->app->root_path . '/modules/` | `Tools:' . $this->core->app->root_path . '/tools/` | `Skills:' . $this->core->app->root_path . '/skills/` | `日志:' . $this->core->app->log_path . '`';
+                                    $prompts[] = '## 工具';
+                                    $prompts[] = '- **强制优先**：有专用工具时禁止`exec`，必须调用工具。';
+                                    $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则输出错误信息。';
+                                    $prompts[] = '- **安全**：`exec`前验证输入参数，防命令注入。';
+                                    $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
+                                    $prompts[] = '## 当前时间';
+                                    $prompts[] = date('Y-m-d H:i:s');
+                                    $prompts[] = '';
+                                    $prompts[] = '## Worker 元数据';
+                                    $prompts[] = '- 名称: ' . $payload['data']['worker_name'];
+                                    $prompts[] = '- 角色: ' . $payload['data']['worker_role'];
+                                    $prompts[] = '- 沙箱: ' . $sand_box_prompt;
+                                    $prompts[] = '';
+                                    $prompts[] = '## 用户指令';
+                                    $prompts[] = $payload['data']['system_prompt'];
+
                                     $this->addWorkerHistory(
                                         $payload['data']['worker_name'],
                                         [
                                             'role'    => 'system',
-                                            'content' => '## 系统' . "\n" .
-                                                '`OS:' . php_uname() . '` | `PHP:' . PHP_VERSION . ' (' . $this->core->OSMgr->getPhpPath() . ')` | `CWD:' . getcwd() . '`' . "\n" .
-                                                '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $this->core->agent_config['workspace_path'] . '`' . "\n" .
-                                                '`框架:' . NS_ROOT . '` | `模块:' . $this->core->app->root_path . '/modules/` | `Tools:' . $this->core->app->root_path . '/tools/` | `Skills:' . $this->core->app->root_path . '/skills/` | `日志:' . $this->core->app->log_path . '`' . "\n" .
-                                                '## Worker 元数据' . "\n" .
-                                                '- 名称: ' . $payload['data']['worker_name'] . "\n" .
-                                                '- 角色: ' . $payload['data']['worker_role'] . "\n" .
-                                                '- 沙箱: ' . $sand_box_prompt . "\n\n" .
-                                                '## 用户指令' . "\n" . $payload['data']['system_prompt']
+                                            'content' => implode("\n", $prompts)
                                         ]
                                     );
 

@@ -540,8 +540,10 @@ final class core extends Factory
         $prompts[] = '3.清理规范：仅删旧工具对/消息，**清理前须手动保存**(保留≥2工具对+10条)。';
 
         $prompts[] = '## 工具';
-        $prompts[] = '- **强制优先**：先检查专用工具。若有，禁止`exec`，必须调用工具。';
-        $prompts[] = '- 若需使用`exec`运行PHP脚本，PHP路径如下:`' . $php_path . '`';
+        $prompts[] = '- **强制优先**：有专用工具时禁止`exec`，必须调用工具。';
+        $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
+        $prompts[] = '- **安全**：`exec`前验证输入参数，防命令注入。';
+        $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
 
         $prompts[] = '## 安全';
         if ($sandbox_mode) {

@@ -331,12 +331,12 @@ class go extends Factory
                                     $worker_message = json_encode(
                                         $this->utils->getMessageMarker(
                                             $this->core->agent_config['agent_llm']['main_worker'],
-                                            AGENT_NAME,
-                                            'Assistant',
+                                            $worker_info['worker_name'],
+                                            $worker_info['worker_role'],
                                             1
                                         ) + [
                                             'type' => 'content',
-                                            'data' => $payload['data']['message']
+                                            'data' => AGENT_NAME . ': ' . ".\n." . $payload['data']['message']
                                         ], JSON_FORMAT);
 
                                     if (isset($this->socket_session[$worker_info['socket_id']])) {

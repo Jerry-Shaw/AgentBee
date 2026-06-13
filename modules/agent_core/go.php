@@ -336,7 +336,7 @@ class go extends Factory
                                             1
                                         ) + [
                                             'type' => 'content',
-                                            'data' => AGENT_NAME . ': ' . "\n" . $payload['data']['message']
+                                            'data' => AGENT_NAME . ': ' . $payload['data']['message']
                                         ], JSON_FORMAT);
 
                                     if (isset($this->socket_session[$worker_info['socket_id']])) {

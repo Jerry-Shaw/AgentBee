@@ -154,7 +154,7 @@ class config extends Factory
             'agent_llm'      => [
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-ru6XiZDE:WImxJO82hxm5L76fNcaK',
-                'model'        => 'qwen3.6-35b-a3b-apex',
+                'model'        => 'qwen3.6-35b-a3b-genesis-v2-apex',
                 'org_id'       => '',
                 'hw_hash'      => '',
                 'provider'     => 'modules/agent_openai',
@@ -163,26 +163,26 @@ class config extends Factory
                 'timeout'      => 7200,
                 'keep_reasons' => true,
                 'params'       => [
-                    'max_tokens'           => 131072,
-                    'temperature'          => 0.8,
-                    'min_p'                => 0,
-                    'top_p'                => 0.95,
-                    'top_k'                => 40,
-                    'frequency_penalty'    => 0,
-                    'presence_penalty'     => 1,
-                    'repetition_penalty'   => 1,
-                    'enable_thinking'      => false,
-                    'stop'                 => [
+                    'max_completion_tokens' => 65536,
+                    'temperature'           => 0.8,
+                    'min_p'                 => 0,
+                    'top_p'                 => 0.95,
+                    'top_k'                 => 40,
+                    'frequency_penalty'     => 0,
+                    'presence_penalty'      => 1,
+                    'repetition_penalty'    => 1,
+                    'enable_thinking'       => false,
+                    'stop'                  => [
                         '<|im_end|>',
                         '<|endoftext|>',
                     ],
-                    'chat_template_kwargs' => [
+                    'chat_template_kwargs'  => [
                         'enable_thinking' => false,
                     ],
-                    'extra_body'           => [
+                    'extra_body'            => [
                         'enable_thinking' => false,
                     ],
-                    'thinking'             => [
+                    'thinking'              => [
                         'type' => 'disabled',
                     ],
                 ],

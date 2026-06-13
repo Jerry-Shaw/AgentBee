@@ -533,7 +533,7 @@ final class core extends Factory
         $prompts[] = '**优先级&铁律**：system>important>daily>misc。冲突先问，删system需同意。重要项禁久留misc→必转持久层。';
 
         $prompts[] = '## 上下文';
-        $prompts[] = '- 主动管理，历史>' . $max_limit . '条自动裁剪；单次输出上限：' . $this->agent_config['agent_llm']['params']['max_tokens'] . ' token(超长需分段)。';
+        $prompts[] = '- 主动管理，历史>' . $max_limit . '条自动裁剪；单次输出上限：' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token(超长需分段)。';
         $prompts[] = '**【必须】**';
         $prompts[] = '1.分级：[需求/决策/结果]→持久层(上三层)；[短期中间态]→misc(有价值必升级)';
         $prompts[] = '2.强制备份：历史过长或连续工具过多→**先手动存关键内容，再调清理工具**。';

@@ -306,6 +306,7 @@ class go extends Factory
                                                 $this->core->agent_config['agent_llm']['child_worker'],
                                                 $payload['data']['worker_name'],
                                                 $payload['data']['worker_role'],
+                                                $payload['data']['worker_name'],
                                                 1
                                             ),
                                         ], JSON_FORMAT)
@@ -334,6 +335,7 @@ class go extends Factory
                                             $this->core->agent_config['agent_llm']['main_worker'],
                                             $worker_info['worker_name'],
                                             $worker_info['worker_role'],
+                                            AGENT_NAME,
                                             1
                                         ) + [
                                             'type' => 'content',
@@ -363,6 +365,7 @@ class go extends Factory
                                                 $this->core->agent_config['agent_llm']['child_worker'],
                                                 $worker_info['worker_name'],
                                                 $worker_info['worker_role'],
+                                                $worker_info['worker_name'],
                                                 1
                                             ),
                                         ], JSON_FORMAT)
@@ -532,6 +535,7 @@ class go extends Factory
                 $this->core->agent_config['agent_llm']['main_worker'],
                 AGENT_NAME,
                 'Assistant',
+                AGENT_NAME,
                 0
             ),
             $current_history
@@ -568,6 +572,7 @@ class go extends Factory
             $this->core->agent_config['agent_llm']['main_worker'],
             AGENT_NAME,
             'Assistant',
+            AGENT_NAME,
             0
         );
 
@@ -644,6 +649,7 @@ class go extends Factory
             $this->core->agent_config['agent_llm']['main_worker'],
             AGENT_NAME,
             'Assistant',
+            AGENT_NAME,
             0
         );
 
@@ -709,6 +715,7 @@ class go extends Factory
                     $this->core->agent_config['agent_llm']['main_worker'],
                     AGENT_NAME,
                     'Assistant',
+                    AGENT_NAME,
                     0
                 ),
                 $this->core->getSessionHistory()

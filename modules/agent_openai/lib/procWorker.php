@@ -48,6 +48,7 @@ class procWorker extends Factory
      * @param libOpenAI $libOpenAI
      *
      * @return void
+     * @throws \ReflectionException
      */
     public function talk(string $socket_id, array $message_metadata, array $session_history, libOpenAI $libOpenAI): void
     {

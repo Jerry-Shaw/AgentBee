@@ -280,14 +280,13 @@ class go extends Factory
 
                                     $child_prompt = $this->utils->getChildPrompt(
                                         $payload['data']['worker_name'],
-                                        $payload['data']['worker_role'],
-                                        $payload['data']['system_prompt']
+                                        $payload['data']['worker_role']
                                     );
 
                                     $this->utils->addSessionHistory($payload['data']['worker_name'], $child_prompt);
                                     $this->utils->addSessionHistory(
                                         $payload['data']['worker_name'],
-                                        ['role' => 'user', 'content' => '用一句话概述你的名字，角色，并回复“已就绪”']
+                                        ['role' => 'user', 'content' => '[用户要求] ' . $payload['data']['init_prompt'] . ' | 用一句话概述你的名字，角色，阅读用户要求，并回复“已就绪”']
                                     );
 
                                     $this->core->utils->procMgr->writeProc(

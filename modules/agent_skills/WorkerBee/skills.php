@@ -27,15 +27,15 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程(独立LLM会话，可并行)。异步，结果稍后推送。大型任务可启用多Worker分工协作。worker_name须唯一。',
+                'description' => '创建Worker子进程。异步，必须收到回复就绪后，再用talk发任务。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name'   => ['type' => 'string', 'description' => 'Worker名称，须唯一'],
-                        'worker_role'   => ['type' => 'string', 'description' => 'Worker角色，如"代码审查员"'],
-                        'system_prompt' => ['type' => 'string', 'description' => '系统指令：角色/目标/边界/安全等。禁止具体任务（如"分析代码"），任务请用 talk。']
+                        'worker_name' => ['type' => 'string', 'description' => '唯一名称'],
+                        'worker_role' => ['type' => 'string', 'description' => '角色，如"代码审查"'],
+                        'init_prompt' => ['type' => 'string', 'description' => '启动后的首条指令，用于验证就绪或设定行为（勿填具体任务）']
                     ],
-                    'required'   => ['worker_name', 'worker_role', 'system_prompt']
+                    'required'   => ['worker_name', 'worker_role', 'init_prompt']
                 ],
             ],
         ],

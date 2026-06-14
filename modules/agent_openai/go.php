@@ -217,6 +217,7 @@ class go extends Factory
                 'listDirectory', 'createDirectory', 'copyDirectory', 'deleteDirectory',
             ]
         );
+
         $this->core->addSkills($agent_skills);
 
         foreach (['OfficeSuite', 'WebCrawler'] as $core_skill) {
@@ -229,9 +230,9 @@ class go extends Factory
 
         $this->libOpenAI->setModelParams($this->core->getLLMParams());
 
-        $socket_id = '';
-
         $this->setShmop(getmypid());
+
+        $socket_id = '';
 
         while (true) {
             $line = fgets(STDIN);

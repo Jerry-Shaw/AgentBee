@@ -576,12 +576,11 @@ class utils extends Factory
     /**
      * @param string $worker_name
      * @param string $worker_role
-     * @param string $system_prompt
      *
      * @return array
      * @throws \Exception
      */
-    public function getChildPrompt(string $worker_name, string $worker_role, string $system_prompt): array
+    public function getChildPrompt(string $worker_name, string $worker_role): array
     {
         $prompts = [];
 
@@ -612,17 +611,13 @@ class utils extends Factory
         $prompts[] = '## Worker 元数据';
         $prompts[] = '- 名称: ' . $worker_name;
         $prompts[] = '- 角色: ' . $worker_role;
-        $prompts[] = '';
-
-        $prompts[] = '## 用户指令';
-        $prompts[] = $system_prompt;
 
         $prompt = [
             'role'    => 'system',
             'content' => implode("\n", $prompts)
         ];
 
-        unset($worker_name, $worker_role, $system_prompt, $prompts);
+        unset($worker_name, $worker_role, $prompts);
         return $prompt;
     }
 

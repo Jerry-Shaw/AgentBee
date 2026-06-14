@@ -29,13 +29,13 @@ class go extends Factory
      *
      * @param string $worker_name
      * @param string $worker_role
-     * @param string $system_prompt
+     * @param string $init_prompt
      *
      * @return string[]
      */
-    public function start(string $worker_name, string $worker_role, string $system_prompt): array
+    public function start(string $worker_name, string $worker_role, string $init_prompt): array
     {
-        return ['status' => 'pending', 'action' => 'start', 'worker_name' => $worker_name, 'worker_role' => $worker_role, 'system_prompt' => $system_prompt];
+        return ['status' => 'pending', 'action' => 'start', 'worker_name' => $worker_name, 'worker_role' => $worker_role, 'init_prompt' => $init_prompt];
     }
 
     /**

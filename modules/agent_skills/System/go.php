@@ -139,7 +139,7 @@ class go extends Factory
      */
     public function cleanContext(int $keep_normal = 6, int $keep_tool_pairs = 2, bool $force_prune = false): array
     {
-        $cleaned = $this->utils->pruneSessionHistory(WORKER_MAIN, $keep_normal, $keep_tool_pairs, $force_prune);
+        $cleaned = $this->utils->cleanSessionHistory(WORKER_MAIN, $keep_normal, $keep_tool_pairs, $force_prune);
 
         return [
             'status'  => 'success',

@@ -112,7 +112,7 @@ class utils extends Factory
      */
     public function setSessionHistory(string $worker_name, array $history): void
     {
-        $this->session_history[$worker_name] = [$history];
+        $this->session_history[$worker_name] = $history;
         unset($worker_name, $history);
     }
 
@@ -136,7 +136,7 @@ class utils extends Factory
      *
      * @return array{removed_normal:int, removed_tools:int, current_count:int}
      */
-    public function pruneSessionHistory(string $worker_name, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $force_prune = false): array
+    public function cleanSessionHistory(string $worker_name, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $force_prune = false): array
     {
         $history = $this->session_history[$worker_name];
 
@@ -363,24 +363,24 @@ class utils extends Factory
      * @param string $sender
      * @param string $worker_name
      * @param string $worker_role
-     * @param string $message_from
+     * @param string $window_name
      * @param int    $is_sub_talk
      *
      * @return array
      */
-    public function getMessageMarker(string $sender, string $worker_name, string $worker_role, string $message_from, int $is_sub_talk): array
+    public function getMessageMarker(string $sender, string $worker_name, string $worker_role, string $window_name, int $is_sub_talk): array
     {
         $marker = [
-            'sender'      => $sender,
-            'isSubTalk'   => $is_sub_talk,
-            'workerName'  => $worker_name,
-            'workerRole'  => $worker_role,
-            'sessionId'   => $this->session_id,
-            'messageId'   => hash('md5', uniqid(microtime(), true)),
-            'messageFrom' => $message_from
+            'sender'     => $sender,
+            'isSubTalk'  => $is_sub_talk,
+            'workerName' => $worker_name,
+            'workerRole' => $worker_role,
+            'sessionId'  => $this->session_id,
+            'messageId'  => hash('md5', uniqid(microtime(), true)),
+            'WindowName' => $window_name
         ];
 
-        unset($sender, $worker_name, $worker_role, $message_from, $is_sub_talk);
+        unset($sender, $worker_name, $worker_role, $window_name, $is_sub_talk);
         return $marker;
     }
 

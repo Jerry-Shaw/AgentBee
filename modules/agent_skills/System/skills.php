@@ -51,14 +51,14 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'cleanContext',
-                'description' => '清理对话上下文。保留最近max_dialog_messages条普通消息(默认10)和keep_tool_pairs组工具对(默认2)。force_clean=true允许全清(谨慎)。调用前需用记忆工具保存重要内容。',
+                'description' => '清理历史上下文(保留最近普通消息+工具对)。调用前必须先用记忆工具保存重要内容，否则会丢失。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'max_dialog_messages' => ['type' => 'integer', 'default' => 10, 'description' => '保留的普通消息最大条数'],
-                        'keep_tool_pairs'     => ['type' => 'integer', 'default' => 2, 'description' => '保留的最近工具调用对数量'],
-                        'force_clean'         => ['type' => 'boolean', 'default' => false, 'description' => '是否强制全清(允许0)']
-                    ]
+                        'keep_normal'     => ['type' => 'integer', 'default' => 6, 'description' => '保留普通消息数(user/无工具assistant)'],
+                        'keep_tool_pairs' => ['type' => 'integer', 'default' => 2, 'description' => '保留工具对数(assistant带工具+响应)'],
+                        'force_prune'     => ['type' => 'boolean', 'default' => false, 'description' => '允许全清(0)'],
+                    ],
                 ],
             ],
         ],

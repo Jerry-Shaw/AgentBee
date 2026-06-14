@@ -23,16 +23,16 @@
 
 namespace modules\agent_skills\OfficeSuite\lib;
 
-use modules\agent_core\core;
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 
 class pptxHandler extends Factory
 {
-    public core $core;
+    public utils $utils;
 
     public function __construct()
     {
-        $this->core = core::new();
+        $this->utils = utils::new();
     }
 
     /**
@@ -110,7 +110,7 @@ class pptxHandler extends Factory
         }
 
         // Create temp directory for extracted images
-        $temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/pptx_read_' . uniqid('', true);
+        $temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/pptx_read_' . uniqid('', true);
         if (!mkdir($temp_dir, 0755, true)) {
             $zip->close();
             return ['error' => 'Cannot create temporary directory for images'];
@@ -301,7 +301,7 @@ class pptxHandler extends Factory
                 $slides = [['title' => '', 'paragraphs' => []]];
             }
 
-            $temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/pptx_' . uniqid('', true);
+            $temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/pptx_' . uniqid('', true);
             if (false === mkdir($temp_dir, 0755, true)) {
                 return ['error' => 'Cannot create temp directory'];
             }
@@ -418,7 +418,7 @@ class pptxHandler extends Factory
         $temp_dir = null;
         try {
             // 1. Extract original file to temp directory
-            $temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/pptx_append_' . uniqid('', true);
+            $temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/pptx_append_' . uniqid('', true);
             if (false === mkdir($temp_dir, 0755, true)) {
                 return ['error' => 'Cannot create temp directory'];
             }

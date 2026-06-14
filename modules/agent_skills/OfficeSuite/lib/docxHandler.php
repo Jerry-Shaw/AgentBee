@@ -23,16 +23,16 @@
 
 namespace modules\agent_skills\OfficeSuite\lib;
 
-use modules\agent_core\core;
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 
 class docxHandler extends Factory
 {
-    public core $core;
+    public utils $utils;
 
     public function __construct()
     {
-        $this->core = core::new();
+        $this->utils = utils::new();
     }
 
     /**
@@ -71,7 +71,7 @@ class docxHandler extends Factory
         unset($text_parts, $reader);
 
         // Extract images
-        $temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/docx_read_' . uniqid('', true);
+        $temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/docx_read_' . uniqid('', true);
         if (!mkdir($temp_dir, 0755, true)) {
             $zip->close();
             return ['error' => 'Cannot create temporary directory for images'];
@@ -123,7 +123,7 @@ class docxHandler extends Factory
                 return ['error' => 'No content to write.'];
             }
 
-            $temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/docx_' . uniqid('', true);
+            $temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/docx_' . uniqid('', true);
             if (!mkdir($temp_dir, 0755, true)) {
                 return ['error' => 'Failed to create temp dir'];
             }
@@ -133,7 +133,7 @@ class docxHandler extends Factory
             mkdir($temp_dir . '/word/media', 0755, true);
 
             if ($append && file_exists($path) && 0 < filesize($path)) {
-                $append_temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/docx_append_' . uniqid('', true);
+                $append_temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/docx_append_' . uniqid('', true);
                 if (!mkdir($append_temp_dir, 0755, true)) {
                     return ['error' => 'Failed to create temp dir for append'];
                 }

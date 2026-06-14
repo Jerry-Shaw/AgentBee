@@ -20,28 +20,19 @@
 
 namespace modules\agent_skills\System;
 
-use modules\agent_core\core;
 use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
-use Nervsys\Ext\libFileIO;
 
 class go extends Factory
 {
-    public core $core;
-    public utils     $utils;
-
-    public libFileIO $libFileIO;
+    public utils $utils;
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->utils     = utils::new();
-        $this->core      = core::new();
-        $this->libFileIO = libFileIO::new();
-
-        $this->core->initCore();
+        $this->utils = utils::new();
     }
 
     /**
@@ -62,8 +53,8 @@ class go extends Factory
         ];
 
         $work_path = '' === $work_path
-            ? $this->core->agent_config['workspace_path']
-            : $this->core->utils->securePath($work_path);
+            ? $this->utils->agent_config['workspace_path']
+            : $this->utils->securePath($work_path);
 
         if (empty($argv) && str_contains($program, ' ')) {
             [$program, $args] = explode(' ', $program, 2);
@@ -83,12 +74,12 @@ class go extends Factory
         }
 
         $active  = time();
-        $procMgr = $this->core->utils->procMgr;
+        $procMgr = $this->utils->procMgr;
 
         $proc_idx = $procMgr
             ->command([$program, ...$argv])
             ->setWorkDir($work_path)
-            ->run();
+            ->run($this->utils->getProcIDX());
 
         $proc_pid = $procMgr->getPid($proc_idx);
 
@@ -113,7 +104,7 @@ class go extends Factory
                 }
 
                 if (time() - $active > $timeout) {
-                    $this->core->OSMgr->killProc($proc_pid);
+                    $this->utils->OSMgr->killProc($proc_pid);
                     $result['error'] .= 'Process has been killed due to timeout reached.';
                 }
             }
@@ -137,172 +128,23 @@ class go extends Factory
     }
 
     /**
-     * Clean context: remove old tool call pairs and trim dialog messages.
+     * Prune session history to stay within context limits.
+     * Assumes input history is valid. Does NOT auto-save; use memory tool first.
      *
-     * Does NOT save any summary; the model must save important content separately before calling.
-     * When $clean_force is false (default), the method enforces minimum retention (keep_tool_pairs≥1, max_dialog_messages≥2).
-     * When $clean_force is true, it allows complete cleanup (0 values allowed) for a fresh start.
+     * @param int  $keep_normal     Min normal messages (user + assistant w/o tool_calls)
+     * @param int  $keep_tool_pairs Min tool pairs (assistant with tool_calls + tools)
+     * @param bool $force_prune     Allow zero limits (fresh start)
      *
-     * @param int  $max_dialog_messages Max number of normal messages (user + assistant without tool_calls) to keep
-     * @param int  $keep_tool_pairs     Number of recent tool pairs to keep (0 = delete all, but min 1 if not forced)
-     * @param bool $force_clean         If true, allow deletion of all tool pairs and dialog messages (fresh start)
-     *
-     * @return array Associative array with 'status', 'message', 'remained' keys
+     * @return array{status:string, message:string, remained:int}
      */
-    public function cleanContext(int $max_dialog_messages = 10, int $keep_tool_pairs = 2, bool $force_clean = false): array
+    public function cleanContext(int $keep_normal = 6, int $keep_tool_pairs = 2, bool $force_prune = false): array
     {
-        // Apply safe limits unless force mode is enabled
-        if (!$force_clean) {
-            $keep_tool_pairs     = max(1, $keep_tool_pairs);
-            $max_dialog_messages = max(2, $max_dialog_messages);
-        } else {
-            $keep_tool_pairs     = max(0, $keep_tool_pairs);
-            $max_dialog_messages = max(0, $max_dialog_messages);
-        }
+        $cleaned = $this->utils->pruneSessionHistory(WORKER_MAIN, $keep_normal, $keep_tool_pairs, $force_prune);
 
-        $history = $this->core->getSessionHistory();
-
-        if (empty($history)) {
-            return ['status' => 'error', 'message' => 'No session history to clean'];
-        }
-
-        $total = count($history);
-        $roles = array_column($history, 'role');
-
-        // 1. Locate all assistant indices
-        $all_assistant_keys = array_keys($roles, 'assistant', true);
-
-        // 2. Build tool pair ranges (assistant with tool_calls + following tool messages)
-        $tool_pair_ranges = [];
-        $last_end         = -1;
-
-        foreach ($all_assistant_keys as $idx) {
-            if ($idx <= $last_end) {
-                continue;
-            }
-
-            if (!empty($history[$idx]['tool_calls'])) {
-                $start = $idx;
-                $end   = $idx;
-                $j     = $idx + 1;
-
-                while ($j < $total && 'tool' === ($roles[$j] ?? '')) {
-                    $end = $j;
-                    ++$j;
-                }
-
-                $tool_pair_ranges[] = ['start' => $start, 'end' => $end];
-                $last_end           = $end;
-            }
-        }
-
-        // 3. Collect normal messages: user messages + assistant without tool_calls
-        $user_keys = array_keys($roles, 'user', true);
-
-        $normal_assistant_keys = array_filter(
-            $all_assistant_keys,
-            function (int $idx) use ($history)
-            {
-                return empty($history[$idx]['tool_calls']);
-            }
-        );
-
-        $normal_keys = array_merge($user_keys, $normal_assistant_keys);
-
-        sort($normal_keys);
-
-        // 4. Select recent normal messages up to $max_dialog_messages
-        $total_normal    = count($normal_keys);
-        $take_count      = min($total_normal, $max_dialog_messages);
-        $selected_normal = array_slice($normal_keys, $total_normal - $take_count);
-
-        // 5. Ensure at least one user message exists in selection
-        $has_user = false;
-
-        foreach ($selected_normal as $idx) {
-            if ('user' === ($roles[$idx] ?? '')) {
-                $has_user = true;
-                break;
-            }
-        }
-
-        if (!$has_user) {
-            $start = $total_normal - $take_count - 1;
-
-            for ($i = $start; $i >= 0; --$i) {
-                $idx = $normal_keys[$i];
-
-                if ('user' === ($roles[$idx] ?? '')) {
-                    array_unshift($selected_normal, $idx);
-                    break;
-                }
-            }
-        }
-
-        // 6. Select recent tool pairs up to $keep_tool_pairs
-        $total_pairs    = count($tool_pair_ranges);
-        $keep_from      = max(0, $total_pairs - $keep_tool_pairs);
-        $selected_pairs = array_slice($tool_pair_ranges, $keep_from);
-
-        // 7. Build indices to keep
-        $keep_indices = [];
-
-        foreach ($selected_normal as $idx) {
-            $keep_indices[$idx] = true;
-        }
-
-        foreach ($selected_pairs as $pair) {
-            for ($i = $pair['start']; $i <= $pair['end']; ++$i) {
-                $keep_indices[$i] = true;
-            }
-        }
-
-        // 8. Rebuild history preserving original order
-        $new_history = [];
-
-        for ($i = 0; $i < $total; ++$i) {
-            if (isset($keep_indices[$i])) {
-                $new_history[] = $history[$i];
-            }
-        }
-
-        // 9. Prepend system message if present (original first system message)
-        $system_idx = array_search('system', $roles, true);
-
-        if (false !== $system_idx) {
-            array_unshift($new_history, $history[$system_idx]);
-        }
-
-        // 10. Ensure first message after system is 'user'
-        $new_count = count($new_history);
-
-        if ($new_count > 1 && 'user' !== ($new_history[1]['role'] ?? '')) {
-            for ($k = 2; $k < $new_count; ++$k) {
-                if ('user' === ($new_history[$k]['role'] ?? '')) {
-                    $user_msg = $new_history[$k];
-
-                    unset($new_history[$k]);
-
-                    $new_history = array_values($new_history);
-                    array_splice($new_history, 1, 0, [$user_msg]);
-
-                    break;
-                }
-            }
-        }
-
-        $this->core->session_history = $new_history;
-
-        $new_count = count($new_history);
-        $removed   = $total - $new_count;
-
-        $result = [
+        return [
             'status'  => 'success',
-            'message' => 'Cleaned ' . $removed . ' messages including ' . ($total_pairs - min($total_pairs, $keep_tool_pairs)) . ' tool pairs. Total messages remained: ' . $new_count . '.'
+            'message' => 'Cleaned ' . $cleaned['removed_normal'] . ' normal messages and ' . $cleaned['removed_tools'] . ' tool pairs. Total messages remained: ' . $cleaned['current_count'] . '.'
         ];
-
-        unset($max_dialog_messages, $keep_tool_pairs, $force_clean, $history, $total, $roles, $all_assistant_keys, $tool_pair_ranges, $last_end, $idx, $start, $end, $j, $user_keys, $normal_assistant_keys, $normal_keys, $total_normal, $take_count, $selected_normal, $has_user, $i, $total_pairs, $keep_from, $selected_pairs, $keep_indices, $pair, $new_history, $system_idx, $new_count, $user_msg, $removed);
-        return $result;
     }
 
     /**
@@ -314,7 +156,7 @@ class go extends Factory
      */
     public function readImage(string $file_path): array
     {
-        $full_path = $this->core->utils->securePath($file_path);
+        $full_path = $this->utils->securePath($file_path);
 
         if (!is_file($full_path)) {
             return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
@@ -369,7 +211,7 @@ class go extends Factory
      */
     public function readFile(string $file_path, int $offset = 0, int $limit = 8192): array
     {
-        $full_path = $this->core->utils->securePath($file_path);
+        $full_path = $this->utils->securePath($file_path);
 
         if (!is_file($full_path)) {
             return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
@@ -411,7 +253,7 @@ class go extends Factory
      */
     public function writeFile(string $file_path, string $content, bool $append = false): array
     {
-        $full_path = $this->core->utils->securePath($file_path);
+        $full_path = $this->utils->securePath($file_path);
 
         $dir_path = dirname($full_path);
         $dir_path = $this->mkPath($dir_path);
@@ -445,8 +287,8 @@ class go extends Factory
      */
     public function copyFile(string $src_file_path, string $dst_file_path): array
     {
-        $src_full = $this->core->utils->securePath($src_file_path);
-        $dst_full = $this->core->utils->securePath($dst_file_path);
+        $src_full = $this->utils->securePath($src_file_path);
+        $dst_full = $this->utils->securePath($dst_file_path);
 
         if (!is_file($src_full)) {
             return ['status' => 'error', 'error' => 'File not found: ' . $src_full];
@@ -477,7 +319,7 @@ class go extends Factory
      */
     public function deleteFile(string $file_path): array
     {
-        $full_path = $this->core->utils->securePath($file_path);
+        $full_path = $this->utils->securePath($file_path);
 
         if (!is_file($full_path)) {
             return [
@@ -513,7 +355,7 @@ class go extends Factory
      */
     public function getFileSize(string $file_path): array
     {
-        $full_path = $this->core->utils->securePath($file_path);
+        $full_path = $this->utils->securePath($file_path);
 
         if (!is_file($full_path)) {
             return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
@@ -542,13 +384,13 @@ class go extends Factory
      */
     public function searchFiles(string $dir_path, string $pattern, bool $recursive = false): array
     {
-        $full_path = $this->core->utils->securePath($dir_path);
+        $full_path = $this->utils->securePath($dir_path);
 
         if (!is_dir($full_path)) {
             return ['status' => 'error', 'error' => 'Directory not found: ' . $full_path];
         }
 
-        $files = $this->libFileIO->findFiles($full_path, $pattern, $recursive);
+        $files = $this->utils->libFileIO->findFiles($full_path, $pattern, $recursive);
 
         $result = [
             'status'   => 'success',
@@ -569,13 +411,13 @@ class go extends Factory
      */
     public function listDirectory(string $dir_path): array
     {
-        $full_path = $this->core->utils->securePath($dir_path);
+        $full_path = $this->utils->securePath($dir_path);
 
         if (!is_dir($full_path)) {
             return ['status' => 'error', 'error' => 'Directory not found: ' . $full_path];
         }
 
-        $contents = $this->libFileIO->getDirContents($full_path);
+        $contents = $this->utils->libFileIO->getDirContents($full_path);
 
         $result = [
             'status'   => 'success',
@@ -596,7 +438,7 @@ class go extends Factory
      */
     public function createDirectory(string $dir_path): array
     {
-        $full_path = $this->core->utils->securePath($dir_path);
+        $full_path = $this->utils->securePath($dir_path);
         $created   = $this->mkPath($full_path);
 
         $result = [
@@ -619,8 +461,8 @@ class go extends Factory
      */
     public function copyDirectory(string $src_dir_path, string $dst_dir_path, bool $overwrite = false): array
     {
-        $src_full = $this->core->utils->securePath($src_dir_path);
-        $dst_full = $this->core->utils->securePath($dst_dir_path);
+        $src_full = $this->utils->securePath($src_dir_path);
+        $dst_full = $this->utils->securePath($dst_dir_path);
 
         if (!is_dir($src_full)) {
             return ['status' => 'error', 'error' => 'Source directory not found: ' . $src_full];
@@ -630,7 +472,7 @@ class go extends Factory
             return ['status' => 'error', 'error' => 'Destination directory already exists: ' . $dst_full];
         }
 
-        $copied = $this->libFileIO->copyDir($src_full, $dst_full);
+        $copied = $this->utils->libFileIO->copyDir($src_full, $dst_full);
 
         if (0 > $copied) {
             return ['status' => 'error', 'error' => 'Failed to copy directory: ' . $src_full];
@@ -656,13 +498,13 @@ class go extends Factory
      */
     public function deleteDirectory(string $dir_path): array
     {
-        $full_path = $this->core->utils->securePath($dir_path);
+        $full_path = $this->utils->securePath($dir_path);
 
         if (!is_dir($full_path)) {
             return ['status' => 'error', 'error' => 'Directory does not exist: ' . $full_path];
         }
 
-        $removed = $this->libFileIO->delDir($full_path);
+        $removed = $this->utils->libFileIO->delDir($full_path);
 
         if (0 > $removed) {
             return ['status' => 'error', 'error' => 'Failed to delete directory: ' . $full_path];

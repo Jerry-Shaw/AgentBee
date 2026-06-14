@@ -23,14 +23,14 @@
 
 namespace modules\agent_skills\Memory;
 
-use modules\agent_core\core;
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libPDO;
 use Nervsys\Ext\libSQLite;
 
 class go extends Factory
 {
-    public core      $core;
+    public utils     $utils;
     public libPDO    $libPDO;
     public libSQLite $libSQLite;
 
@@ -93,9 +93,8 @@ class go extends Factory
      */
     public function __construct()
     {
-        $this->core = core::new();
-        $this->core->initCore();
-        $this->db_path = $this->core->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
+        $this->utils   = utils::new();
+        $this->db_path = $this->utils->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
 
         if (!is_dir($this->db_path)) {
             mkdir($this->db_path, 0777, true);

@@ -23,16 +23,16 @@
 
 namespace modules\agent_skills\OfficeSuite\lib;
 
-use modules\agent_core\core;
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 
 class xlsxHandler extends Factory
 {
-    public core $core;
+    public utils $utils;
 
     public function __construct()
     {
-        $this->core = core::new();
+        $this->utils = utils::new();
     }
 
     /**
@@ -208,7 +208,7 @@ class xlsxHandler extends Factory
                 return ['error' => 'No data to write.'];
             }
 
-            $temp_dir = $this->core->agent_config['workspace_path'] . '/OfficeTemp/xlsx_' . uniqid('', true);
+            $temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/xlsx_' . uniqid('', true);
             if (!mkdir($temp_dir, 0755, true)) {
                 return ['error' => 'Failed to create temp dir'];
             }

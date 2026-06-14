@@ -73,8 +73,8 @@ final class core extends Factory
         $this->agent_config = $this->config->get(true, $reload);
         $this->llm_params   = $this->agent_config['agent_llm']['params'] ?? [];
 
-        if (isset($this->agent_config['agent_memory']['max_history'])) {
-            $this->session_history_limit = $this->agent_config['agent_memory']['max_history'];
+        if (isset($this->agent_config['max_ctx_len'])) {
+            $this->session_history_limit = $this->agent_config['max_ctx_len'];
         }
 
         if ('' === $this->agent_config['workspace_path'] || !is_dir($this->agent_config['workspace_path'])) {
@@ -112,116 +112,33 @@ final class core extends Factory
     }
 
     /**
-     * @param string $module_type
+     * @param array $fetched_skills
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function initModule(string $module_type): void
+    public function addSkills(array $fetched_skills): void
     {
-        $modules  = [];
-        $dir_list = $this->libFileIO->getDirContents($this->app->root_path . DIRECTORY_SEPARATOR . $module_type);
+        $skill_metadata = [];
 
-        foreach ($dir_list as $dir) {
-            if ($dir['is_file']) {
-                continue;
-            }
-
-            $json_file = $dir['absolute_path'] . DIRECTORY_SEPARATOR . 'module.json';
-            $meta_file = $dir['absolute_path'] . DIRECTORY_SEPARATOR . $module_type . '.php';
-
-            if (!is_file($json_file) || !is_file($meta_file)) {
-                continue;
-            }
-
-            $json_data = json_decode(file_get_contents($json_file), true);
-
-            if (
-                !is_array($json_data)
-                || !isset($json_data['entry'])
-                || !isset($json_data['name'])
-                || $json_data['name'] !== $dir['name']
-                || isset($this->agent_tools[$json_data['name']])
-            ) {
-                continue;
-            }
-
-            $namespace = '\\' . $module_type . '\\' . $json_data['name'];
-
+        foreach ($fetched_skills as $skill) {
             try {
-                $module_class = $namespace . '\\' . strstr($json_data['entry'], '.', true);
-                $module_meta  = $namespace . '\\' . $module_type;
+                $this->agent_tools[$skill['name']] = ($skill['class'])::new();
 
-                $metadata = $module_meta::META;
-
-                foreach ($metadata as $index => $meta) {
-                    $metadata[$index]['function']['name'] = $json_data['name'] . '/' . $meta['function']['name'];
-                }
-
-                $this->agent_tools[$json_data['name']] = $module_class::new();
-
-                $modules = array_merge($modules, $metadata);
-
-                $this->utils->debug('Loading ' . ucfirst($module_type) . ': ' . $json_data['name'] . '...', 'trace');
+                $skill_metadata = array_merge($skill_metadata, $skill['meta']);
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
             }
         }
 
-        if (!empty($modules)) {
-            $this->llm_tools['tools']               ??= [];
-            $this->llm_tools['tools']               = array_merge($this->llm_tools['tools'], $modules);
+        if (!empty($skill_metadata)) {
+            $this->llm_tools['tools']               = array_merge($this->llm_tools['tools'] ?? [], $skill_metadata);
             $this->llm_tools['tool_choice']         = 'auto';
             $this->llm_tools['parallel_tool_calls'] = true;
         }
 
-        unset($module_type, $modules, $dir_list, $dir, $json_file, $meta_file, $json_data, $namespace, $module_class, $module_meta, $metadata, $index, $meta);
-    }
-
-    /**
-     * @param int      $proc_idx
-     * @param string   $worker_name
-     * @param callable $output_handler
-     *
-     * @return int
-     * @throws \Exception
-     */
-    public function runProcWorker(int $proc_idx, string $worker_name, callable $output_handler): int
-    {
-        $worker_status = $this->procMgr->getStatus($proc_idx);
-
-        if (0 < $worker_status) {
-            return $proc_idx;
-        }
-
-        $this->procMgr->close($proc_idx);
-
-        $proc_idx = $this->procMgr->command(
-            [
-                $this->OSMgr->getPhpPath(),
-                $this->app->script_path,
-                '-c=' . $this->agent_config['agent_llm']['provider'] . '/' . $worker_name
-            ]
-        )->run($proc_idx);
-
-        $worker_pid = $this->procMgr->getPid($proc_idx);
-
-        $this->utils->debug($worker_name . ' started with pid: ' . $worker_pid, 'trace');
-        $this->utils->debug('Register Output Handler', 'debug');
-
-        $this->socketMgr->addExternalProc(
-            $this->procMgr->getProc($proc_idx),
-            $output_handler
-        );
-
-        if ($proc_idx === $this->openai_idx) {
-            $this->utils->debug('Create shared memory for ' . $worker_name, 'debug');
-            $this->agent_modules['agent_llm']->setShmop($worker_pid);
-        }
-
-        unset($worker_name, $output_handler, $worker_status, $worker_pid);
-        return $proc_idx;
+        unset($fetched_skills, $skill_metadata, $skill);
     }
 
     /**
@@ -326,7 +243,7 @@ final class core extends Factory
     public function getSystemMemory(): array
     {
         $system_default = $this->getSystemDefault($this->agent_config['sandbox_mode'] ?? true);
-        $system_memory  = $this->agent_modules['agent_memory']->read('system', 0, 0);
+        $system_memory  = \modules\agent_skills\Memory\go::new()->read('system', 0, 0);
 
         if (!empty($system_memory['messages'])) {
             $memory = ['=== 重要个性设定 ==='];
@@ -494,7 +411,7 @@ final class core extends Factory
         $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
         $lang_name = 'zh' === $lang_code ? '中文' : '英文';
         $work_path = $this->agent_config['workspace_path'];
-        $max_limit = $this->agent_config['agent_memory']['max_history'] * 3;
+        $max_limit = $this->agent_config['max_ctx_len'] * 3;
 
         $prompts[] = '## 系统';
         $prompts[] = '`OS:' . php_uname() . '` | `Agent:' . AGENT_NAME . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `PHP:' . PHP_VERSION . '(' . $php_path . ')`';

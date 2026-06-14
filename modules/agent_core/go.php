@@ -22,6 +22,8 @@ namespace modules\agent_core;
 
 use modules\agent_core\lib\message;
 use modules\agent_core\lib\utils;
+use modules\agent_openai\go as openai;
+use modules\agent_skills\Memory\go as memory;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\SocketMgr;
 
@@ -30,6 +32,9 @@ class go extends Factory
     public core    $core;
     public utils   $utils;
     public message $message;
+
+    public memory $memory;
+    public openai $openai;
 
     public int $child_idx = 100;
 
@@ -55,6 +60,8 @@ class go extends Factory
 
         $this->init();
 
+        $this->memory          = memory::new();
+        $this->openai          = openai::new();
         $this->message         = message::new();
         $this->core->socketMgr = SocketMgr::new();
     }
@@ -69,10 +76,6 @@ class go extends Factory
     {
         $this->utils->debug($reload ? 'Reloading...' : 'Initializing...', 'trace');
         $this->core->initCore($reload);
-        $this->utils->debug('Loading Tools...', 'debug');
-        $this->core->initModule('tools');
-        $this->utils->debug('Loading Skills...', 'debug');
-        $this->core->initModule('skills');
         $this->utils->debug('Loading Providers...', 'debug');
         $this->core->initProvider();
 
@@ -90,6 +93,52 @@ class go extends Factory
         }
     }
 
+
+    /**
+     * @param int      $proc_idx
+     * @param string   $worker_name
+     * @param callable $output_handler
+     *
+     * @return int
+     * @throws \Exception
+     */
+    public function runProcWorker(int $proc_idx, string $worker_name, callable $output_handler): int
+    {
+        $worker_status = $this->core->procMgr->getStatus($proc_idx);
+
+        if (0 < $worker_status) {
+            return $proc_idx;
+        }
+
+        $this->core->procMgr->close($proc_idx);
+
+        $proc_idx = $this->core->procMgr->command(
+            [
+                $this->core->OSMgr->getPhpPath(),
+                $this->core->app->script_path,
+                '-c=agent_openai/' . $worker_name
+            ]
+        )->run($proc_idx);
+
+        $worker_pid = $this->core->procMgr->getPid($proc_idx);
+
+        $this->utils->debug($worker_name . ' started with pid: ' . $worker_pid, 'trace');
+        $this->utils->debug('Register Output Handler', 'debug');
+
+        $this->core->socketMgr->addExternalProc(
+            $this->core->procMgr->getProc($proc_idx),
+            $output_handler
+        );
+
+        if ($proc_idx === $this->core->openai_idx) {
+            $this->utils->debug('Create shared memory for ' . $worker_name, 'debug');
+            $this->openai->setShmop($worker_pid);
+        }
+
+        unset($worker_name, $output_handler, $worker_status, $worker_pid);
+        return $proc_idx;
+    }
+
     /**
      * Start WebSocket server and worker process.
      *
@@ -103,7 +152,7 @@ class go extends Factory
         ini_set('memory_limit', $memory_limit);
         $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
 
-        $this->core->runProcWorker($this->core->openai_idx, $this->core->agent_config['agent_llm']['main_worker'], [$this, 'streamWorkerHandler']);
+        $this->runProcWorker($this->core->openai_idx, openai::WORKER_MAIN, [$this, 'streamWorkerHandler']);
 
         $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
@@ -205,7 +254,7 @@ class go extends Factory
                             case 'add':
                                 if (0 === $payload['isSubTalk']) {
                                     $this->core->addSessionHistory($payload['data']);
-                                } elseif (1 === $payload['isSubTalk'] && $payload['sender'] === $this->core->agent_config['agent_llm']['child_worker']) {
+                                } elseif (1 === $payload['isSubTalk'] && openai::WORKER_CHILD === $payload['sender']) {
                                     $this->addWorkerHistory($payload['workerName'], $payload['data']);
                                 }
                                 break;
@@ -234,9 +283,9 @@ class go extends Factory
                                         break;
                                     }
 
-                                    $proc_idx = $this->core->runProcWorker(
+                                    $proc_idx = $this->runProcWorker(
                                         $this->child_idx++,
-                                        $this->core->agent_config['agent_llm']['child_worker'],
+                                        openai::WORKER_CHILD,
                                         [$this, 'streamWorkerHandler']
                                     );
 
@@ -303,7 +352,7 @@ class go extends Factory
                                             'socket_id' => $payload['data']['socket_id'],
                                             'history'   => $this->child_workers[$payload['data']['worker_name']]['history'],
                                             'msg_meta'  => $this->utils->getMessageMarker(
-                                                $this->core->agent_config['agent_llm']['child_worker'],
+                                                openai::WORKER_CHILD,
                                                 $payload['data']['worker_name'],
                                                 $payload['data']['worker_role'],
                                                 $payload['data']['worker_name'],
@@ -332,7 +381,7 @@ class go extends Factory
 
                                     $worker_message = json_encode(
                                         $this->utils->getMessageMarker(
-                                            $this->core->agent_config['agent_llm']['main_worker'],
+                                            openai::WORKER_MAIN,
                                             $worker_info['worker_name'],
                                             $worker_info['worker_role'],
                                             AGENT_NAME,
@@ -362,7 +411,7 @@ class go extends Factory
                                             'cmd'      => 'talk',
                                             'history'  => $this->child_workers[$payload['data']['worker_name']]['history'],
                                             'msg_meta' => $this->utils->getMessageMarker(
-                                                $this->core->agent_config['agent_llm']['child_worker'],
+                                                openai::WORKER_CHILD,
                                                 $worker_info['worker_name'],
                                                 $worker_info['worker_role'],
                                                 $worker_info['worker_name'],
@@ -418,7 +467,7 @@ class go extends Factory
                             $this->in_process = true;
                             $this->utils->debug($payload['sender'] . '|' . $payload['workerName'] . ': LLM Tool calls', 'trace');
 
-                            $this->core->agent_llm->chat(
+                            $this->openai->chat(
                                 $message['socket_id'],
                                 [
                                     'sender'     => $payload['sender'],
@@ -435,11 +484,11 @@ class go extends Factory
                         case 'end':
                             $this->in_process = false;
 
-                            $max_history   = $this->core->agent_config['agent_memory']['max_history'];
-                            $warning_count = $max_history * 2;
-                            $limit_count   = $max_history * 3;
+                            $max_ctx_len   = $this->core->agent_config['max_ctx_len'];
+                            $warning_count = $max_ctx_len * 2;
+                            $limit_count   = $max_ctx_len * 3;
 
-                            if ($this->core->agent_config['agent_llm']['child_worker'] === $payload['sender'] && '' !== $payload['data']) {
+                            if (openai::WORKER_CHILD === $payload['sender'] && '' !== $payload['data']) {
                                 $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ' replied', 'trace');
                                 $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
 
@@ -448,7 +497,7 @@ class go extends Factory
                                 $this->child_workers[$payload['workerName']]['talk_count'] = $payload['talk_count'];
 
                                 if ($payload['talk_count'] > $limit_count) {
-                                    $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_history . ')', 'trace');
+                                    $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                     $this->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker，必要时可重启继续任务。';
                                 }
                             }
@@ -460,9 +509,9 @@ class go extends Factory
                                 break;
                             } elseif (!$this->clean_warning) {
                                 $this->clean_warning     = true;
-                                $this->onsend_messages[] = '[历史 ' . $current_count . '/' . $max_history . '] 自动：①总结关键信息(需求/回复/工具结果)→存记忆(daily/important/system,临时ram)；②调用清理工具删旧工具对；③告知用户(概要/层级/剩余数)。| 超 ' . $limit_count . ' 条强制清理，及时保存。';
+                                $this->onsend_messages[] = '[历史 ' . $current_count . '/' . $max_ctx_len . '] 自动：①总结关键信息(需求/回复/工具结果)→存记忆(daily/important/system,临时ram)；②调用清理工具删旧工具对；③告知用户(概要/层级/剩余数)。| 超 ' . $limit_count . ' 条强制清理，及时保存。';
 
-                                $this->utils->debug('streamWorkerHandler: History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_history . ')', 'trace');
+                                $this->utils->debug('streamWorkerHandler: History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                             }
                             break;
                     }
@@ -505,7 +554,7 @@ class go extends Factory
      */
     public function onHeartbeat(string $socket_id): string
     {
-        $task_list = $this->core->agent_task->runTask();
+        $task_list = $this->memory->runTask();
 
         if (empty($task_list)) {
             unset($socket_id, $task_list);
@@ -529,10 +578,10 @@ class go extends Factory
 
         $this->in_process = true;
 
-        $this->core->agent_llm->chat(
+        $this->openai->chat(
             $socket_id,
             $this->utils->getMessageMarker(
-                $this->core->agent_config['agent_llm']['main_worker'],
+                openai::WORKER_MAIN,
                 AGENT_NAME,
                 'Assistant',
                 AGENT_NAME,
@@ -569,7 +618,7 @@ class go extends Factory
         }
 
         $this->socket_session[$socket_id] = $this->utils->getMessageMarker(
-            $this->core->agent_config['agent_llm']['main_worker'],
+            openai::WORKER_MAIN,
             AGENT_NAME,
             'Assistant',
             AGENT_NAME,
@@ -588,7 +637,7 @@ class go extends Factory
             }
 
             if ('stop' === $data['type']) {
-                $this->core->agent_llm->abort($socket_id);
+                $this->openai->abort($socket_id);
                 $this->utils->debug('UserMessage: Send abort to LLM', 'debug');
                 continue;
             }
@@ -612,7 +661,7 @@ class go extends Factory
                 // Reload config
                 if ('saveConfig' === $result['data']['act']) {
                     $this->init(true);
-                    $this->core->agent_llm->reload();
+                    $this->openai->reload();
                     $this->utils->debug('UserMessage: ' . $data['type'] . '->reloaded', 'trace');
                 }
 
@@ -646,7 +695,7 @@ class go extends Factory
         }
 
         $message_metadata = $this->utils->getMessageMarker(
-            $this->core->agent_config['agent_llm']['main_worker'],
+            openai::WORKER_MAIN,
             AGENT_NAME,
             'Assistant',
             AGENT_NAME,
@@ -661,8 +710,8 @@ class go extends Factory
             $this->in_process = true;
             $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
             $this->utils->debug('UserMessage: Send message to LLM', 'debug');
-            $this->core->runProcWorker($this->core->openai_idx, $this->core->agent_config['agent_llm']['main_worker'], [$this, 'streamWorkerHandler']);
-            $this->core->agent_llm->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
+            $this->runProcWorker($this->core->openai_idx, openai::WORKER_MAIN, [$this, 'streamWorkerHandler']);
+            $this->openai->chat($socket_id, $message_metadata, $this->core->getSessionHistory());
         }
 
         unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet);
@@ -700,19 +749,19 @@ class go extends Factory
 
             $current_count = $this->core->addSessionHistory(['role' => 'user', 'content' => $llm_data]);
 
-            if ($current_count > $this->core->agent_config['agent_memory']['max_history'] * 3) {
+            if ($current_count > $this->core->agent_config['max_ctx_len'] * 3) {
                 $new_count = $this->core->cleanSessionHistory();
-                $this->utils->debug('System: History truncated (' . $current_count . '->' . $new_count . ', config: ' . $this->core->agent_config['agent_memory']['max_history'] . ')', 'trace');
+                $this->utils->debug('System: History truncated (' . $current_count . '->' . $new_count . ', config: ' . $this->core->agent_config['max_ctx_len'] . ')', 'trace');
             }
 
             $this->in_process = true;
 
             $this->utils->debug('System: Send message to LLM', 'debug');
 
-            $this->core->agent_llm->chat(
+            $this->openai->chat(
                 $socket_id,
                 $this->utils->getMessageMarker(
-                    $this->core->agent_config['agent_llm']['main_worker'],
+                    openai::WORKER_MAIN,
                     AGENT_NAME,
                     'Assistant',
                     AGENT_NAME,

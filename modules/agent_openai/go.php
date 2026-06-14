@@ -30,6 +30,9 @@ class go extends Factory
 {
     const CMD_RELOAD = '__RELOAD__';
 
+    const WORKER_MAIN  = 'WorkerMain';
+    const WORKER_CHILD = 'WorkerBee';
+
     public core  $core;
     public utils $utils;
 
@@ -58,8 +61,6 @@ class go extends Factory
     public function init(bool $reload = false): void
     {
         $this->core->initCore($reload);
-        $this->core->initModule('tools');
-        $this->core->initModule('skills');
 
         if ($reload) {
             Factory::destroy($this->libOpenAI);
@@ -74,7 +75,6 @@ class go extends Factory
         $this->libOpenAI->setOrgId($this->core->agent_config['agent_llm']['org_id']);
         $this->libOpenAI->setTimeout($this->core->agent_config['agent_llm']['timeout']);
         $this->libOpenAI->setApiModel($this->core->agent_config['agent_llm']['model']);
-        $this->libOpenAI->setModelParams($this->core->getLLMParams());
     }
 
     /**
@@ -161,6 +161,13 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
+        $agent_skills = $this->utils->fetchSkills('modules/agent_skills');
+        $this->core->addSkills($agent_skills);
+        $custom_skills = $this->utils->fetchSkills('skills');
+        $this->core->addSkills($custom_skills);
+
+        $this->libOpenAI->setModelParams($this->core->getLLMParams());
+
         $this->setShmop(getmypid());
 
         while (true) {
@@ -205,25 +212,17 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
-        // Remove WorkerBee tools to prevent recursion
-        if (!empty($this->core->llm_tools['tools'])) {
-            unset($this->core->agent_tools['Memory']);
-            unset($this->core->agent_tools['WorkerBee']);
-            $this->core->llm_tools['tools'] = array_values(
-                array_filter(
-                    $this->core->llm_tools['tools'],
-                    function (array $item): bool
-                    {
-                        if (!str_starts_with($item['function']['name'], 'Memory/') && !str_starts_with($item['function']['name'], 'WorkerBee/')) {
-                            return true;
-                        }
-                        return false;
-                    }
-                )
-            );
+        $core_skills = ['System', 'OfficeSuite', 'WebCrawler'];
+
+        foreach ($core_skills as $core_skill) {
+            $agent_skills = $this->utils->fetchSkills('modules/agent_skills', $core_skill);
+            $this->core->addSkills($agent_skills);
         }
 
-        $this->libOpenAI->setModelParams($this->core->llm_params + $this->core->llm_tools);
+        $custom_skills = $this->utils->fetchSkills('skills');
+        $this->core->addSkills($custom_skills);
+
+        $this->libOpenAI->setModelParams($this->core->getLLMParams());
 
         $socket_id = '';
 

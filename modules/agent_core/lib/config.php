@@ -157,11 +157,8 @@ class config extends Factory
                 'model'        => 'qwen3.6-35b-a3b-genesis-v2-apex',
                 'org_id'       => '',
                 'hw_hash'      => '',
-                'provider'     => 'modules/agent_openai',
-                'main_worker'  => 'WorkerMain',
-                'child_worker' => 'WorkerBee',
-                'timeout'      => 7200,
-                'keep_reasons' => true,
+                'timeout'      => 600,
+                'keep_reasons' => false,
                 'params'       => [
                     'max_completion_tokens' => 65536,
                     'temperature'           => 0.8,
@@ -183,20 +180,14 @@ class config extends Factory
                         'enable_thinking' => false,
                     ],
                     'thinking'              => [
-                        'type' => 'disabled',
+                        'type' => 'enable',
                     ],
                 ],
             ],
-            'agent_task'     => [
-                'provider' => 'tools/Memory',
-            ],
-            'agent_memory'   => [
-                'provider'    => 'tools/Memory',
-                'max_history' => 50,
-            ],
-            'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
-            'sandbox_mode'   => false,
+            'max_ctx_len'    => 50,
             'memory_limit'   => '4G',
+            'sandbox_mode'   => false,
+            'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
             'agent_debug'    => 'trace',
             'socket_debug'   => false,
         ];

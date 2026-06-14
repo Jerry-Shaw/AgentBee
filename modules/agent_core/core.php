@@ -125,7 +125,7 @@ final class core extends Factory
                 $params         = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();
                 $args           = Factory::buildArgs($params, (array)$fn_args);
                 $tool_result    = $this->agent_tools[$module_name]->$method_name(...$args);
-                $result_content = json_encode(['status' => 'success', 'data' => $tool_result], JSON_FORMAT);
+                $result_content = json_encode($tool_result, JSON_FORMAT);
 
                 if (false === $result_content) {
                     $result_content = json_encode(['status' => 'error', 'message' => json_last_error_msg()], JSON_FORMAT);

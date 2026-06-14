@@ -22,6 +22,7 @@ namespace modules\agent_openai\lib;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;
+use Nervsys\Core\Lib\Error;
 use Nervsys\Ext\libOpenAI;
 
 class procWorker extends Factory
@@ -146,8 +147,8 @@ class procWorker extends Factory
                             if (str_starts_with($result['function_name'], 'WorkerBee/')) {
                                 $result_data = json_decode($result['content'], true);
 
-                                $result_data['data']['socket_id'] = $socket_id;
-                                $this->sendMsg($socket_id, 'context', 'WorkerBee', $message_metadata, $result_data['data']);
+                                $result_data['socket_id'] = $socket_id;
+                                $this->sendMsg($socket_id, 'context', 'WorkerBee', $message_metadata, $result_data);
                             }
 
                             if ('System/cleanContext' === $result['function_name']) {
@@ -164,8 +165,8 @@ class procWorker extends Factory
                                 $result_data = json_decode($result['content'], true);
 
                                 if (is_array($result_data) && 'success' === $result_data['status']) {
-                                    $image_loader[] = ['type' => 'text', 'text' => $result_data['data']['filename'] . ' (按需使用)'];
-                                    $image_loader[] = ['type' => 'image_url', 'image_url' => ['url' => $result_data['data']['content']]];
+                                    $image_loader[] = ['type' => 'text', 'text' => $result_data['filename'] . ' (按需使用)'];
+                                    $image_loader[] = ['type' => 'image_url', 'image_url' => ['url' => $result_data['content']]];
 
                                     $result['content'] = '图片已加载（按需使用，禁止分析）';
                                 }
@@ -190,9 +191,10 @@ class procWorker extends Factory
 
                     unset($assistant_message, $tool_results, $image_loader, $result, $result_data, $tool_history);
                 }
-            } catch (\Throwable $exception) {
-                $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $exception->getMessage());
-                unset($exception);
+            } catch (\Throwable $throwable) {
+                $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $throwable->getMessage());
+                Error::new()->exceptionHandler($throwable, false, false);
+                unset($throwable);
             }
 
             unset($key, $data, $finished);
@@ -200,8 +202,10 @@ class procWorker extends Factory
 
         try {
             $libOpenAI->completions($session_history, $this->core->utils->agent_config['agent_llm']['model'], [], $stream_callback);
-        } catch (\Throwable $exception) {
-            $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $exception->getMessage());
+        } catch (\Throwable $throwable) {
+            $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $throwable->getMessage());
+            Error::new()->exceptionHandler($throwable, false, false);
+            unset($throwable);
         }
 
         $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);

@@ -170,21 +170,6 @@ class go extends Factory
     }
 
     /**
-     * @param string $worker_name
-     * @param array  $content
-     *
-     * @return void
-     */
-    public function addWorkerHistory(string $worker_name, array $content): void
-    {
-        if (isset($this->child_workers[$worker_name])) {
-            $this->child_workers[$worker_name]['history'][] = $content;
-        }
-
-        unset($worker_name, $content);
-    }
-
-    /**
      * Callback for external stream (stdout from worker).
      *
      * @param string $external_stream_id
@@ -192,7 +177,7 @@ class go extends Factory
      *
      * @return void
      * @throws \ReflectionException
-     * @throws \Exception
+     * @throws \Throwable
      */
     public function streamWorkerHandler(string $external_stream_id, array $context): void
     {
@@ -290,8 +275,7 @@ class go extends Factory
                                         'worker_role' => $payload['data']['worker_role'],
                                         'status'      => 'processing',
                                         'last_talk'   => date('Y-m-d H:i:s'),
-                                        'talk_count'  => 0,
-                                        'history'     => []
+                                        'talk_count'  => 0
                                     ];
 
                                     $child_prompt = $this->utils->getChildPrompt(
@@ -300,8 +284,8 @@ class go extends Factory
                                         $payload['data']['system_prompt']
                                     );
 
-                                    $this->addWorkerHistory($payload['data']['worker_name'], $child_prompt);
-                                    $this->addWorkerHistory(
+                                    $this->utils->addSessionHistory($payload['data']['worker_name'], $child_prompt);
+                                    $this->utils->addSessionHistory(
                                         $payload['data']['worker_name'],
                                         ['role' => 'user', 'content' => '用一句话概述你的名字，角色，并回复“已就绪”']
                                     );
@@ -311,7 +295,7 @@ class go extends Factory
                                         json_encode([
                                             'cmd'       => 'start',
                                             'socket_id' => $payload['data']['socket_id'],
-                                            'history'   => $this->child_workers[$payload['data']['worker_name']]['history'],
+                                            'history'   => $this->utils->getSessionHistory($payload['data']['worker_name']),
                                             'msg_meta'  => $this->utils->getMessageMarker(
                                                 WORKER_CHILD,
                                                 $payload['data']['worker_name'],
@@ -332,13 +316,13 @@ class go extends Factory
                                         break;
                                     }
 
-                                    if ('processing' === $this->child_workers[$payload['data']['worker_name']]['status']) {
-                                        $this->utils->debug('WorkerBee: ' . $payload['data']['worker_name'] . ' is busy', 'trace');
-                                        $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
+                                    if ('processing' === $this->child_workers[$worker_info['worker_name']]['status']) {
+                                        $this->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is busy', 'trace');
+                                        $this->onsend_messages[] = '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
                                         break;
                                     }
 
-                                    $this->child_workers[$payload['data']['worker_name']]['status'] = 'processing';
+                                    $this->child_workers[$worker_info['worker_name']]['status'] = 'processing';
 
                                     $worker_message = json_encode(
                                         $this->utils->getMessageMarker(
@@ -359,10 +343,10 @@ class go extends Factory
                                         $this->message_buffers[] = $worker_message;
                                     }
 
-                                    $this->utils->debug('WorkerBee: ' . $payload['data']['worker_name'] . ' is working', 'trace');
+                                    $this->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working', 'trace');
 
-                                    $this->addWorkerHistory(
-                                        $payload['data']['worker_name'],
+                                    $this->utils->addSessionHistory(
+                                        $worker_info['worker_name'],
                                         ['role' => 'user', 'content' => $payload['data']['message']]
                                     );
 
@@ -370,7 +354,7 @@ class go extends Factory
                                         $worker_info['proc_idx'],
                                         json_encode([
                                             'cmd'      => 'talk',
-                                            'history'  => $this->child_workers[$payload['data']['worker_name']]['history'],
+                                            'history'  => $this->utils->getSessionHistory($worker_info['worker_name']),
                                             'msg_meta' => $this->utils->getMessageMarker(
                                                 WORKER_CHILD,
                                                 $worker_info['worker_name'],

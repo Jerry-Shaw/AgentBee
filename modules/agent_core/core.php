@@ -136,28 +136,6 @@ final class core extends Factory
     }
 
     /**
-     * Add a message to session history.
-     *
-     * @param array $content
-     *
-     * @return int
-     * @throws \Exception
-     */
-    public function addSessionHistory(array $content): int
-    {
-        if (empty($this->session_history)) {
-            $this->session_history[] = $this->getSystemMemory();
-        }
-
-        $this->session_history[] = $content;
-
-        $message_count = count($this->session_history);
-
-        unset($content);
-        return $message_count;
-    }
-
-    /**
      * Get current session history.
      *
      * @return array

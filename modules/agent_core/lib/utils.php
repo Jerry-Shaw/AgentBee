@@ -35,8 +35,13 @@ class utils extends Factory
     public libFileIO $libFileIO;
     public config    $config;
 
+    public int $proc_idx   = 100;
+    public int $worker_idx = 10000;
+
     public string $session_id;
     public array  $agent_config;
+
+    public array $session_history = [];
 
     /**
      * @throws \ReflectionException
@@ -51,6 +56,256 @@ class utils extends Factory
 
         $this->session_id   = hash('md5', uniqid('', true));
         $this->agent_config = $this->config->get();
+    }
+
+    /**
+     * @return int
+     */
+    public function getProcIDX(): int
+    {
+        if ($this->proc_idx++ >= $this->worker_idx) {
+            $this->proc_idx = 100;
+        }
+
+        return $this->proc_idx;
+    }
+
+    /**
+     * @return int
+     */
+    public function getWorkerIDX(): int
+    {
+        return $this->worker_idx++;
+    }
+
+    /**
+     * @param string $worker_name
+     * @param array  $content
+     *
+     * @return int
+     */
+    public function addSessionHistory(string $worker_name, array $content): int
+    {
+        $this->session_history[$worker_name] ??= [];
+        $this->session_history[$worker_name] = $content;
+
+        $message_count = count($this->session_history);
+
+        unset($worker_name, $content);
+        return $message_count;
+    }
+
+    /**
+     * @param string $worker_name
+     * @param array  $history
+     *
+     * @return void
+     */
+    public function setSessionHistory(string $worker_name, array $history): void
+    {
+        $this->session_history[$worker_name] = $history;
+        unset($worker_name, $history);
+    }
+
+    /**
+     * @param string $worker_name
+     *
+     * @return array
+     */
+    public function getSessionHistory(string $worker_name): array
+    {
+        return $this->session_history[$worker_name] ?? [];
+    }
+
+    /**
+     * Prune session history for a worker.
+     *
+     * @param string $worker_name
+     * @param int    $keep_normal     Min normal units (user + assistant w/o tool_calls)
+     * @param int    $keep_tool_pairs Min tool pairs (assistant with tool_calls + its tools)
+     * @param bool   $force           Allow zero limits
+     *
+     * @return array{removed_normal:int, removed_tools:int, current_count:int}
+     */
+    public function pruneSessionHistory(string $worker_name, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $force = false): array
+    {
+        $history = $this->session_history[$worker_name];
+
+        // 1. enforce bounds
+        if (!$force) {
+            $keep_tool_pairs = max(1, $keep_tool_pairs);
+            $keep_normal     = max(2, $keep_normal);
+        } else {
+            $keep_tool_pairs = max(0, $keep_tool_pairs);
+            $keep_normal     = max(0, $keep_normal);
+        }
+
+        // 2. extract system message (first one)
+        $system = null;
+        foreach ($history as $idx => $msg) {
+            if ('system' === $msg['role']) {
+                $system = $msg;
+                unset($history[$idx]);
+                break;
+            }
+        }
+
+        $history = array_values($history);
+        $total   = count($history);
+
+        // 3. split into units (normal / tool) and count original totals
+        $units              = [];
+        $total_normal_units = 0;
+        $total_tool_units   = 0;
+        $i                  = 0;
+
+        while ($i < $total) {
+            $msg = $history[$i];
+            if ('assistant' === $msg['role'] && !empty($msg['tool_calls'])) {
+                $indices = [$i];
+                $j       = $i + 1;
+
+                while ($j < $total && 'tool' === $history[$j]['role']) {
+                    $indices[] = $j;
+                    $j++;
+                }
+
+                $units[] = ['type' => 'tool', 'indices' => $indices];
+                $total_tool_units++;
+                $i = $j;
+            } else {
+                $units[] = ['type' => 'normal', 'indices' => [$i], 'role' => $msg['role']];
+                $total_normal_units++;
+                $i++;
+            }
+        }
+
+        // 4. handle keep_normal == 0 : only system may survive
+        if (0 === $keep_normal || empty($history)) {
+            $this->session_history[$worker_name] = !is_null($system) ? [$system] : [];
+
+            return [
+                'removed_normal' => $total_normal_units,
+                'removed_tools'  => $total_tool_units,
+                'current_count'  => !is_null($system) ? 1 : 0
+            ];
+        }
+
+        // 5. select units from end to front
+        $selected_normal = [];
+        $selected_tools  = [];
+
+        $need_normal = $keep_normal;
+        $need_tools  = $keep_tool_pairs;
+        $unit_count  = count($units);
+
+        for ($idx = $unit_count - 1; $idx >= 0; $idx--) {
+            $unit = $units[$idx];
+            if ('normal' === $unit['type']) {
+                if ($need_normal > 0) {
+                    array_unshift($selected_normal, $unit);
+                    $need_normal--;
+                }
+            } else {
+                if ($need_tools > 0) {
+                    array_unshift($selected_tools, $unit);
+                    $need_tools--;
+                }
+            }
+            if ($need_normal <= 0 && $need_tools <= 0) {
+                break;
+            }
+        }
+
+        // 6. ensure first normal unit is 'user'
+        if (!empty($selected_normal) && 'user' !== $selected_normal[0]['role']) {
+            $first_idx = $selected_normal[0]['indices'][0];
+            for ($i = $first_idx - 1; $i >= 0; $i--) {
+                if ('user' === $history[$i]['role']) {
+                    $user_unit = ['type' => 'normal', 'indices' => [$i], 'role' => 'user'];
+                    array_unshift($selected_normal, $user_unit);
+                    break;
+                }
+            }
+        }
+
+        // 7. ensure each tool pair has a preceding user (add missing users)
+        $extra_user_indices = [];
+        foreach ($selected_tools as $tool_unit) {
+            $tool_start = $tool_unit['indices'][0];
+            for ($i = $tool_start - 1; $i >= 0; $i--) {
+                if ('user' === $history[$i]['role']) {
+                    $extra_user_indices[$i] = true;
+                    break;
+                }
+            }
+        }
+
+        $normal_idx_set = [];
+        foreach ($selected_normal as $nu) {
+            $normal_idx_set[$nu['indices'][0]] = true;
+        }
+
+        foreach ($extra_user_indices as $uidx => $_) {
+            if (!isset($normal_idx_set[$uidx])) {
+                $selected_normal[] = ['type' => 'normal', 'indices' => [$uidx], 'role' => 'user'];
+            }
+        }
+
+        // 8. merge and sort units by original order
+        $all_units = array_merge($selected_normal, $selected_tools);
+
+        usort(
+            $all_units,
+            function ($a, $b)
+            {
+                return $a['indices'][0] <=> $b['indices'][0];
+            }
+        );
+
+        // 9. count kept units and build new history
+        $kept_normal_units = 0;
+        $kept_tool_units   = 0;
+        $keep              = [];
+
+        foreach ($all_units as $unit) {
+            foreach ($unit['indices'] as $idx) {
+                $keep[$idx] = true;
+            }
+            if ('normal' === $unit['type']) {
+                $kept_normal_units++;
+            } else {
+                $kept_tool_units++;
+            }
+        }
+
+        $new_history = [];
+
+        for ($i = 0; $i < $total; $i++) {
+            if (isset($keep[$i])) {
+                $new_history[] = $history[$i];
+            }
+        }
+
+        // 10. prepend system if exists
+        if (null !== $system) {
+            array_unshift($new_history, $system);
+        }
+
+        $this->session_history[$worker_name] = $new_history;
+
+        // 11. compute removed counts (non‑negative)
+        $removed_normal = max(0, $total_normal_units - $kept_normal_units);
+        $removed_tools  = max(0, $total_tool_units - $kept_tool_units);
+
+        // 12. clean temporary variables (ordered by definition, exclude $new_history)
+        unset($system, $history, $total, $units, $i, $msg, $indices, $j, $selected_normal, $selected_tools, $need_normal, $need_tools, $unit_count, $idx, $unit, $first_idx, $user_unit, $extra_user_indices, $normal_idx_set, $uidx, $tool_unit, $tool_start, $all_units, $keep, $total_normal_units, $total_tool_units, $kept_normal_units, $kept_tool_units);
+
+        return [
+            'removed_normal' => $removed_normal,
+            'removed_tools'  => $removed_tools,
+            'current_count'  => count($new_history)
+        ];
     }
 
     /**
@@ -296,8 +551,9 @@ class utils extends Factory
         $prompts[] = '## 时间';
         $prompts[] = date('Y-m-d H:i:s') . ' 时区:' . $this->app->timezone;
 
-        $prompts[] = '## 自开发';
-        $prompts[] = '- **修复**:查日志→定位→分析→建议→用户确认→备份→修复→测试。改代码前**必须备份**，符合模块规范。';
+        $prompts[] = '## Worker 元数据';
+        $prompts[] = '- 名称: ' . WORKER_MAIN;
+        $prompts[] = '- 角色: 个人助理';
 
         $prompt = [
             'role'    => 'system',

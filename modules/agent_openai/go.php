@@ -30,14 +30,10 @@ class go extends Factory
 {
     const CMD_RELOAD = '__RELOAD__';
 
-    const WORKER_MAIN  = 'AgentBee';
-    const WORKER_CHILD = 'WorkerBee';
-
     public core  $core;
     public utils $utils;
 
-    public libOpenAI $libOpenAI;
-
+    public libOpenAI  $libOpenAI;
     public procWorker $procWorker;
 
     /**

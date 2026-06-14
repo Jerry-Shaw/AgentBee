@@ -35,8 +35,9 @@ class utils extends Factory
     public libFileIO $libFileIO;
     public config    $config;
 
-    public int $proc_idx   = 100;
-    public int $worker_idx = 10000;
+    public int $main_idx   = 0;
+    public int $proc_idx   = 10;
+    public int $worker_idx = 1000;
 
     public string $session_id;
     public array  $agent_config;
@@ -61,13 +62,21 @@ class utils extends Factory
     /**
      * @return int
      */
+    public function getMainIDX(): int
+    {
+        return $this->main_idx;
+    }
+
+    /**
+     * @return int
+     */
     public function getProcIDX(): int
     {
-        if ($this->proc_idx++ >= $this->worker_idx) {
+        if ($this->proc_idx >= $this->worker_idx) {
             $this->proc_idx = 100;
         }
 
-        return $this->proc_idx;
+        return $this->proc_idx++;
     }
 
     /**
@@ -86,10 +95,10 @@ class utils extends Factory
      */
     public function addSessionHistory(string $worker_name, array $content): int
     {
-        $this->session_history[$worker_name] ??= [];
-        $this->session_history[$worker_name] = $content;
+        $this->session_history[$worker_name]   ??= [];
+        $this->session_history[$worker_name][] = $content;
 
-        $message_count = count($this->session_history);
+        $message_count = count($this->session_history[$worker_name]);
 
         unset($worker_name, $content);
         return $message_count;
@@ -103,7 +112,7 @@ class utils extends Factory
      */
     public function setSessionHistory(string $worker_name, array $history): void
     {
-        $this->session_history[$worker_name] = $history;
+        $this->session_history[$worker_name] = [$history];
         unset($worker_name, $history);
     }
 
@@ -123,16 +132,16 @@ class utils extends Factory
      * @param string $worker_name
      * @param int    $keep_normal     Min normal units (user + assistant w/o tool_calls)
      * @param int    $keep_tool_pairs Min tool pairs (assistant with tool_calls + its tools)
-     * @param bool   $force           Allow zero limits
+     * @param bool   $force_prune     Allow zero limits
      *
      * @return array{removed_normal:int, removed_tools:int, current_count:int}
      */
-    public function pruneSessionHistory(string $worker_name, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $force = false): array
+    public function pruneSessionHistory(string $worker_name, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $force_prune = false): array
     {
         $history = $this->session_history[$worker_name];
 
         // 1. enforce bounds
-        if (!$force) {
+        if (!$force_prune) {
             $keep_tool_pairs = max(1, $keep_tool_pairs);
             $keep_normal     = max(2, $keep_normal);
         } else {
@@ -299,7 +308,7 @@ class utils extends Factory
         $removed_tools  = max(0, $total_tool_units - $kept_tool_units);
 
         // 12. clean temporary variables (ordered by definition, exclude $new_history)
-        unset($system, $history, $total, $units, $i, $msg, $indices, $j, $selected_normal, $selected_tools, $need_normal, $need_tools, $unit_count, $idx, $unit, $first_idx, $user_unit, $extra_user_indices, $normal_idx_set, $uidx, $tool_unit, $tool_start, $all_units, $keep, $total_normal_units, $total_tool_units, $kept_normal_units, $kept_tool_units);
+        unset($worker_name, $keep_normal, $keep_tool_pairs, $force_prune, $history, $system, $total, $units, $i, $msg, $indices, $j, $selected_normal, $selected_tools, $need_normal, $need_tools, $unit_count, $idx, $unit, $first_idx, $user_unit, $extra_user_indices, $normal_idx_set, $uidx, $tool_unit, $tool_start, $all_units, $keep, $total_normal_units, $total_tool_units, $kept_normal_units, $kept_tool_units);
 
         return [
             'removed_normal' => $removed_normal,

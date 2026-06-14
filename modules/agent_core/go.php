@@ -36,8 +36,6 @@ class go extends Factory
     public memory $memory;
     public openai $openai;
 
-    public int $child_idx = 100;
-
     public bool $in_process    = false;
     public bool $clean_warning = false;
 
@@ -76,13 +74,11 @@ class go extends Factory
     {
         $this->utils->debug($reload ? 'Reloading...' : 'Initializing...', 'trace');
         $this->core->initCore($reload);
-        $this->utils->debug('Loading Providers...', 'debug');
-        $this->core->initProvider();
 
-        $this->utils->debug('Model ID: ' . ($this->core->agent_config['agent_llm']['model'] ?? 'NONE'), 'trace');
-        $this->utils->debug('SandBox mode: ' . ($this->core->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
+        $this->utils->debug('Model ID: ' . ($this->utils->agent_config['agent_llm']['model'] ?? 'NONE'), 'trace');
+        $this->utils->debug('SandBox mode: ' . ($this->utils->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
 
-        $workspace_path = $this->core->agent_config['workspace_path'] ?? '';
+        $workspace_path = $this->utils->agent_config['workspace_path'] ?? '';
         $this->utils->debug('Checking workspace: ' . $workspace_path, 'trace');
         if ('' !== $workspace_path && !is_dir($workspace_path)) {
             try {
@@ -130,7 +126,7 @@ class go extends Factory
             $output_handler
         );
 
-        if ($proc_idx === $this->core->openai_idx) {
+        if (WORKER_MAIN === $worker_name) {
             $this->utils->debug('Create shared memory for ' . $worker_name, 'debug');
             $this->openai->setShmop($worker_pid);
         }
@@ -147,22 +143,22 @@ class go extends Factory
      */
     public function start(): void
     {
-        $memory_limit = $this->core->agent_config['memory_limit'] ?? '4G';
+        $memory_limit = $this->utils->agent_config['memory_limit'] ?? '4G';
 
         ini_set('memory_limit', $memory_limit);
         $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
 
-        $this->runProcWorker($this->core->openai_idx, WORKER_MAIN, [$this, 'streamWorkerHandler']);
+        $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
 
         $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
         try {
-            $server_host = 'tcp://' . $this->core->agent_config['agent_server']['host'] . ':' . $this->core->agent_config['agent_server']['port'];
+            $server_host = 'tcp://' . $this->utils->agent_config['agent_server']['host'] . ':' . $this->utils->agent_config['agent_server']['port'];
             $this->utils->debug('Local IP address: ' . implode(', ', $this->core->OSMgr->getIPv4()), 'trace');
             $this->utils->debug('Ready to start server: ' . $server_host, 'trace');
             $this->core->socketMgr
-                ->setDebugMode($this->core->agent_config['socket_debug'])
-                ->setAliveTimeout($this->core->agent_config['agent_server']['ping_interval'])
+                ->setDebugMode($this->utils->agent_config['socket_debug'])
+                ->setAliveTimeout($this->utils->agent_config['agent_server']['ping_interval'])
                 ->setEventListener('onHandshake', [$this, 'onHandshake'])
                 ->setEventListener('onHeartbeat', [$this, 'onHeartbeat'])
                 ->setEventListener('onMessage', [$this, 'onMessage'])
@@ -284,15 +280,15 @@ class go extends Factory
                                     }
 
                                     $proc_idx = $this->runProcWorker(
-                                        $this->child_idx++,
+                                        $this->utils->getWorkerIDX(),
                                         WORKER_CHILD,
                                         [$this, 'streamWorkerHandler']
                                     );
 
                                     $this->utils->debug('WorkerBee started: ' . $payload['data']['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload['data']['worker_role'] . ')', 'trace');
 
-                                    if ($this->core->agent_config['sandbox_mode']) {
-                                        $sand_box_prompt = '- **开启**:所有文件以 `' . $this->core->agent_config['workspace_path'] . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
+                                    if ($this->utils->agent_config['sandbox_mode']) {
+                                        $sand_box_prompt = '- **开启**:所有文件以 `' . $this->utils->agent_config['workspace_path'] . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
                                     } else {
                                         $sand_box_prompt = '- **关闭**:按绝对路径，优先项目根目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
                                     }
@@ -313,7 +309,7 @@ class go extends Factory
 
                                     $prompts[] = '## 系统';
                                     $prompts[] = '`OS:' . php_uname() . '` | `PHP:' . PHP_VERSION . ' (' . $php_path . ')` | `CWD:' . getcwd() . '`';
-                                    $prompts[] = '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $this->core->agent_config['workspace_path'] . '`';
+                                    $prompts[] = '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $this->utils->agent_config['workspace_path'] . '`';
                                     $prompts[] = '`框架:' . NS_ROOT . '` | `模块:' . $this->core->app->root_path . '/modules/` | `Tools:' . $this->core->app->root_path . '/tools/` | `Skills:' . $this->core->app->root_path . '/skills/` | `日志:' . $this->core->app->log_path . '`';
                                     $prompts[] = '## 工具';
                                     $prompts[] = '- **强制优先**：有专用工具时禁止`exec`，必须调用工具。';
@@ -484,7 +480,7 @@ class go extends Factory
                         case 'end':
                             $this->in_process = false;
 
-                            $max_ctx_len   = $this->core->agent_config['max_ctx_len'];
+                            $max_ctx_len   = $this->utils->agent_config['max_ctx_len'];
                             $warning_count = $max_ctx_len * 2;
                             $limit_count   = $max_ctx_len * 3;
 
@@ -672,7 +668,10 @@ class go extends Factory
             if (!$this->in_process) {
                 $llm_data = $result['content'];
 
-                if (empty($this->core->session_history)) {
+                if (empty($this->utils->getSessionHistory(WORKER_MAIN))) {
+                    $system_prompt = $this->getSystemPrompt();
+                    $this->utils->addSessionHistory(WORKER_MAIN, $system_prompt);
+
                     array_unshift(
                         $llm_data, [
                             'type' => 'text',
@@ -710,11 +709,36 @@ class go extends Factory
             $this->in_process = true;
             $this->utils->debug('UserMessage: Send message to LLM', 'debug');
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
-            $this->runProcWorker($this->core->openai_idx, WORKER_MAIN, [$this, 'streamWorkerHandler']);
+            $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
             $this->openai->chat($socket_id, $message_metadata, $this->utils->getSessionHistory(WORKER_MAIN));
         }
 
         unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet);
+    }
+
+    /**
+     * Get system memory prompt.
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function getSystemPrompt(): array
+    {
+        $system_default = $this->utils->getMainPrompt();
+        $system_memory  = $this->memory->read('system', 0, 0);
+
+        if (!empty($system_memory['messages'])) {
+            $memory = ['', '=== 重要个性设定 ==='];
+
+            foreach ($system_memory['messages'] as $message) {
+                $memory[] = $message['content'];
+            }
+
+            $system_default['content'] .= implode("\n", $memory);
+        }
+
+        unset($system_memory, $memory, $message);
+        return $system_default;
     }
 
     /**
@@ -749,9 +773,9 @@ class go extends Factory
 
             $current_count = $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
 
-            if ($current_count > $this->core->agent_config['max_ctx_len'] * 3) {
-                $new_count = $this->core->cleanSessionHistory();
-                $this->utils->debug('System: History truncated (' . $current_count . '->' . $new_count . ', config: ' . $this->core->agent_config['max_ctx_len'] . ')', 'trace');
+            if ($current_count > $this->utils->agent_config['max_ctx_len'] * 3) {
+                $cleaned = $this->utils->pruneSessionHistory(WORKER_MAIN);
+                $this->utils->debug('System: History truncated (' . $current_count . '->' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
             }
 
             $this->in_process = true;

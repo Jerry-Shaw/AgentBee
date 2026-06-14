@@ -23,6 +23,9 @@ declare(strict_types = 1);
 const AGENT_VERSION = '1.0.8';
 const AGENT_NAME    = 'AgentBee (蜂小秘)';
 
+const WORKER_MAIN  = 'AgentBee';
+const WORKER_CHILD = 'WorkerBee';
+
 use Nervsys\Core\Lib\App;
 
 require __DIR__ . '/../Nervsys/NS.php';

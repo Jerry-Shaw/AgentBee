@@ -63,14 +63,14 @@ class go extends Factory
         }
 
         $this->libOpenAI = libOpenAI::new(
-            $this->core->agent_config['agent_llm']['api_url'],
-            $this->core->agent_config['agent_llm']['api_key'],
+            $this->utils->agent_config['agent_llm']['api_url'],
+            $this->utils->agent_config['agent_llm']['api_key'],
             '[DONE]'
         );
 
-        $this->libOpenAI->setOrgId($this->core->agent_config['agent_llm']['org_id']);
-        $this->libOpenAI->setTimeout($this->core->agent_config['agent_llm']['timeout']);
-        $this->libOpenAI->setApiModel($this->core->agent_config['agent_llm']['model']);
+        $this->libOpenAI->setOrgId($this->utils->agent_config['agent_llm']['org_id']);
+        $this->libOpenAI->setTimeout($this->utils->agent_config['agent_llm']['timeout']);
+        $this->libOpenAI->setApiModel($this->utils->agent_config['agent_llm']['model']);
     }
 
     /**
@@ -81,8 +81,8 @@ class go extends Factory
     public function reload(): void
     {
         $this->init(true);
-        $this->setShmop($this->core->utils->procMgr->getPid($this->core->openai_idx));
-        $this->core->utils->procMgr->writeProc($this->core->openai_idx, self::CMD_RELOAD);
+        $this->setShmop($this->core->utils->procMgr->getPid($this->utils->main_idx));
+        $this->core->utils->procMgr->writeProc($this->utils->main_idx, self::CMD_RELOAD);
     }
 
     /**
@@ -128,7 +128,7 @@ class go extends Factory
         ];
 
         $this->libOpenAI->resumeStream();
-        $this->core->utils->procMgr->writeProc($this->core->openai_idx, json_encode($message));
+        $this->core->utils->procMgr->writeProc($this->utils->main_idx, json_encode($message));
 
         unset($socket_id, $message_metadata, $session_history);
     }
@@ -155,7 +155,7 @@ class go extends Factory
      */
     public function AgentBee(): void
     {
-        ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
+        ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
 
         $agent_skills = $this->utils->fetchSkills('modules/agent_skills');
         $this->core->addSkills($agent_skills);
@@ -206,7 +206,7 @@ class go extends Factory
      */
     public function WorkerBee(): void
     {
-        ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
+        ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
 
         $agent_skills = $this->utils->fetchSkills(
             'modules/agent_skills',

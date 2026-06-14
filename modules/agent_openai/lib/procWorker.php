@@ -36,7 +36,6 @@ class procWorker extends Factory
     public function __construct()
     {
         $this->core = core::new();
-        $this->core->initCore();
     }
 
     /**
@@ -196,7 +195,7 @@ class procWorker extends Factory
         };
 
         try {
-            $libOpenAI->completions($session_history, $this->core->agent_config['agent_llm']['model'], [], $stream_callback);
+            $libOpenAI->completions($session_history, $this->core->utils->agent_config['agent_llm']['model'], [], $stream_callback);
         } catch (\Throwable $exception) {
             $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $exception->getMessage());
         }
@@ -261,7 +260,7 @@ class procWorker extends Factory
 
         // Reasoning content
         if (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {
-            if ($this->core->agent_config['agent_llm']['keep_reasons']) {
+            if ($this->core->utils->agent_config['agent_llm']['keep_reasons']) {
                 $reasons_content .= $delta['reasoning_content'];
             }
             $this->sendMsg($socket_id, 'stream', 'think', $message_metadata, $delta['reasoning_content']);

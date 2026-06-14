@@ -20,15 +20,12 @@
 
 namespace modules\agent_core;
 
-use modules\agent_core\lib\config;
 use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Lib\Error;
-use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\Reflect;
 use Nervsys\Core\System;
-use Nervsys\Ext\libFileIO;
 
 final class core extends Factory
 {
@@ -37,14 +34,9 @@ final class core extends Factory
     public utils     $utils;
     public SocketMgr $socketMgr;
 
-    public int $openai_idx = 0;
-
-    public array $llm_tools  = [];
-    public array $llm_params = [];
-
-    public array $agent_tools   = [];
-    public array $agent_config  = [];
-    public array $agent_modules = [];
+    public array $llm_tools   = [];
+    public array $llm_params  = [];
+    public array $agent_tools = [];
 
     public array $session_history       = [];
     public int   $session_history_limit = 20;
@@ -64,45 +56,19 @@ final class core extends Factory
         $this->utils     = utils::new();
         $this->socketMgr = SocketMgr::new();
 
-        $this->agent_config = $this->utils->config->get(true, $reload);
-        $this->llm_params   = $this->agent_config['agent_llm']['params'] ?? [];
+        $this->utils->agent_config = $this->utils->config->get(true, $reload);
 
-        if (isset($this->agent_config['max_ctx_len'])) {
-            $this->session_history_limit = $this->agent_config['max_ctx_len'];
+        $this->llm_params = $this->utils->agent_config['agent_llm']['params'] ?? [];
+
+        if (isset($this->utils->agent_config['max_ctx_len'])) {
+            $this->session_history_limit = $this->utils->agent_config['max_ctx_len'];
         }
 
-        if ('' === $this->agent_config['workspace_path'] || !is_dir($this->agent_config['workspace_path'])) {
-            $this->agent_config['workspace_path'] = $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
+        if ('' === $this->utils->agent_config['workspace_path'] || !is_dir($this->utils->agent_config['workspace_path'])) {
+            $this->utils->agent_config['workspace_path'] = $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
         }
 
-        $this->agent_config['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
-    }
-
-    /**
-     * Initialize all modules.
-     *
-     * @return void
-     * @throws \ReflectionException
-     */
-    public function initProvider(): void
-    {
-        foreach ($this->agent_config as $name => $config) {
-            if (!isset($config['provider'])) {
-                continue;
-            }
-
-            $module = '\\' . strtr($config['provider'], '/', '\\') . '\\go';
-
-            try {
-                $this->agent_modules[$name] = $module::new();
-                $this->utils->debug('Loading Provider: ' . $config['provider'] . '...', 'trace');
-            } catch (\Throwable $throwable) {
-                Error::new()->exceptionHandler($throwable, false, false);
-                unset($throwable);
-            }
-        }
-
-        unset($name, $config, $module);
+        $this->utils->agent_config['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
     }
 
     /**
@@ -133,102 +99,6 @@ final class core extends Factory
         }
 
         unset($fetched_skills, $skill_metadata, $skill);
-    }
-
-    /**
-     * Get current session history.
-     *
-     * @return array
-     */
-    public function getSessionHistory(): array
-    {
-        return $this->session_history;
-    }
-
-    /**
-     * @return int
-     * @throws \Exception
-     */
-    public function cleanSessionHistory(): int
-    {
-        $keep_user_assistant = 8;
-        $keep_tool_calls     = 2;
-        $keep_tool_results   = 2;
-
-        $new_history = [];
-        $last_role   = '';
-        $last_key    = count($this->session_history) - 1;
-
-        for ($i = $last_key; $i > 0; --$i) {
-            $message_role  = $this->session_history[$i]['role'];
-            $is_tool_calls = $this->session_history[$i]['tool_calls'] ?? false;
-
-            if (0 < $keep_user_assistant) {
-                if ('user' === $message_role) {
-                    $new_history[$i] = $this->session_history[$i];
-                    --$keep_user_assistant;
-                    $last_role = 'user';
-                } elseif ('assistant' === $message_role && !$is_tool_calls) {
-                    $new_history[$i] = $this->session_history[$i];
-                    --$keep_user_assistant;
-                    $last_role = 'assistant';
-                }
-
-                if ('user' !== $last_role && !$is_tool_calls && in_array($message_role, ['user', 'assistant'], true)) {
-                    ++$keep_user_assistant;
-                }
-            }
-
-            if (0 < $keep_tool_results) {
-                if ('tool' === $message_role) {
-                    $new_history[$i] = $this->session_history[$i];
-                    --$keep_tool_results;
-                }
-            }
-
-            if (0 < $keep_tool_calls) {
-                if ('assistant' === $message_role && $is_tool_calls) {
-                    $new_history[$i] = $this->session_history[$i];
-                    --$keep_tool_calls;
-                }
-            }
-
-            if (0 >= $keep_user_assistant && 0 >= $keep_tool_results && 0 >= $keep_tool_calls) {
-                break;
-            }
-        }
-
-        ksort($new_history, SORT_NUMERIC);
-        array_unshift($new_history, $this->getSystemMemory());
-        $this->session_history = array_values($new_history);
-
-        unset($keep_user_assistant, $keep_tool_calls, $keep_tool_results, $new_history, $last_role, $last_key, $i, $message_role, $is_tool_calls);
-        return count($this->session_history);
-    }
-
-    /**
-     * Get system memory prompt.
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function getSystemMemory(): array
-    {
-        $system_default = $this->utils->getMainPrompt();
-        $system_memory  = \modules\agent_skills\Memory\go::new()->read('system', 0, 0);
-
-        if (!empty($system_memory['messages'])) {
-            $memory = ['=== 重要个性设定 ==='];
-
-            foreach ($system_memory['messages'] as $message) {
-                $memory[] = $message['content'];
-            }
-
-            $system_default['content'] .= implode("\n", $memory);
-        }
-
-        unset($system_memory, $memory, $message);
-        return $system_default;
     }
 
     /**

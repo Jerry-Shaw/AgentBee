@@ -453,7 +453,7 @@ class go extends Factory
                             $warning_count = $max_ctx_len * 2;
                             $limit_count   = $max_ctx_len * 3;
 
-                            if (WORKER_CHILD === $payload['sender'] && '' !== $payload['data']) {
+                            if (WORKER_CHILD === $payload['sender']) {
                                 $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ' replied', 'trace');
                                 $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
 

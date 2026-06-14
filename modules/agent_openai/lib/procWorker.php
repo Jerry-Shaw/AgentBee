@@ -58,7 +58,7 @@ class procWorker extends Factory
         $tool_calls_buffer = [];
 
         // Sync session history from main process
-        $this->core->utils->setSessionHistory($message_metadata['sender'], $session_history);
+        $this->core->utils->setSessionHistory($message_metadata['workerName'], $session_history);
 
         $stream_callback = function (
             string $key,
@@ -136,7 +136,7 @@ class procWorker extends Factory
                         $this->sendMsg($socket_id, 'stream', 'tool_calls', $message_metadata, $assistant_message['tool_calls']);
                     }
 
-                    $this->core->utils->addSessionHistory($message_metadata['sender'], $assistant_message);
+                    $this->core->utils->addSessionHistory($message_metadata['workerName'], $assistant_message);
 
                     $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
 
@@ -158,7 +158,7 @@ class procWorker extends Factory
                                     'history',
                                     'sync',
                                     $message_metadata,
-                                    $this->core->utils->getSessionHistory($message_metadata['sender'])
+                                    $this->core->utils->getSessionHistory($message_metadata['workerName'])
                                 );
                             }
 
@@ -179,7 +179,7 @@ class procWorker extends Factory
                                 'content'      => $result['content']
                             ];
 
-                            $this->core->utils->addSessionHistory($message_metadata['sender'], $tool_history);
+                            $this->core->utils->addSessionHistory($message_metadata['workerName'], $tool_history);
 
                             $this->sendMsg($socket_id, 'stream', 'tool_result', $message_metadata, $result);
                             $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $tool_history);

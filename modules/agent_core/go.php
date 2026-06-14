@@ -283,7 +283,7 @@ class go extends Factory
                                         $payload['data']['worker_role']
                                     );
 
-                                    $this->utils->addSessionHistory($payload['data']['worker_name'], $child_prompt);
+                                    $this->utils->setSessionHistory($payload['data']['worker_name'], [$child_prompt]);
                                     $this->utils->addSessionHistory(
                                         $payload['data']['worker_name'],
                                         ['role' => 'user', 'content' => '[用户要求] ' . $payload['data']['init_prompt'] . ' | 用一句话概述你的名字，角色，阅读用户要求，并回复“已就绪”']
@@ -404,7 +404,7 @@ class go extends Factory
                     break;
 
                 case 'end':
-                    $current_history = $this->utils->getSessionHistory($payload['sender']);
+                    $current_history = $this->utils->getSessionHistory($payload['workerName']);
 
                     switch ($payload_type) {
                         case 'tools':
@@ -494,7 +494,7 @@ class go extends Factory
      * @param string $socket_id
      *
      * @return string
-     * @throws \Exception
+     * @throws \Throwable
      */
     public function onHeartbeat(string $socket_id): string
     {
@@ -547,7 +547,7 @@ class go extends Factory
      *
      * @return void
      * @throws \ReflectionException
-     * @throws \Exception
+     * @throws \Throwable
      */
     public function onMessage(string $socket_id, string $message, bool $is_binary): void
     {
@@ -695,7 +695,7 @@ class go extends Factory
      * @param string $socket_id
      *
      * @return array
-     * @throws \Exception
+     * @throws \Throwable
      */
     public function onSendString(string $socket_id): array
     {

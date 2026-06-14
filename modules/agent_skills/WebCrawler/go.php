@@ -23,19 +23,19 @@
 
 namespace modules\agent_skills\WebCrawler;
 
-use modules\agent_core\core;
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libHttp;
 
 class go extends Factory
 {
-    public core    $core;
+    public utils   $utils;
     public libHttp $http;
 
     public function __construct()
     {
-        $this->core = core::new();
-        $this->http = libHttp::new();
+        $this->utils = utils::new();
+        $this->http  = libHttp::new();
     }
 
     /**
@@ -197,7 +197,7 @@ class go extends Factory
     public function downloadFile(string $url, string $save_to, int $timeout = 30): array
     {
         // Ensure target directory exists before fetching
-        $save_to  = $this->core->securePath($save_to);
+        $save_to  = $this->utils->securePath($save_to);
         $dir_path = dirname($save_to);
 
         if (!is_dir($dir_path)) {

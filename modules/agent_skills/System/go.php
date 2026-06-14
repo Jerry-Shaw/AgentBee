@@ -21,12 +21,14 @@
 namespace modules\agent_skills\System;
 
 use modules\agent_core\core;
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libFileIO;
 
 class go extends Factory
 {
     public core $core;
+    public utils     $utils;
 
     public libFileIO $libFileIO;
 
@@ -35,6 +37,7 @@ class go extends Factory
      */
     public function __construct()
     {
+        $this->utils     = utils::new();
         $this->core      = core::new();
         $this->libFileIO = libFileIO::new();
 
@@ -60,7 +63,7 @@ class go extends Factory
 
         $work_path = '' === $work_path
             ? $this->core->agent_config['workspace_path']
-            : $this->core->securePath($work_path);
+            : $this->core->utils->securePath($work_path);
 
         if (empty($argv) && str_contains($program, ' ')) {
             [$program, $args] = explode(' ', $program, 2);
@@ -80,7 +83,7 @@ class go extends Factory
         }
 
         $active  = time();
-        $procMgr = $this->core->procMgr;
+        $procMgr = $this->core->utils->procMgr;
 
         $proc_idx = $procMgr
             ->command([$program, ...$argv])
@@ -311,7 +314,7 @@ class go extends Factory
      */
     public function readImage(string $file_path): array
     {
-        $full_path = $this->core->securePath($file_path);
+        $full_path = $this->core->utils->securePath($file_path);
 
         if (!is_file($full_path)) {
             return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
@@ -366,7 +369,7 @@ class go extends Factory
      */
     public function readFile(string $file_path, int $offset = 0, int $limit = 8192): array
     {
-        $full_path = $this->core->securePath($file_path);
+        $full_path = $this->core->utils->securePath($file_path);
 
         if (!is_file($full_path)) {
             return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
@@ -408,7 +411,7 @@ class go extends Factory
      */
     public function writeFile(string $file_path, string $content, bool $append = false): array
     {
-        $full_path = $this->core->securePath($file_path);
+        $full_path = $this->core->utils->securePath($file_path);
 
         $dir_path = dirname($full_path);
         $dir_path = $this->mkPath($dir_path);
@@ -442,8 +445,8 @@ class go extends Factory
      */
     public function copyFile(string $src_file_path, string $dst_file_path): array
     {
-        $src_full = $this->core->securePath($src_file_path);
-        $dst_full = $this->core->securePath($dst_file_path);
+        $src_full = $this->core->utils->securePath($src_file_path);
+        $dst_full = $this->core->utils->securePath($dst_file_path);
 
         if (!is_file($src_full)) {
             return ['status' => 'error', 'error' => 'File not found: ' . $src_full];
@@ -474,7 +477,7 @@ class go extends Factory
      */
     public function deleteFile(string $file_path): array
     {
-        $full_path = $this->core->securePath($file_path);
+        $full_path = $this->core->utils->securePath($file_path);
 
         if (!is_file($full_path)) {
             return [
@@ -510,7 +513,7 @@ class go extends Factory
      */
     public function getFileSize(string $file_path): array
     {
-        $full_path = $this->core->securePath($file_path);
+        $full_path = $this->core->utils->securePath($file_path);
 
         if (!is_file($full_path)) {
             return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
@@ -539,7 +542,7 @@ class go extends Factory
      */
     public function searchFiles(string $dir_path, string $pattern, bool $recursive = false): array
     {
-        $full_path = $this->core->securePath($dir_path);
+        $full_path = $this->core->utils->securePath($dir_path);
 
         if (!is_dir($full_path)) {
             return ['status' => 'error', 'error' => 'Directory not found: ' . $full_path];
@@ -566,7 +569,7 @@ class go extends Factory
      */
     public function listDirectory(string $dir_path): array
     {
-        $full_path = $this->core->securePath($dir_path);
+        $full_path = $this->core->utils->securePath($dir_path);
 
         if (!is_dir($full_path)) {
             return ['status' => 'error', 'error' => 'Directory not found: ' . $full_path];
@@ -593,7 +596,7 @@ class go extends Factory
      */
     public function createDirectory(string $dir_path): array
     {
-        $full_path = $this->core->securePath($dir_path);
+        $full_path = $this->core->utils->securePath($dir_path);
         $created   = $this->mkPath($full_path);
 
         $result = [
@@ -616,8 +619,8 @@ class go extends Factory
      */
     public function copyDirectory(string $src_dir_path, string $dst_dir_path, bool $overwrite = false): array
     {
-        $src_full = $this->core->securePath($src_dir_path);
-        $dst_full = $this->core->securePath($dst_dir_path);
+        $src_full = $this->core->utils->securePath($src_dir_path);
+        $dst_full = $this->core->utils->securePath($dst_dir_path);
 
         if (!is_dir($src_full)) {
             return ['status' => 'error', 'error' => 'Source directory not found: ' . $src_full];
@@ -653,7 +656,7 @@ class go extends Factory
      */
     public function deleteDirectory(string $dir_path): array
     {
-        $full_path = $this->core->securePath($dir_path);
+        $full_path = $this->core->utils->securePath($dir_path);
 
         if (!is_dir($full_path)) {
             return ['status' => 'error', 'error' => 'Directory does not exist: ' . $full_path];

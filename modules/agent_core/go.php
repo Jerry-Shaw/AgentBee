@@ -104,15 +104,15 @@ class go extends Factory
      */
     public function runProcWorker(int $proc_idx, string $worker_name, callable $output_handler): int
     {
-        $worker_status = $this->core->procMgr->getStatus($proc_idx);
+        $worker_status = $this->core->utils->procMgr->getStatus($proc_idx);
 
         if (0 < $worker_status) {
             return $proc_idx;
         }
 
-        $this->core->procMgr->close($proc_idx);
+        $this->core->utils->procMgr->close($proc_idx);
 
-        $proc_idx = $this->core->procMgr->command(
+        $proc_idx = $this->core->utils->procMgr->command(
             [
                 $this->core->OSMgr->getPhpPath(),
                 $this->core->app->script_path,
@@ -120,13 +120,13 @@ class go extends Factory
             ]
         )->run($proc_idx);
 
-        $worker_pid = $this->core->procMgr->getPid($proc_idx);
+        $worker_pid = $this->core->utils->procMgr->getPid($proc_idx);
 
         $this->utils->debug($worker_name . ' started with pid: ' . $worker_pid, 'trace');
         $this->utils->debug('Register Output Handler', 'debug');
 
         $this->core->socketMgr->addExternalProc(
-            $this->core->procMgr->getProc($proc_idx),
+            $this->core->utils->procMgr->getProc($proc_idx),
             $output_handler
         );
 
@@ -345,7 +345,7 @@ class go extends Factory
                                         ['role' => 'user', 'content' => '用一句话概述你的名字，角色，并回复“已就绪”']
                                     );
 
-                                    $this->core->procMgr->writeProc(
+                                    $this->core->utils->procMgr->writeProc(
                                         $proc_idx,
                                         json_encode([
                                             'cmd'       => 'start',
@@ -365,7 +365,7 @@ class go extends Factory
                                 case 'talk':
                                     $worker_info = $this->child_workers[$payload['data']['worker_name']] ?? [];
 
-                                    if (empty($worker_info) || 0 === $this->core->procMgr->getStatus($worker_info['proc_idx'])) {
+                                    if (empty($worker_info) || 0 === $this->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
                                         // WorkerBee died, notice main worker
                                         $this->onsend_messages[] = '[WorkerBee] "' . $payload['data']['worker_name'] . '" 进程已终止，消息发送失败';
                                         break;
@@ -405,7 +405,7 @@ class go extends Factory
                                         ['role' => 'user', 'content' => $payload['data']['message']]
                                     );
 
-                                    $this->core->procMgr->writeProc(
+                                    $this->core->utils->procMgr->writeProc(
                                         $worker_info['proc_idx'],
                                         json_encode([
                                             'cmd'      => 'talk',
@@ -424,11 +424,11 @@ class go extends Factory
                                 case 'close':
                                     $worker_info = $this->child_workers[$payload['data']['worker_name']] ?? [];
 
-                                    if (!empty($worker_info) && 0 < $this->core->procMgr->getStatus($worker_info['proc_idx'])) {
+                                    if (!empty($worker_info) && 0 < $this->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
                                         $this->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
 
-                                        $this->core->procMgr->writeProc($worker_info['proc_idx'], json_encode(['cmd' => 'close'], JSON_FORMAT));
-                                        $this->core->procMgr->close($worker_info['proc_idx']);
+                                        $this->core->utils->procMgr->writeProc($worker_info['proc_idx'], json_encode(['cmd' => 'close'], JSON_FORMAT));
+                                        $this->core->utils->procMgr->close($worker_info['proc_idx']);
                                         unset($this->child_workers[$payload['data']['worker_name']]);
                                     } else {
                                         $this->utils->debug('WorkerBee not found: ' . $worker_info['worker_name'], 'trace');

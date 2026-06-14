@@ -30,7 +30,7 @@ class go extends Factory
 {
     const CMD_RELOAD = '__RELOAD__';
 
-    const WORKER_MAIN  = 'WorkerMain';
+    const WORKER_MAIN  = 'AgentBee';
     const WORKER_CHILD = 'WorkerBee';
 
     public core  $core;
@@ -85,8 +85,8 @@ class go extends Factory
     public function reload(): void
     {
         $this->init(true);
-        $this->setShmop($this->core->procMgr->getPid($this->core->openai_idx));
-        $this->core->procMgr->writeProc($this->core->openai_idx, self::CMD_RELOAD);
+        $this->setShmop($this->core->utils->procMgr->getPid($this->core->openai_idx));
+        $this->core->utils->procMgr->writeProc($this->core->openai_idx, self::CMD_RELOAD);
     }
 
     /**
@@ -132,7 +132,7 @@ class go extends Factory
         ];
 
         $this->libOpenAI->resumeStream();
-        $this->core->procMgr->writeProc($this->core->openai_idx, json_encode($message));
+        $this->core->utils->procMgr->writeProc($this->core->openai_idx, json_encode($message));
 
         unset($socket_id, $message_metadata, $session_history);
     }
@@ -157,7 +157,7 @@ class go extends Factory
      * @return void
      * @throws \ReflectionException
      */
-    public function WorkerMain(): void
+    public function AgentBee(): void
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
@@ -212,9 +212,18 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->core->agent_config['memory_limit'] ?? '4G');
 
-        $core_skills = ['System', 'OfficeSuite', 'WebCrawler'];
+        $agent_skills = $this->utils->fetchSkills(
+            'modules/agent_skills',
+            'System',
+            [
+                'getTime', 'readImage', 'readFile', 'writeFile',
+                'copyFile', 'deleteFile', 'getFileSize', 'searchFiles',
+                'listDirectory', 'createDirectory', 'copyDirectory', 'deleteDirectory',
+            ]
+        );
+        $this->core->addSkills($agent_skills);
 
-        foreach ($core_skills as $core_skill) {
+        foreach (['OfficeSuite', 'WebCrawler'] as $core_skill) {
             $agent_skills = $this->utils->fetchSkills('modules/agent_skills', $core_skill);
             $this->core->addSkills($agent_skills);
         }

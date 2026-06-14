@@ -23,15 +23,15 @@
 
 namespace modules\agent_skills\OfficeSuite;
 
+use modules\agent_core\lib\utils;
 use modules\agent_skills\OfficeSuite\lib\docxHandler;
 use modules\agent_skills\OfficeSuite\lib\pptxHandler;
 use modules\agent_skills\OfficeSuite\lib\xlsxHandler;
-use modules\agent_core\core;
 use Nervsys\Core\Factory;
 
 class go extends Factory
 {
-    public core   $core;
+    public utils  $utils;
     private array $docx_buffer    = [];
     private array $pptx_buffer    = [];
     private array $pptx_temp_dirs = [];
@@ -39,7 +39,7 @@ class go extends Factory
 
     public function __construct()
     {
-        $this->core = core::new();
+        $this->utils = utils::new();
     }
 
     public function __destruct()
@@ -63,7 +63,7 @@ class go extends Factory
      */
     public function readDocx(string $path): array
     {
-        $path = $this->core->securePath($path);
+        $path = $this->utils->securePath($path);
         if (!is_file($path)) {
             return ['error' => 'File not found: ' . $path];
         }
@@ -184,7 +184,7 @@ class go extends Factory
      */
     public function addDocxImage(string $path, int $width = 200, ?int $height = null, string $align = 'center'): array
     {
-        $path = $this->core->securePath($path);
+        $path = $this->utils->securePath($path);
         if (!file_exists($path)) {
             return ['error' => 'Image not found: ' . $path];
         }
@@ -209,7 +209,7 @@ class go extends Factory
      */
     public function appendDocx(string $path, array $items): array
     {
-        $path = $this->core->securePath($path);
+        $path = $this->utils->securePath($path);
         if (empty($items)) {
             return ['error' => 'No content to append.'];
         }
@@ -230,7 +230,7 @@ class go extends Factory
         if (empty($this->docx_buffer)) {
             return ['error' => 'No content to save. Call initDocx() first.'];
         }
-        $path    = $this->core->securePath($path);
+        $path    = $this->utils->securePath($path);
         $handler = docxHandler::new();
         if (null === $handler) {
             return ['error' => 'DOCX handler not found.'];
@@ -247,7 +247,7 @@ class go extends Factory
      */
     public function readXlsx(string $path): array
     {
-        $path = $this->core->securePath($path);
+        $path = $this->utils->securePath($path);
         if (!is_file($path)) {
             return ['error' => 'File not found: ' . $path];
         }
@@ -264,7 +264,7 @@ class go extends Factory
      */
     public function writeXlsx(string $path, array $data, ?string $sheet_name = null): array
     {
-        $path = $this->core->securePath($path);
+        $path = $this->utils->securePath($path);
         if (null !== $sheet_name) {
             $is_multi_sheet = false;
             if (!empty($data) && is_array($data[0]) && isset($data[0]['name']) && isset($data[0]['rows'])) {
@@ -285,7 +285,7 @@ class go extends Factory
      */
     public function appendXlsxRows(string $path, string $sheet_name, array $rows): array
     {
-        $path    = $this->core->securePath($path);
+        $path    = $this->utils->securePath($path);
         $handler = xlsxHandler::new();
         $result  = $handler->appendRows($path, $sheet_name, $rows);
         unset($path, $sheet_name, $rows, $handler);
@@ -299,7 +299,7 @@ class go extends Factory
      */
     public function readPptx(string $path): array
     {
-        $path = $this->core->securePath($path);
+        $path = $this->utils->securePath($path);
         if (false === is_file($path)) {
             return ['error' => 'File not found: ' . $path];
         }
@@ -349,7 +349,7 @@ class go extends Factory
             return ['error' => 'Slide must have at least title, paragraphs, or image'];
         }
         if (null !== $image_path) {
-            $image_path = $this->core->securePath($image_path);
+            $image_path = $this->utils->securePath($image_path);
             if (false === file_exists($image_path)) {
                 return ['error' => 'Image not found: ' . $image_path];
             }
@@ -379,7 +379,7 @@ class go extends Factory
      */
     public function appendPptx(string $path, array $slides): array
     {
-        $path = $this->core->securePath($path);
+        $path = $this->utils->securePath($path);
         if (empty($slides)) {
             return ['error' => 'No slides to append.'];
         }
@@ -400,7 +400,7 @@ class go extends Factory
         if (empty($this->pptx_buffer)) {
             return ['error' => 'No slides to save. Call initPptx() first.'];
         }
-        $path    = $this->core->securePath($path);
+        $path    = $this->utils->securePath($path);
         $handler = pptxHandler::new();
         if (null === $handler) {
             return ['error' => 'PPTX handler not found.'];

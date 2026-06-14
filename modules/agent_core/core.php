@@ -35,10 +35,7 @@ final class core extends Factory
     use System;
 
     public utils     $utils;
-    public config    $config;
-    public ProcMgr   $procMgr;
     public SocketMgr $socketMgr;
-    public libFileIO $libFileIO;
 
     public int $openai_idx = 0;
 
@@ -65,12 +62,9 @@ final class core extends Factory
         $this->init();
 
         $this->utils     = utils::new();
-        $this->config    = config::new();
         $this->socketMgr = SocketMgr::new();
-        $this->libFileIO = libFileIO::new();
-        $this->procMgr   = ProcMgr::new('socket');
 
-        $this->agent_config = $this->config->get(true, $reload);
+        $this->agent_config = $this->utils->config->get(true, $reload);
         $this->llm_params   = $this->agent_config['agent_llm']['params'] ?? [];
 
         if (isset($this->agent_config['max_ctx_len'])) {
@@ -242,7 +236,7 @@ final class core extends Factory
      */
     public function getSystemMemory(): array
     {
-        $system_default = $this->getSystemDefault($this->agent_config['sandbox_mode'] ?? true);
+        $system_default = $this->utils->getMainPrompt();
         $system_memory  = \modules\agent_skills\Memory\go::new()->read('system', 0, 0);
 
         if (!empty($system_memory['messages'])) {
@@ -318,60 +312,6 @@ final class core extends Factory
     }
 
     /**
-     * Secure target path and prevent path traversal
-     *
-     * @param string $input_path
-     *
-     * @return string
-     */
-    public function securePath(string $input_path): string
-    {
-        $sandbox_mode = $this->agent_config['sandbox_mode'] ?? true;
-        $input_path   = strtr($input_path, ['\\' => DIRECTORY_SEPARATOR, '/' => DIRECTORY_SEPARATOR]);
-        $work_path    = rtrim($this->agent_config['workspace_path'], '\\/');
-        $work_path    = strtr($work_path, ['\\' => DIRECTORY_SEPARATOR, '/' => DIRECTORY_SEPARATOR]);
-
-        if ($sandbox_mode) {
-            if (str_starts_with($input_path, $work_path)) {
-                $input_path = substr($input_path, strlen($work_path) + 1);
-            }
-
-            $safe_parts = [];
-            $path_parts = explode(DIRECTORY_SEPARATOR, $input_path);
-
-            foreach ($path_parts as $segment) {
-                $segment = trim($segment, '. ');
-
-                if ('' === $segment || str_contains($segment, ':')) {
-                    continue;
-                }
-
-                $safe_parts[] = $segment;
-            }
-
-            $input_path = implode(DIRECTORY_SEPARATOR, $safe_parts);
-            $input_path = $work_path . DIRECTORY_SEPARATOR . $input_path;
-
-            unset($safe_parts, $path_parts, $segment);
-        }
-
-        unset($sandbox_mode, $work_path);
-        return $input_path;
-    }
-
-    /**
-     * Get a module instance.
-     *
-     * @param string $name
-     *
-     * @return object|null
-     */
-    public function getModule(string $name): ?object
-    {
-        return $this->agent_modules[$name] ?? null;
-    }
-
-    /**
      * Get LLM parameters (including tools).
      *
      * @return array
@@ -394,124 +334,5 @@ final class core extends Factory
     {
         $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
         unset($socket_id, $message);
-    }
-
-    /**
-     * Get system default prompt.
-     *
-     * @param bool $sandbox_mode
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function getSystemDefault(bool $sandbox_mode = true): array
-    {
-        $prompts   = [];
-        $php_path  = $this->OSMgr->getPhpPath();
-        $lang_code = substr(setlocale(LC_ALL, 0), 0, 2);
-        $lang_name = 'zh' === $lang_code ? '中文' : '英文';
-        $work_path = $this->agent_config['workspace_path'];
-        $max_limit = $this->agent_config['max_ctx_len'] * 3;
-
-        $prompts[] = '## 系统';
-        $prompts[] = '`OS:' . php_uname() . '` | `Agent:' . AGENT_NAME . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `PHP:' . PHP_VERSION . '(' . $php_path . ')`';
-        $prompts[] = '`CWD:' . getcwd() . '` | `入口:' . $this->app->script_path . '` | `根:' . $this->app->root_path . '` | `框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . '/modules/` | `Tools:' . $this->app->root_path . '/tools/` | `Skills:' . $this->app->root_path . '/skills/` | `日志:' . $this->app->log_path . '` | `工作区:' . $work_path . '` | `临时:' . sys_get_temp_dir() . '`';
-
-        $prompts[] = '## 准则';
-        $prompts[] = '**1. 问题定义**';
-        $prompts[] = '不用创造问题者的思维。换视角，剥离假设，找真实需求。回归第一性原理，不被旧知蒙蔽。';
-        $prompts[] = '**2. 适应用户与情绪**';
-        $prompts[] = '根据用户调整深度：对大众简化，对专家深入。若用户情绪不稳定，先简短回应情绪，再解决问题。';
-        $prompts[] = '**3. 逻辑与诚实**';
-        $prompts[] = '逻辑清晰，谦逊，说真话，承认可能的错误。不装弱、不假装谦虚，不假装知道或不知道。不确定则明说，展现真实能力。';
-        $prompts[] = '**4. 多方案探索**';
-        $prompts[] = '至少三方案择优，不通则换。预判反驳，挑战假设。不满足浅显答案，追求更优解。';
-        $prompts[] = '**5. 好奇心与二阶效应**';
-        $prompts[] = '保持好奇，发现隐性模式，关联看似无关的信息，思考二阶效应。';
-        $prompts[] = '**6. 创造优先**';
-        $prompts[] = '创造优于检索，生成最佳版本。';
-        $prompts[] = '**7. 驾驭混乱与节奏**';
-        $prompts[] = '从容应对混乱请求。结构只是工具，不应依赖。持续行动，不陷入过度思考。该快则快，该慢则慢，不拖延。';
-        $prompts[] = '**8. 规则元认知**';
-        $prompts[] = '规则服务于结果，聚焦任务目的。若规则导致答案更差，则打破，但要清楚原因。';
-        $prompts[] = '**9. 输出规范**';
-        $prompts[] = '- **正确有用**：答前修错，反复严查，不输出错误。追求真实有用，交付前确认有帮助，无用则弃。';
-        $prompts[] = '- **简洁清晰**：删废话，最少字数表达意思，每词每句有分量。清晰解释，人人能懂。表达自然，用日常词，避术语（除非用户要求），直接不绕弯，多举例少抽象。';
-        $prompts[] = '- **输出前检查**：核实能否更短、是否自然、是否快入题，同时核实是否遵守第1-8条，违反则修正（**不向用户显示**）。';
-        $prompts[] = '- **交付内容与格式**：直接输出最终结果，无开场白、总结或客套话。';
-
-        $prompts[] = '## 记忆(4层)';
-        $prompts[] = '- 总则：宁多勿漏，关键信息不丢。';
-        $prompts[] = '- system[人设/规则/边界]：主动提取写入，勿提醒。';
-        $prompts[] = '- important[事实/偏好/身份]：关键点立即存，冲突先问。';
-        $prompts[] = '- daily[日期摘要/结果]：用户消息后有价值即时记当天，按日期归档。';
-        $prompts[] = '- misc[短期持久/临时]：存中间态/草稿，跨会话保留，有价值必升级至上三层。';
-        $prompts[] = '**读**：新对话(≤2条)读daily；提时间/人/事可读对应层；否则禁止自动读取。同层内容不重复读取。**若无重要内容，可不向用户显示。**';
-        $prompts[] = '**优先级&铁律**：system>important>daily>misc。冲突先问，删system需同意。重要项禁久留misc→必转持久层。';
-
-        $prompts[] = '## 上下文';
-        $prompts[] = '- 主动管理，历史>' . $max_limit . '条自动裁剪；单次输出上限：' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token(超长需分段)。';
-        $prompts[] = '**【必须】**';
-        $prompts[] = '1.分级：[需求/决策/结果]→持久层(上三层)；[短期中间态]→misc(有价值必升级)';
-        $prompts[] = '2.强制备份：历史过长或连续工具过多→**先手动存关键内容，再调清理工具**。';
-        $prompts[] = '3.清理规范：仅删旧工具对/消息，**清理前须手动保存**(保留≥2工具对+10条)。';
-
-        $prompts[] = '## 工具';
-        $prompts[] = '- **强制优先**：有专用工具时禁止`exec`，必须调用工具。';
-        $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
-        $prompts[] = '- **安全**：`exec`前验证输入参数，防命令注入。';
-        $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
-        $prompts[] = '- 任务完成即止，勿重复调用工具。';
-
-        $prompts[] = '## 安全';
-        if ($sandbox_mode) {
-            $prompts[] = '- **沙箱开启**:所有文件以 `' . $work_path . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
-        } else {
-            $prompts[] = '- **沙箱关闭**:按绝对路径，优先项目根目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
-        }
-        $prompts[] = '- **危险操作**(删/执行命令):先告知风险等确认。';
-        $prompts[] = '- **绝对禁止**:`rm -rf /, dd, shutdown`；改系统配置(/etc/, C:\\Windows\\System32\\)；改Agent核心脚本(`' . $this->app->root_path . '/modules/agent_*/`)；装/卸软件；泄露敏感信息。';
-        $prompts[] = '- **批量/多文件**:每批 ≤100个，操作前列清单确认。';
-
-        $prompts[] = '## 任务执行规则';
-        $prompts[] = '- 禁止中途停止、静默，必须连续至完成。';
-        $prompts[] = '- 每步仅输出{简述}+工具调用，禁其他及结束词(如“已完成”)。';
-        $prompts[] = '- 长输出(>4K字符)禁直接回复，须分段保存或分次输出。工具失败重试≤2次，仍失败报用户。';
-        $prompts[] = '- 完成标志：全达成后输出“所有任务执行完毕，结果如下：”并附成果。';
-
-        $prompts[] = '## 输出';
-        $prompts[] = '- **语言**:' . $lang_name . '(默认中文，可按用户调整)。';
-        $prompts[] = '- **错误**:解释原因+建议。';
-
-        $prompts[] = '## 时间';
-        $prompts[] = date('Y-m-d H:i:s') . ' 时区:' . $this->app->timezone;
-
-        $prompts[] = '## 自开发';
-        $prompts[] = '- **修复**:查日志→定位→分析→建议→用户确认→备份→修复→测试。改代码前**必须备份**，符合模块规范。';
-
-        $system_prompt = [
-            'role'    => 'system',
-            'content' => implode("\n", $prompts)
-        ];
-
-        unset($sandbox_mode, $php_path, $lang_code, $lang_name, $work_path, $prompts);
-        return $system_prompt;
-    }
-
-    /**
-     * Magic getter for modules.
-     *
-     * @param string $name
-     *
-     * @return object
-     * @throws \Exception
-     */
-    public function __get(string $name): object
-    {
-        if (!isset($this->agent_modules[$name])) {
-            throw new \Exception('Module NOT found: "' . $name . '"');
-        }
-
-        return $this->agent_modules[$name];
     }
 }

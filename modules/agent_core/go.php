@@ -411,18 +411,39 @@ class go extends Factory
                             $this->in_process = true;
                             $this->utils->debug($payload['sender'] . '|' . $payload['workerName'] . ': LLM Tool calls', 'trace');
 
-                            $this->openai->chat(
-                                $message['socket_id'],
-                                [
-                                    'sender'     => $payload['sender'],
-                                    'isSubTalk'  => $payload['isSubTalk'],
-                                    'workerName' => $payload['workerName'],
-                                    'workerRole' => $payload['workerRole'],
-                                    'sessionId'  => $payload['sessionId'],
-                                    'messageId'  => $payload['messageId']
-                                ],
-                                $current_history
-                            );
+                            if (WORKER_MAIN === $payload['sender']) {
+                                $this->openai->chat(
+                                    $message['socket_id'],
+                                    [
+                                        'sender'     => $payload['sender'],
+                                        'isSubTalk'  => $payload['isSubTalk'],
+                                        'workerName' => $payload['workerName'],
+                                        'workerRole' => $payload['workerRole'],
+                                        'sessionId'  => $payload['sessionId'],
+                                        'messageId'  => $payload['messageId']
+                                    ],
+                                    $current_history
+                                );
+                            } elseif (isset($this->child_workers[$payload['workerName']])) {
+                                $worker_info = $this->child_workers[$payload['workerName']];
+
+                                $this->child_workers[$worker_info['worker_name']]['status'] = 'tool_calls';
+
+                                $this->core->utils->procMgr->writeProc(
+                                    $worker_info['proc_idx'],
+                                    json_encode([
+                                        'cmd'      => 'talk',
+                                        'history'  => $this->utils->getSessionHistory($worker_info['worker_name']),
+                                        'msg_meta' => $this->utils->getMessageMarker(
+                                            WORKER_CHILD,
+                                            $worker_info['worker_name'],
+                                            $worker_info['worker_role'],
+                                            $worker_info['worker_name'],
+                                            1
+                                        ),
+                                    ], JSON_FORMAT)
+                                );
+                            }
                             break;
 
                         case 'end':

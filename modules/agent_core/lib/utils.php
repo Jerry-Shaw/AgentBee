@@ -146,12 +146,10 @@ class utils extends Factory
                 }
 
                 $skills[] = [
-                    'class' => $namespace . '\\' . strstr($json_data['entry'], '.', true),
                     'name'  => $json_data['name'],
-                    'meta'  => array_values($metadata)
+                    'meta'  => array_values($metadata),
+                    'class' => $namespace . '\\' . strstr($json_data['entry'], '.', true)
                 ];
-
-                $this->debug('Loading Skills: ' . $json_data['name'] . '...', 'trace');
             } catch (\Throwable $throwable) {
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);

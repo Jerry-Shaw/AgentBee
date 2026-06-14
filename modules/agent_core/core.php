@@ -544,6 +544,7 @@ final class core extends Factory
         $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
         $prompts[] = '- **安全**：`exec`前验证输入参数，防命令注入。';
         $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
+        $prompts[] = '- 任务完成即止，勿重复调用工具。';
 
         $prompts[] = '## 安全';
         if ($sandbox_mode) {

@@ -38,9 +38,6 @@ final class core extends Factory
     public array $llm_params  = [];
     public array $agent_tools = [];
 
-    public array $session_history       = [];
-    public int   $session_history_limit = 20;
-
     /**
      * Initialize core components.
      *
@@ -59,10 +56,6 @@ final class core extends Factory
         $this->utils->agent_config = $this->utils->config->get(true, $reload);
 
         $this->llm_params = $this->utils->agent_config['agent_llm']['params'] ?? [];
-
-        if (isset($this->utils->agent_config['max_ctx_len'])) {
-            $this->session_history_limit = $this->utils->agent_config['max_ctx_len'];
-        }
 
         if ('' === $this->utils->agent_config['workspace_path'] || !is_dir($this->utils->agent_config['workspace_path'])) {
             $this->utils->agent_config['workspace_path'] = $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';

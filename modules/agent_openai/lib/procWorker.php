@@ -56,7 +56,7 @@ class procWorker extends Factory
         $tool_calls_buffer = [];
 
         // Sync session history from main process
-        $this->core->session_history = $session_history;
+        $this->core->utils->setSessionHistory($message_metadata['sender'], $session_history);
 
         $stream_callback = function (
             string $key,
@@ -134,19 +134,13 @@ class procWorker extends Factory
                         $this->sendMsg($socket_id, 'stream', 'tool_calls', $message_metadata, $assistant_message['tool_calls']);
                     }
 
-                    $this->core->session_history[] = $assistant_message;
+                    $this->core->utils->addSessionHistory($message_metadata['sender'], $assistant_message);
+
                     $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
 
                     if (!empty($tool_calls_buffer)) {
-                        $session_history = $this->core->session_history;
-                        $tool_results    = $this->core->execTools($tool_calls_buffer);
-                        $current_history = $this->core->session_history;
-
-                        if (count($current_history) < count($session_history)) {
-                            $this->sendMsg($socket_id, 'history', 'sync', $message_metadata, $current_history);
-                        }
-
                         $image_loader = [];
+                        $tool_results = $this->core->execTools($tool_calls_buffer);
 
                         foreach ($tool_results as $result) {
                             if (str_starts_with($result['function_name'], 'WorkerBee/')) {
@@ -154,6 +148,16 @@ class procWorker extends Factory
 
                                 $result_data['data']['socket_id'] = $socket_id;
                                 $this->sendMsg($socket_id, 'context', 'WorkerBee', $message_metadata, $result_data['data']);
+                            }
+
+                            if ('System/cleanContext' === $result['function_name']) {
+                                $this->sendMsg(
+                                    $socket_id,
+                                    'history',
+                                    'sync',
+                                    $message_metadata,
+                                    $this->core->utils->getSessionHistory($message_metadata['sender'])
+                                );
                             }
 
                             if ('System/readImage' === $result['function_name']) {
@@ -173,7 +177,7 @@ class procWorker extends Factory
                                 'content'      => $result['content']
                             ];
 
-                            $this->core->session_history[] = $tool_history;
+                            $this->core->utils->addSessionHistory($message_metadata['sender'], $tool_history);
 
                             $this->sendMsg($socket_id, 'stream', 'tool_result', $message_metadata, $result);
                             $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $tool_history);
@@ -184,7 +188,7 @@ class procWorker extends Factory
                         }
                     }
 
-                    unset($assistant_message, $session_history, $tool_results, $current_history, $image_loader, $result, $result_data, $tool_history);
+                    unset($assistant_message, $tool_results, $image_loader, $result, $result_data, $tool_history);
                 }
             } catch (\Throwable $exception) {
                 $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $exception->getMessage());

@@ -248,15 +248,11 @@ class go extends Factory
                     if (isset($payload['data'])) {
                         switch ($payload_type) {
                             case 'add':
-                                if (WORKER_MAIN === $payload['sender']) {
-                                    $this->utils->addSessionHistory(WORKER_MAIN, $payload['data']);
-                                } elseif (1 === $payload['isSubTalk'] && WORKER_CHILD === $payload['sender']) {
-                                    $this->utils->addSessionHistory($payload['workerName'], $payload['data']);
-                                }
+                                $this->utils->addSessionHistory($payload['workerName'], $payload['data']);
                                 break;
 
                             case 'sync':
-                                $this->core->session_history = $payload['data'];
+                                $this->utils->setSessionHistory($payload['workerName'], $payload['data']);
                                 break;
                         }
                     }
@@ -287,12 +283,6 @@ class go extends Factory
 
                                     $this->utils->debug('WorkerBee started: ' . $payload['data']['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload['data']['worker_role'] . ')', 'trace');
 
-                                    if ($this->utils->agent_config['sandbox_mode']) {
-                                        $sand_box_prompt = '- **开启**:所有文件以 `' . $this->utils->agent_config['workspace_path'] . '` 为根，路径映射相对，**禁止 ../ 或符号链接跳出**。';
-                                    } else {
-                                        $sand_box_prompt = '- **关闭**:按绝对路径，优先项目根目录，**禁止 ../ 绕开系统关键目录**(如 `C:\Windows\System32`)。';
-                                    }
-
                                     $this->child_workers[$payload['data']['worker_name']] = [
                                         'proc_idx'    => $proc_idx,
                                         'socket_id'   => $payload['data']['socket_id'],
@@ -304,38 +294,13 @@ class go extends Factory
                                         'history'     => []
                                     ];
 
-                                    $prompts  = [];
-                                    $php_path = $this->core->OSMgr->getPhpPath();
-
-                                    $prompts[] = '## 系统';
-                                    $prompts[] = '`OS:' . php_uname() . '` | `PHP:' . PHP_VERSION . ' (' . $php_path . ')` | `CWD:' . getcwd() . '`';
-                                    $prompts[] = '`入口:' . $this->core->app->script_path . '` | `根:' . $this->core->app->root_path . '` | `工作区:' . $this->utils->agent_config['workspace_path'] . '`';
-                                    $prompts[] = '`框架:' . NS_ROOT . '` | `模块:' . $this->core->app->root_path . '/modules/` | `Tools:' . $this->core->app->root_path . '/tools/` | `Skills:' . $this->core->app->root_path . '/skills/` | `日志:' . $this->core->app->log_path . '`';
-                                    $prompts[] = '## 工具';
-                                    $prompts[] = '- **强制优先**：有专用工具时禁止`exec`，必须调用工具。';
-                                    $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则输出错误信息。';
-                                    $prompts[] = '- **安全**：`exec`前验证输入参数，防命令注入。';
-                                    $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
-                                    $prompts[] = '- 任务完成即止，勿重复调用工具。';
-                                    $prompts[] = '## 当前时间';
-                                    $prompts[] = date('Y-m-d H:i:s');
-                                    $prompts[] = '';
-                                    $prompts[] = '## Worker 元数据';
-                                    $prompts[] = '- 名称: ' . $payload['data']['worker_name'];
-                                    $prompts[] = '- 角色: ' . $payload['data']['worker_role'];
-                                    $prompts[] = '- 沙箱: ' . $sand_box_prompt;
-                                    $prompts[] = '';
-                                    $prompts[] = '## 用户指令';
-                                    $prompts[] = $payload['data']['system_prompt'];
-
-                                    $this->addWorkerHistory(
+                                    $child_prompt = $this->utils->getChildPrompt(
                                         $payload['data']['worker_name'],
-                                        [
-                                            'role'    => 'system',
-                                            'content' => implode("\n", $prompts)
-                                        ]
+                                        $payload['data']['worker_role'],
+                                        $payload['data']['system_prompt']
                                     );
 
+                                    $this->addWorkerHistory($payload['data']['worker_name'], $child_prompt);
                                     $this->addWorkerHistory(
                                         $payload['data']['worker_name'],
                                         ['role' => 'user', 'content' => '用一句话概述你的名字，角色，并回复“已就绪”']
@@ -378,9 +343,9 @@ class go extends Factory
                                     $worker_message = json_encode(
                                         $this->utils->getMessageMarker(
                                             WORKER_MAIN,
+                                            WORKER_MAIN,
+                                            'Assistant',
                                             $worker_info['worker_name'],
-                                            $worker_info['worker_role'],
-                                            AGENT_NAME,
                                             1
                                         ) + [
                                             'type' => 'content',
@@ -578,7 +543,7 @@ class go extends Factory
             $socket_id,
             $this->utils->getMessageMarker(
                 WORKER_MAIN,
-                AGENT_NAME,
+                WORKER_MAIN,
                 'Assistant',
                 AGENT_NAME,
                 0
@@ -615,7 +580,7 @@ class go extends Factory
 
         $this->socket_session[$socket_id] = $this->utils->getMessageMarker(
             WORKER_MAIN,
-            AGENT_NAME,
+            WORKER_MAIN,
             'Assistant',
             AGENT_NAME,
             0
@@ -695,7 +660,7 @@ class go extends Factory
 
         $message_metadata = $this->utils->getMessageMarker(
             WORKER_MAIN,
-            AGENT_NAME,
+            WORKER_MAIN,
             'Assistant',
             AGENT_NAME,
             0
@@ -774,7 +739,7 @@ class go extends Factory
             $current_count = $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
 
             if ($current_count > $this->utils->agent_config['max_ctx_len'] * 3) {
-                $cleaned = $this->utils->pruneSessionHistory(WORKER_MAIN);
+                $cleaned = $this->utils->cleanSessionHistory(WORKER_MAIN);
                 $this->utils->debug('System: History truncated (' . $current_count . '->' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
             }
 
@@ -786,7 +751,7 @@ class go extends Factory
                 $socket_id,
                 $this->utils->getMessageMarker(
                     WORKER_MAIN,
-                    AGENT_NAME,
+                    WORKER_MAIN,
                     'Assistant',
                     AGENT_NAME,
                     0

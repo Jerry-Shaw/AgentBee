@@ -1,6 +1,6 @@
 {
   "name": "Memory",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "SQLite-based four-layer memory management: system, important, daily, misc (with TTL), plus task scheduling and full-text search (FTS5).",
   "author": "agent self-developed",
   "email": "",

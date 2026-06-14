@@ -1,6 +1,6 @@
 {
   "name": "WebCrawler",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Web page crawler tool based on libHttp - extract HTML, text, content, links, assets, JSON, and download files.",
   "author": "agent self-developed",
   "email": "",

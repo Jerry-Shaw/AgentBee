@@ -21,9 +21,9 @@
  * limitations under the License.
  */
 
-namespace tools\WebCrawler;
+namespace modules\agent_skills\WebCrawler;
 
-class tools
+class skills
 {
     public const META = [
         [

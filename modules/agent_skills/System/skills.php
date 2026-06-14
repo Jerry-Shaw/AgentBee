@@ -18,9 +18,9 @@
  * limitations under the License.
  */
 
-namespace tools\System;
+namespace modules\agent_skills\System;
 
-class tools
+class skills
 {
     public const META = [
         [

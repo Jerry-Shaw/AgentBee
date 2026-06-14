@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace tools\System;
+namespace modules\agent_skills\System;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;

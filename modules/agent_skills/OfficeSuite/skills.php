@@ -21,9 +21,9 @@
  * limitations under the License.
  */
 
-namespace tools\OfficeSuite;
+namespace modules\agent_skills\OfficeSuite;
 
-class tools
+class skills
 {
     public const META = [
         // DOCX 读取

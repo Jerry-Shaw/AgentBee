@@ -18,9 +18,9 @@
  * limitations under the License.
  */
 
-namespace tools\WorkerBee;
+namespace modules\agent_skills\WorkerBee;
 
-class tools
+class skills
 {
     public const META = [
         [

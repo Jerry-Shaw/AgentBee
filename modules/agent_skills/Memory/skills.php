@@ -21,9 +21,9 @@
  * limitations under the License.
  */
 
-namespace tools\Memory;
+namespace modules\agent_skills\Memory;
 
-class tools
+class skills
 {
     public const META = [
         [

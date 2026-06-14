@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace tools\OfficeSuite\lib;
+namespace modules\agent_skills\OfficeSuite\lib;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;

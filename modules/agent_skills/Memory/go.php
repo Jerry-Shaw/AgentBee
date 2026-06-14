@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace tools\Memory;
+namespace modules\agent_skills\Memory;
 
 use modules\agent_core\core;
 use Nervsys\Core\Factory;

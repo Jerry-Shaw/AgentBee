@@ -289,20 +289,19 @@ class go extends Factory
                                         ['role' => 'user', 'content' => '[用户要求] ' . $payload['data']['init_prompt'] . ' | 用一句话概述你的名字，角色，阅读用户要求，并回复“已就绪”']
                                     );
 
-                                    $this->core->utils->procMgr->writeProc(
+                                    $metadata = $this->utils->getMessageMarker(
+                                        WORKER_CHILD,
+                                        $payload['data']['worker_name'],
+                                        $payload['data']['worker_role'],
+                                        $payload['data']['worker_name'],
+                                        1
+                                    );
+
+                                    $this->openai->talk(
                                         $proc_idx,
-                                        json_encode([
-                                            'cmd'       => 'start',
-                                            'socket_id' => $payload['data']['socket_id'],
-                                            'history'   => $this->utils->getSessionHistory($payload['data']['worker_name']),
-                                            'msg_meta'  => $this->utils->getMessageMarker(
-                                                WORKER_CHILD,
-                                                $payload['data']['worker_name'],
-                                                $payload['data']['worker_role'],
-                                                $payload['data']['worker_name'],
-                                                1
-                                            ),
-                                        ], JSON_FORMAT)
+                                        'start',
+                                        $this->utils->getSessionHistory($payload['data']['worker_name']),
+                                        $metadata + ['socket_id' => $payload['data']['socket_id']]
                                     );
                                     break;
 
@@ -315,7 +314,7 @@ class go extends Factory
                                         break;
                                     }
 
-                                    if ('processing' === $this->child_workers[$worker_info['worker_name']]['status']) {
+                                    if ('ready' !== $this->child_workers[$worker_info['worker_name']]['status']) {
                                         $this->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is busy', 'trace');
                                         $this->onsend_messages[] = '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
                                         break;
@@ -349,19 +348,19 @@ class go extends Factory
                                         ['role' => 'user', 'content' => $payload['data']['message']]
                                     );
 
-                                    $this->core->utils->procMgr->writeProc(
+                                    $metadata = $this->utils->getMessageMarker(
+                                        WORKER_CHILD,
+                                        $worker_info['worker_name'],
+                                        $worker_info['worker_role'],
+                                        $worker_info['worker_name'],
+                                        1
+                                    );
+
+                                    $this->openai->talk(
                                         $worker_info['proc_idx'],
-                                        json_encode([
-                                            'cmd'      => 'talk',
-                                            'history'  => $this->utils->getSessionHistory($worker_info['worker_name']),
-                                            'msg_meta' => $this->utils->getMessageMarker(
-                                                WORKER_CHILD,
-                                                $worker_info['worker_name'],
-                                                $worker_info['worker_role'],
-                                                $worker_info['worker_name'],
-                                                1
-                                            ),
-                                        ], JSON_FORMAT)
+                                        'talk',
+                                        $this->utils->getSessionHistory($worker_info['worker_name']),
+                                        $metadata + ['socket_id' => $payload['data']['socket_id']]
                                     );
                                     break;
 
@@ -371,7 +370,21 @@ class go extends Factory
                                     if (!empty($worker_info) && 0 < $this->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
                                         $this->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
 
-                                        $this->core->utils->procMgr->writeProc($worker_info['proc_idx'], json_encode(['cmd' => 'close'], JSON_FORMAT));
+                                        $metadata = $this->utils->getMessageMarker(
+                                            WORKER_CHILD,
+                                            $worker_info['worker_name'],
+                                            $worker_info['worker_role'],
+                                            $worker_info['worker_name'],
+                                            1
+                                        );
+
+                                        $this->openai->talk(
+                                            $worker_info['proc_idx'],
+                                            'close',
+                                            $this->utils->getSessionHistory($worker_info['worker_name']),
+                                            $metadata + ['socket_id' => $payload['data']['socket_id']]
+                                        );
+
                                         $this->core->utils->procMgr->close($worker_info['proc_idx']);
                                         unset($this->child_workers[$payload['data']['worker_name']]);
                                     } else {
@@ -413,38 +426,32 @@ class go extends Factory
                             if (WORKER_MAIN === $payload['sender']) {
                                 $this->in_process = true;
 
-                                $this->openai->chat(
-                                    $message['socket_id'],
-                                    [
-                                        'sender'     => $payload['sender'],
-                                        'isSubTalk'  => $payload['isSubTalk'],
-                                        'workerName' => $payload['workerName'],
-                                        'workerRole' => $payload['workerRole'],
-                                        'sessionId'  => $payload['sessionId'],
-                                        'messageId'  => $payload['messageId']
-                                    ],
-                                    $current_history
-                                );
-                            } elseif (isset($this->child_workers[$payload['workerName']])) {
+                                $worker_idx = $this->utils->getMainIDX();
+                            } else {
+                                if (!isset($this->child_workers[$payload['workerName']])) {
+                                    break;
+                                }
+
                                 $worker_info = $this->child_workers[$payload['workerName']];
+                                $worker_idx  = $worker_info['proc_idx'];
 
                                 $this->child_workers[$worker_info['worker_name']]['status'] = 'tool_calls';
-
-                                $this->core->utils->procMgr->writeProc(
-                                    $worker_info['proc_idx'],
-                                    json_encode([
-                                        'cmd'      => 'talk',
-                                        'history'  => $this->utils->getSessionHistory($worker_info['worker_name']),
-                                        'msg_meta' => $this->utils->getMessageMarker(
-                                            WORKER_CHILD,
-                                            $worker_info['worker_name'],
-                                            $worker_info['worker_role'],
-                                            $worker_info['worker_name'],
-                                            1
-                                        ),
-                                    ], JSON_FORMAT)
-                                );
                             }
+
+                            $this->openai->talk(
+                                $worker_idx,
+                                'talk',
+                                $current_history,
+                                [
+                                    'sender'     => $payload['sender'],
+                                    'socket_id'  => $payload['socket_id'],
+                                    'isSubTalk'  => $payload['isSubTalk'],
+                                    'workerName' => $payload['workerName'],
+                                    'workerRole' => $payload['workerRole'],
+                                    'sessionId'  => $payload['sessionId'],
+                                    'messageId'  => $payload['messageId']
+                                ]
+                            );
                             break;
 
                         case 'end':
@@ -461,7 +468,7 @@ class go extends Factory
                                     $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
                                 }
 
-                                $this->child_workers[$payload['workerName']]['status']     = 'idle';
+                                $this->child_workers[$payload['workerName']]['status']     = 'ready';
                                 $this->child_workers[$payload['workerName']]['last_talk']  = date('Y-m-d H:i:s');
                                 $this->child_workers[$payload['workerName']]['talk_count'] = $payload['talk_count'];
 
@@ -541,25 +548,26 @@ class go extends Factory
 
         $task_content = '[定时任务] JSON:' . PHP_EOL . $task_json . PHP_EOL . '按序:①按任务要求执行(提醒/工具/问答) ②仅重要结果存daily(重要可+important),琐碎不存 ③完成后简述概要/结果/存储层级,语气自然。';
 
-        $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $task_content]);
-
-        $current_history = $this->utils->getSessionHistory(WORKER_MAIN);
-
         $this->in_process = true;
 
-        $this->openai->chat(
-            $socket_id,
-            $this->utils->getMessageMarker(
-                WORKER_MAIN,
-                WORKER_MAIN,
-                'Assistant',
-                AGENT_NAME,
-                0
-            ),
-            $current_history
+        $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $task_content]);
+
+        $metadata = $this->utils->getMessageMarker(
+            WORKER_MAIN,
+            WORKER_MAIN,
+            'Assistant',
+            AGENT_NAME,
+            0
         );
 
-        unset($socket_id, $task_list, $task_jobs, $task_json, $task_content, $current_history);
+        $this->openai->talk(
+            $this->utils->getMainIDX(),
+            'talk',
+            $this->utils->getSessionHistory(WORKER_MAIN),
+            $metadata + ['socket_id' => $socket_id]
+        );
+
+        unset($socket_id, $task_list, $task_jobs, $task_json, $task_content, $metadata);
         return '';
     }
 
@@ -683,7 +691,13 @@ class go extends Factory
             $this->utils->debug('UserMessage: Send message to LLM', 'debug');
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
-            $this->openai->chat($socket_id, $message_metadata, $this->utils->getSessionHistory(WORKER_MAIN));
+
+            $this->openai->talk(
+                $this->utils->getMainIDX(),
+                'talk',
+                $this->utils->getSessionHistory(WORKER_MAIN),
+                $message_metadata + ['socket_id' => $socket_id]
+            );
         }
 
         unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet);
@@ -755,19 +769,22 @@ class go extends Factory
 
             $this->utils->debug('System: Send message to LLM', 'debug');
 
-            $this->openai->chat(
-                $socket_id,
-                $this->utils->getMessageMarker(
-                    WORKER_MAIN,
-                    WORKER_MAIN,
-                    'Assistant',
-                    AGENT_NAME,
-                    0
-                ),
-                $this->utils->getSessionHistory(WORKER_MAIN)
+            $metadata = $this->utils->getMessageMarker(
+                WORKER_MAIN,
+                WORKER_MAIN,
+                'Assistant',
+                AGENT_NAME,
+                0
             );
 
-            unset($llm_data, $message, $current_count);
+            $this->openai->talk(
+                $this->utils->getMainIDX(),
+                'talk',
+                $this->utils->getSessionHistory(WORKER_MAIN),
+                $metadata + ['socket_id' => $socket_id]
+            );
+
+            unset($llm_data, $message, $current_count, $metadata);
         }
 
         unset($socket_id);

@@ -42,23 +42,24 @@ class procWorker extends Factory
     /**
      * Execute a single LLM request (called by worker).
      *
-     * @param string    $socket_id
-     * @param array     $message_metadata
-     * @param array     $session_history
+     * @param array     $metadata
+     * @param array     $history
      * @param libOpenAI $libOpenAI
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function talk(string $socket_id, array $message_metadata, array $session_history, libOpenAI $libOpenAI): void
+    public function talk(array $metadata, array $history, libOpenAI $libOpenAI): void
     {
         $assistant_content = '';
         $reasons_content   = '';
         $finish_reason     = '';
         $tool_calls_buffer = [];
 
+        $socket_id = $metadata['socket_id'];
+
         // Sync session history from main process
-        $this->core->utils->setSessionHistory($message_metadata['workerName'], $session_history);
+        $this->core->utils->setSessionHistory($metadata['workerName'], $history);
 
         $stream_callback = function (
             string $key,
@@ -67,7 +68,7 @@ class procWorker extends Factory
         ) use (
             $libOpenAI,
             $socket_id,
-            $message_metadata,
+            $metadata,
             &$tool_calls_buffer,
             &$assistant_content,
             &$reasons_content,
@@ -79,7 +80,7 @@ class procWorker extends Factory
                     $this->sendStream(
                         $socket_id,
                         $data,
-                        $message_metadata,
+                        $metadata,
                         $tool_calls_buffer,
                         $assistant_content,
                         $reasons_content,
@@ -94,7 +95,7 @@ class procWorker extends Factory
                             'reasoning_content' => ''
                         ];
 
-                        $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
+                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
 
                         $tool_calls_buffer = [];
                         return;
@@ -108,8 +109,8 @@ class procWorker extends Factory
                             'reasoning_content' => ''
                         ];
 
-                        $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
-                        $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, '[系统提示] 内容过长被截断。试试拆分问题，或设置更大的输出长度。');
+                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
+                        $this->sendMsg($socket_id, 'stream', 'error', $metadata, '[系统提示] 内容过长被截断。试试拆分问题，或设置更大的输出长度。');
 
                         $tool_calls_buffer = [];
                         return;
@@ -133,12 +134,12 @@ class procWorker extends Factory
                             ], $tool_calls_buffer
                         );
 
-                        $this->sendMsg($socket_id, 'stream', 'tool_calls', $message_metadata, $assistant_message['tool_calls']);
+                        $this->sendMsg($socket_id, 'stream', 'tool_calls', $metadata, $assistant_message['tool_calls']);
                     }
 
-                    $this->core->utils->addSessionHistory($message_metadata['workerName'], $assistant_message);
+                    $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
 
-                    $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $assistant_message);
+                    $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
 
                     if (!empty($tool_calls_buffer)) {
                         $image_loader = [];
@@ -149,7 +150,7 @@ class procWorker extends Factory
                                 $result_data = json_decode($result['content'], true);
 
                                 $result_data['socket_id'] = $socket_id;
-                                $this->sendMsg($socket_id, 'context', 'WorkerBee', $message_metadata, $result_data);
+                                $this->sendMsg($socket_id, 'context', 'WorkerBee', $metadata, $result_data);
                             }
 
                             if ('System/cleanContext' === $result['function_name']) {
@@ -157,8 +158,8 @@ class procWorker extends Factory
                                     $socket_id,
                                     'history',
                                     'sync',
-                                    $message_metadata,
-                                    $this->core->utils->getSessionHistory($message_metadata['workerName'])
+                                    $metadata,
+                                    $this->core->utils->getSessionHistory($metadata['workerName'])
                                 );
                             }
 
@@ -179,21 +180,21 @@ class procWorker extends Factory
                                 'content'      => $result['content']
                             ];
 
-                            $this->core->utils->addSessionHistory($message_metadata['workerName'], $tool_history);
+                            $this->core->utils->addSessionHistory($metadata['workerName'], $tool_history);
 
-                            $this->sendMsg($socket_id, 'stream', 'tool_result', $message_metadata, $result);
-                            $this->sendMsg($socket_id, 'history', 'add', $message_metadata, $tool_history);
+                            $this->sendMsg($socket_id, 'stream', 'tool_result', $metadata, $result);
+                            $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_history);
                         }
 
                         if (!empty($image_loader)) {
-                            $this->sendMsg($socket_id, 'context', 'readImage', $message_metadata, $image_loader);
+                            $this->sendMsg($socket_id, 'context', 'readImage', $metadata, $image_loader);
                         }
                     }
 
                     unset($assistant_message, $tool_results, $image_loader, $result, $result_data, $tool_history);
                 }
             } catch (\Throwable $throwable) {
-                $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $throwable->getMessage());
+                $this->sendMsg($socket_id, 'stream', 'error', $metadata, $throwable->getMessage());
                 Error::new()->exceptionHandler($throwable, false, false);
                 unset($throwable);
             }
@@ -202,22 +203,22 @@ class procWorker extends Factory
         };
 
         try {
-            $libOpenAI->completions($session_history, $this->core->utils->agent_config['agent_llm']['model'], [], $stream_callback);
+            $libOpenAI->completions($history, $this->core->utils->agent_config['agent_llm']['model'], [], $stream_callback);
         } catch (\Throwable $throwable) {
-            $this->sendMsg($socket_id, 'stream', 'error', $message_metadata, $throwable->getMessage());
+            $this->sendMsg($socket_id, 'stream', 'error', $metadata, $throwable->getMessage());
             Error::new()->exceptionHandler($throwable, false, false);
             unset($throwable);
         }
 
-        $this->sendMsg($socket_id, 'stream', 'end', $message_metadata);
+        $this->sendMsg($socket_id, 'stream', 'end', $metadata);
 
         if (empty($tool_calls_buffer)) {
-            $this->sendMsg($socket_id, 'end', 'end', $message_metadata, $assistant_content);
+            $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
         } else {
-            $this->sendMsg($socket_id, 'end', 'tools', $message_metadata, $tool_calls_buffer);
+            $this->sendMsg($socket_id, 'end', 'tools', $metadata, $tool_calls_buffer);
         }
 
-        unset($socket_id, $message_metadata, $session_history, $libOpenAI);
+        unset($socket_id, $metadata, $history, $libOpenAI);
     }
 
     /**

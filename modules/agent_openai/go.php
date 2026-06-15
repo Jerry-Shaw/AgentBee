@@ -81,8 +81,8 @@ class go extends Factory
     public function reload(): void
     {
         $this->init(true);
-        $this->setShmop($this->core->utils->procMgr->getPid($this->utils->main_idx));
-        $this->core->utils->procMgr->writeProc($this->utils->main_idx, self::CMD_RELOAD);
+        $this->setShmop($this->utils->procMgr->getPid($this->utils->main_idx));
+        $this->utils->procMgr->writeProc($this->utils->main_idx, self::CMD_RELOAD);
     }
 
     /**
@@ -109,28 +109,27 @@ class go extends Factory
     }
 
     /**
-     * Start a chat session.
-     *
-     * @param string $socket_id
-     * @param array  $message_metadata
-     * @param array  $session_history
+     * @param int    $proc_idx
+     * @param string $cmd
+     * @param array  $history
+     * @param array  $metadata
      *
      * @return void
-     * @throws \ReflectionException
-     * @throws \Throwable
+     * @throws \Exception
      */
-    public function chat(string $socket_id, array $message_metadata, array $session_history): void
+    public function talk(int $proc_idx, string $cmd, array $history, array $metadata): void
     {
-        $message = [
-            'socket_id' => $socket_id,
-            'msg_meta'  => $message_metadata,
-            'history'   => $session_history,
-        ];
-
         $this->libOpenAI->resumeStream();
-        $this->core->utils->procMgr->writeProc($this->utils->main_idx, json_encode($message));
+        $this->utils->procMgr->writeProc(
+            $proc_idx,
+            json_encode([
+                'cmd'      => $cmd,
+                'history'  => $history,
+                'metadata' => $metadata
+            ], JSON_FORMAT)
+        );
 
-        unset($socket_id, $message_metadata, $session_history);
+        unset($proc_idx, $cmd, $history, $metadata);
     }
 
     /**
@@ -188,8 +187,7 @@ class go extends Factory
             }
 
             $this->procWorker->talk(
-                $job_data['socket_id'],
-                $job_data['msg_meta'],
+                $job_data['metadata'],
                 $job_data['history'],
                 $this->libOpenAI
             );
@@ -255,16 +253,15 @@ class go extends Factory
 
             switch ($data['cmd']) {
                 case 'start':
-                    $socket_id = $data['socket_id'];
+                    $socket_id = $data['metadata']['socket_id'];
 
                 case 'talk':
-                    $worker_history = $data['history'];
-                    $message_meta   = $data['msg_meta'] + ['talk_count' => count($worker_history), 'socket_id' => $socket_id];
+                    $history  = $data['history'];
+                    $metadata = $data['metadata'] + ['talk_count' => count($history), 'socket_id' => $socket_id];
 
                     $this->procWorker->talk(
-                        $socket_id,
-                        $message_meta,
-                        $worker_history,
+                        $metadata,
+                        $history,
                         $this->libOpenAI
                     );
                     break;

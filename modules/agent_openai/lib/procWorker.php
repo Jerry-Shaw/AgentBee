@@ -146,14 +146,14 @@ class procWorker extends Factory
                         $tool_results = $this->core->execTools($tool_calls_buffer);
 
                         foreach ($tool_results as $result) {
-                            if (str_starts_with($result['function_name'], 'WorkerBee/')) {
+                            if (str_starts_with($result['function_name'], 'WorkerBee-')) {
                                 $result_data = json_decode($result['content'], true);
 
                                 $result_data['socket_id'] = $socket_id;
                                 $this->sendMsg($socket_id, 'context', 'WorkerBee', $metadata, $result_data);
                             }
 
-                            if ('System/cleanContext' === $result['function_name']) {
+                            if ('System-cleanContext' === $result['function_name']) {
                                 $this->sendMsg(
                                     $socket_id,
                                     'history',
@@ -163,7 +163,7 @@ class procWorker extends Factory
                                 );
                             }
 
-                            if ('System/readImage' === $result['function_name']) {
+                            if ('System-readImage' === $result['function_name']) {
                                 $result_data = json_decode($result['content'], true);
 
                                 if (is_array($result_data) && 'success' === $result_data['status']) {

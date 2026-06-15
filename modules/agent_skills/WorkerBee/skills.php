@@ -43,7 +43,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker发送消息。异步，仅当目标状态为ready时有效，结果稍后推送。必须逐句发送并等待回复，禁止连续多条。若长时间无回复，可考虑重启进程。',
+                'description' => '向Worker异步发送消息（仅ready状态有效）。回复会自动推送。禁止轮询等待，禁止连续多发，否则会阻塞通信。无响应可重启。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -58,7 +58,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '终止Worker进程并释放资源。建议任务完成或上下文过长时主动保存记忆后调用。若需继续，请重启同名Worker并发送摘要恢复上下文。',
+                'description' => '终止Worker进程。建议任务完成或上下文过长时，保存记忆后调用。若需继续，可重启同名Worker并发送摘要恢复上下文。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -72,7 +72,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '列出所有Worker及其状态（ready/processing/calling_tools等）。异步，结果稍后推送。'
+                'description' => '列出所有Worker及其状态（ready/processing/calling_tools等）。异步，结果稍后推送。仅用于偶尔查看，禁止高频调用，以免阻塞通信。'
             ],
         ]
     ];

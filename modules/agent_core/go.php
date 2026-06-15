@@ -436,7 +436,7 @@ class go extends Factory
                                 $worker_info = $this->child_workers[$payload['workerName']];
                                 $worker_idx  = $worker_info['proc_idx'];
 
-                                $this->child_workers[$worker_info['worker_name']]['status'] = 'tool_calls';
+                                $this->child_workers[$worker_info['worker_name']]['status'] = 'calling_tools';
                             }
 
                             $this->openai->talk(
@@ -477,7 +477,7 @@ class go extends Factory
                                     $this->utils->debug($payload['sender'] . ': History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                 }
                             } else {
-                                $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ' replied', 'trace');
+                                $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' end reply', 'trace');
 
                                 if ('' !== $payload['data']) {
                                     $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];

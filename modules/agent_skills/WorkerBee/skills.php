@@ -27,7 +27,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程。异步，必须收到回复就绪后，再用talk发任务。',
+                'description' => '创建Worker子进程。异步，必须收到回复就绪后（状态为ready），才能调用talk发任务。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -43,7 +43,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker发送消息。异步，结果稍后推送。必须逐句发送并等待回复，禁止连续多条。若长时间无回复，可考虑重启进程。',
+                'description' => '向Worker发送消息。异步，仅当目标状态为ready时有效，结果稍后推送。必须逐句发送并等待回复，禁止连续多条。若长时间无回复，可考虑重启进程。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -72,7 +72,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '列出所有Worker及其状态。异步，结果稍后推送。'
+                'description' => '列出所有Worker及其状态（ready/processing/calling_tools等）。异步，结果稍后推送。'
             ],
         ]
     ];

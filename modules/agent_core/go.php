@@ -184,8 +184,6 @@ class go extends Factory
         $stdout_stream = $context['stdout'];
         $data_chunk    = fread($stdout_stream, 8192);
 
-        $this->utils->debug('streamWorkerHandler: Data chunk received', 'debug');
-
         if (false === $data_chunk || '' === $data_chunk) {
             unset($this->stream_buffers[$external_stream_id]);
             return;
@@ -212,7 +210,7 @@ class go extends Factory
             $payload      = $message['payload'];
             $payload_type = $payload['type'];
 
-            $this->utils->debug($payload['sender'] . '|' . $payload['workerName'] . ': ' . $message['type'] . '->' . $payload_type, 'debug');
+            $this->utils->debug($payload['workerName'] . ': ' . $message['type'] . '->' . $payload_type, 'debug');
 
             switch ($message['type']) {
                 case 'stream':
@@ -244,6 +242,9 @@ class go extends Factory
                     break;
 
                 case 'context':
+                    // Reset main worker status
+                    $this->in_process = false;
+
                     switch ($payload_type) {
                         case 'readImage':
                             $this->coming_messages = array_merge($this->coming_messages, $payload['data']);
@@ -421,7 +422,7 @@ class go extends Factory
 
                     switch ($payload_type) {
                         case 'tools':
-                            $this->utils->debug($payload['sender'] . '|' . $payload['workerName'] . ': LLM Tool calls', 'trace');
+                            $this->utils->debug($payload['workerName'] . ': LLM Tool calls', 'trace');
 
                             if (WORKER_MAIN === $payload['sender']) {
                                 $this->in_process = true;
@@ -455,6 +456,8 @@ class go extends Factory
                             break;
 
                         case 'end':
+                            $this->utils->debug($payload['workerName'] . ': LLM Stream end', 'trace');
+
                             $max_ctx_len   = $this->utils->agent_config['max_ctx_len'];
                             $warning_count = $max_ctx_len * 2;
                             $limit_count   = $max_ctx_len * 3;
@@ -471,7 +474,7 @@ class go extends Factory
                                     $this->clean_warning     = true;
                                     $this->onsend_messages[] = '[系统提醒] 历史 ' . $current_count . '/' . $max_ctx_len . '，超过 ' . $limit_count . ' 条将强制清理，建议主动清理：①总结关键信息(需求/回复/工具结果)→存记忆；②清理过期上下文及旧工具对；③简单告知用户；④**清理后立即继续原任务，不得中断。**';
 
-                                    $this->utils->debug('streamWorkerHandler: History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
+                                    $this->utils->debug($payload['sender'] . ': History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                 }
                             } else {
                                 $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ' replied', 'trace');
@@ -491,8 +494,6 @@ class go extends Factory
                             }
                             break;
                     }
-
-                    $this->utils->debug('streamWorkerHandler: LLM Stream end', 'trace');
                     break;
             }
         }

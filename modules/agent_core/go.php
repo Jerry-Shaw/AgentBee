@@ -408,10 +408,11 @@ class go extends Factory
 
                     switch ($payload_type) {
                         case 'tools':
-                            $this->in_process = true;
                             $this->utils->debug($payload['sender'] . '|' . $payload['workerName'] . ': LLM Tool calls', 'trace');
 
                             if (WORKER_MAIN === $payload['sender']) {
+                                $this->in_process = true;
+
                                 $this->openai->chat(
                                     $message['socket_id'],
                                     [
@@ -455,7 +456,10 @@ class go extends Factory
 
                             if (WORKER_CHILD === $payload['sender']) {
                                 $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ' replied', 'trace');
-                                $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
+
+                                if ('' !== $payload['data']) {
+                                    $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
+                                }
 
                                 $this->child_workers[$payload['workerName']]['status']     = 'idle';
                                 $this->child_workers[$payload['workerName']]['last_talk']  = date('Y-m-d H:i:s');

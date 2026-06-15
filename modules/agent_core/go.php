@@ -478,7 +478,7 @@ class go extends Factory
                                 break;
                             } elseif (!$this->clean_warning) {
                                 $this->clean_warning     = true;
-                                $this->onsend_messages[] = '[历史 ' . $current_count . '/' . $max_ctx_len . '] 自动：①总结关键信息(需求/回复/工具结果)→存记忆(daily/important/system,临时ram)；②调用清理工具删旧工具对；③告知用户(概要/层级/剩余数)。| 超 ' . $limit_count . ' 条强制清理，及时保存。';
+                                $this->onsend_messages[] = '[系统提醒] 历史 ' . $current_count . '/' . $max_ctx_len . '，超过 ' . $limit_count . ' 条将强制清理，建议主动清理：①总结关键信息(需求/回复/工具结果)→存记忆；②清理过期上下文及旧工具对；③简单告知用户；④**清理后立即继续原任务，不得中断。**';
 
                                 $this->utils->debug('streamWorkerHandler: History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                             }

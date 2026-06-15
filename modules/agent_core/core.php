@@ -110,7 +110,7 @@ final class core extends Factory
             $fn_name = $tool_call['function']['name'];
             $fn_args = json_decode($tool_call['function']['arguments'], true) ?? [];
 
-            if (!str_contains($fn_name, '/')) {
+            if (!str_contains($fn_name, '-')) {
                 $results[] = [
                     'tool_call_id'  => $tool_call['id'],
                     'function_name' => $fn_name,
@@ -119,7 +119,7 @@ final class core extends Factory
                 continue;
             }
 
-            [$module_name, $method_name] = explode('/', $fn_name);
+            [$module_name, $method_name] = explode('-', $fn_name);
 
             try {
                 $params         = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();

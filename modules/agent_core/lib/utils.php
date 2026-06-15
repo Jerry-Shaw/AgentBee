@@ -456,7 +456,7 @@ class utils extends Factory
                 }
 
                 foreach ($metadata as $index => $item) {
-                    $metadata[$index]['function']['name'] = $json_data['name'] . '/' . $item['function']['name'];
+                    $metadata[$index]['function']['name'] = $json_data['name'] . '-' . $item['function']['name'];
                 }
 
                 $skills[] = [

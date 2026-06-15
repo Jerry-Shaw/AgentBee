@@ -212,7 +212,7 @@ class go extends Factory
             $payload      = $message['payload'];
             $payload_type = $payload['type'];
 
-            $this->utils->debug('streamWorkerHandler: ' . $message['type'] . '->' . $payload_type, 'debug');
+            $this->utils->debug($payload['sender'] . '|' . $payload['workerName'] . ': ' . $message['type'] . '->' . $payload_type, 'debug');
 
             switch ($message['type']) {
                 case 'stream':
@@ -455,13 +455,25 @@ class go extends Factory
                             break;
 
                         case 'end':
-                            $this->in_process = false;
-
                             $max_ctx_len   = $this->utils->agent_config['max_ctx_len'];
                             $warning_count = $max_ctx_len * 2;
                             $limit_count   = $max_ctx_len * 3;
 
-                            if (WORKER_CHILD === $payload['sender']) {
+                            if (WORKER_MAIN === $payload['sender']) {
+                                $this->in_process = false;
+
+                                $current_count = count($current_history);
+
+                                if ($current_count < $warning_count) {
+                                    $this->clean_warning = false;
+                                    break;
+                                } elseif (!$this->clean_warning) {
+                                    $this->clean_warning     = true;
+                                    $this->onsend_messages[] = '[系统提醒] 历史 ' . $current_count . '/' . $max_ctx_len . '，超过 ' . $limit_count . ' 条将强制清理，建议主动清理：①总结关键信息(需求/回复/工具结果)→存记忆；②清理过期上下文及旧工具对；③简单告知用户；④**清理后立即继续原任务，不得中断。**';
+
+                                    $this->utils->debug('streamWorkerHandler: History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
+                                }
+                            } else {
                                 $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' | ' . $payload['workerRole'] . ' replied', 'trace');
 
                                 if ('' !== $payload['data']) {
@@ -476,18 +488,6 @@ class go extends Factory
                                     $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                     $this->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker，必要时可重启继续任务。';
                                 }
-                            }
-
-                            $current_count = count($current_history);
-
-                            if ($current_count < $warning_count) {
-                                $this->clean_warning = false;
-                                break;
-                            } elseif (!$this->clean_warning) {
-                                $this->clean_warning     = true;
-                                $this->onsend_messages[] = '[系统提醒] 历史 ' . $current_count . '/' . $max_ctx_len . '，超过 ' . $limit_count . ' 条将强制清理，建议主动清理：①总结关键信息(需求/回复/工具结果)→存记忆；②清理过期上下文及旧工具对；③简单告知用户；④**清理后立即继续原任务，不得中断。**';
-
-                                $this->utils->debug('streamWorkerHandler: History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                             }
                             break;
                     }
@@ -530,6 +530,10 @@ class go extends Factory
      */
     public function onHeartbeat(string $socket_id): string
     {
+        if ($this->in_process) {
+            return '';
+        }
+
         $task_list = $this->memory->runTask();
 
         if (empty($task_list)) {
@@ -548,9 +552,25 @@ class go extends Factory
 
         $task_content = '[定时任务] JSON:' . PHP_EOL . $task_json . PHP_EOL . '按序:①按任务要求执行(提醒/工具/问答) ②仅重要结果存daily(重要可+important),琐碎不存 ③完成后简述概要/结果/存储层级,语气自然。';
 
+        $llm_data = [];
+
         $this->in_process = true;
 
-        $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $task_content]);
+        if (!empty($this->onsend_messages)) {
+            while (!is_null($coming_message = array_shift($this->onsend_messages))) {
+                $llm_data[] = [
+                    'type' => 'text',
+                    'text' => $coming_message
+                ];
+            }
+        }
+
+        $llm_data[] = [
+            'type' => 'text',
+            'text' => $task_content
+        ];
+
+        $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
 
         $metadata = $this->utils->getMessageMarker(
             WORKER_MAIN,
@@ -751,10 +771,10 @@ class go extends Factory
         if (!empty($this->onsend_messages)) {
             $llm_data = [];
 
-            while (!is_null($message = array_shift($this->onsend_messages))) {
+            while (!is_null($coming_message = array_shift($this->onsend_messages))) {
                 $llm_data[] = [
                     'type' => 'text',
-                    'text' => $message
+                    'text' => $coming_message
                 ];
             }
 
@@ -784,7 +804,7 @@ class go extends Factory
                 $metadata + ['socket_id' => $socket_id]
             );
 
-            unset($llm_data, $message, $current_count, $metadata);
+            unset($llm_data, $coming_message, $current_count, $metadata);
         }
 
         unset($socket_id);

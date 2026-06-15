@@ -342,7 +342,7 @@ class go extends Factory
                                         $this->message_buffers[] = $worker_message;
                                     }
 
-                                    $this->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working', 'trace');
+                                    $this->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' started task', 'trace');
 
                                     $this->utils->addSessionHistory(
                                         $worker_info['worker_name'],

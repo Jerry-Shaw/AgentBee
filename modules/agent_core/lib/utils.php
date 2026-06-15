@@ -127,6 +127,16 @@ class utils extends Factory
     }
 
     /**
+     * @param string $worker_name
+     *
+     * @return void
+     */
+    public function deleteSessionHistory(string $worker_name): void
+    {
+        unset($this->session_history[$worker_name]);
+    }
+
+    /**
      * Prune session history for a worker.
      *
      * @param string $worker_name
@@ -489,7 +499,7 @@ class utils extends Factory
 
         $prompts[] = '## 系统';
         $prompts[] = '`OS:' . php_uname() . '` | `Agent:' . AGENT_NAME . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `PHP:' . PHP_VERSION . '(' . $php_path . ')`';
-        $prompts[] = '`CWD:' . getcwd() . '` | `入口:' . $this->app->script_path . '` | `根目录:' . $this->app->root_path . '` | `框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . '/modules/` | `技能:' . $this->app->root_path . '/skills/` | `日志:' . $this->app->log_path . '` | `工作区:' . $work_path . '`';
+        $prompts[] = '`CWD:' . getcwd() . '` | `入口:' . $this->app->script_path . '` | `根目录:' . $this->app->root_path . '` | `框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能:' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '` | `日志:' . $this->app->log_path . '` | `工作区:' . $work_path . '`';
 
         $prompts[] = '## 准则';
         $prompts[] = '**1. 问题定义**';
@@ -558,7 +568,7 @@ class utils extends Factory
         $prompts[] = '- **错误**:解释原因+建议。';
 
         $prompts[] = '## 时间';
-        $prompts[] = date('Y-m-d H:i:s') . ' 时区:' . $this->app->timezone;
+        $prompts[] = date('Y-m-d H:i:s') . ' | 时区:' . $this->app->timezone;
 
         $prompts[] = '## Worker 元数据';
         $prompts[] = '- 名称: ' . WORKER_MAIN;
@@ -587,7 +597,7 @@ class utils extends Factory
         $prompts[] = '## 系统';
         $prompts[] = '`OS:' . php_uname() . '` | `PHP:' . PHP_VERSION . ' (' . $this->OSMgr->getPhpPath() . ')` | `CWD:' . getcwd() . '`';
         $prompts[] = '`入口:' . $this->app->script_path . '` | `根目录:' . $this->app->root_path . '` | `工作区:' . $this->agent_config['workspace_path'] . '`';
-        $prompts[] = '`框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . '/modules/` | `技能:' . $this->app->root_path . '/skills/` | `日志:' . $this->app->log_path . '`';
+        $prompts[] = '`框架:' . NS_ROOT . '` | `模块:' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能:' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '` | `日志:' . $this->app->log_path . '`';
 
         $prompts[] = '## 工具';
         $prompts[] = '- **强制优先**：有专用工具时优先调用工具。';
@@ -605,7 +615,7 @@ class utils extends Factory
         $prompts[] = '- **批量/多文件**:每批 ≤100个，操作前列清单确认。';
 
         $prompts[] = '## 时间';
-        $prompts[] = date('Y-m-d H:i:s') . ' 时区:' . $this->app->timezone;
+        $prompts[] = date('Y-m-d H:i:s') . ' | 时区:' . $this->app->timezone;
         $prompts[] = '';
 
         $prompts[] = '## Worker 元数据';

@@ -387,6 +387,8 @@ class go extends Factory
                                         );
 
                                         $this->core->utils->procMgr->close($worker_info['proc_idx']);
+                                        $this->core->utils->deleteSessionHistory($worker_info['worker_name']);
+
                                         unset($this->child_workers[$payload['data']['worker_name']]);
                                     } else {
                                         $this->utils->debug('WorkerBee not found: ' . $worker_info['worker_name'], 'trace');
@@ -477,7 +479,7 @@ class go extends Factory
                                     $this->utils->debug($payload['sender'] . ': History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                 }
                             } else {
-                                $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' end reply', 'trace');
+                                $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' finished reply', 'trace');
 
                                 if ('' !== $payload['data']) {
                                     $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];

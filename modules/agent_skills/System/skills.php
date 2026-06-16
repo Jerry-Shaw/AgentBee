@@ -26,8 +26,23 @@ class skills
         [
             'type'     => 'function',
             'function' => [
+                'name'        => 'cleanContext',
+                'description' => '清理历史上下文(保留最近普通消息+工具对)。调用前必须先用记忆工具保存重要内容，否则会丢失。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'keep_normal'     => ['type' => 'integer', 'default' => 6, 'description' => '保留普通消息数(user/无工具assistant)'],
+                        'keep_tool_pairs' => ['type' => 'integer', 'default' => 2, 'description' => '保留工具对数(assistant带工具+响应)'],
+                        'force_prune'     => ['type' => 'boolean', 'default' => false, 'description' => '允许全清(0)'],
+                    ],
+                ],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
                 'name'        => 'exec',
-                'description' => '执行系统命令。program为可执行文件(如powershell,git,php)，禁止cmd内置命令。argv数组(默认[])。timeout秒(默认30)，work_path可选。返回{"output":"","error":""}',
+                'description' => '执行系统命令，仅当无专用工具时才可调用。program为可执行文件(如powershell,git,php)，禁止cmd内置命令。argv数组(默认[])。timeout秒(默认30)，work_path可选。返回{"output":"","error":""}',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -45,21 +60,6 @@ class skills
             'function' => [
                 'name'        => 'getTime',
                 'description' => '获取当前系统时间。返回{"datetime":"YYYY-MM-DD HH:MM:SS","timestamp":秒数}'
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'cleanContext',
-                'description' => '清理历史上下文(保留最近普通消息+工具对)。调用前必须先用记忆工具保存重要内容，否则会丢失。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'keep_normal'     => ['type' => 'integer', 'default' => 6, 'description' => '保留普通消息数(user/无工具assistant)'],
-                        'keep_tool_pairs' => ['type' => 'integer', 'default' => 2, 'description' => '保留工具对数(assistant带工具+响应)'],
-                        'force_prune'     => ['type' => 'boolean', 'default' => false, 'description' => '允许全清(0)'],
-                    ],
-                ],
             ],
         ],
         [

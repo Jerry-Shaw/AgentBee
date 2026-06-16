@@ -428,22 +428,34 @@ class utils extends Factory
      * @param string $worker_role
      * @param string $window_name
      * @param int    $is_sub_talk
+     * @param string $message_id
      *
      * @return array
      */
-    public function getMessageMarker(string $sender, string $worker_name, string $worker_role, string $window_name, int $is_sub_talk): array
+    public function getMessageMarker(
+        string $sender,
+        string $worker_name,
+        string $worker_role,
+        string $window_name,
+        int    $is_sub_talk,
+        string $message_id = ''
+    ): array
     {
+        if ('' === $message_id) {
+            $message_id = hash('md5', uniqid(microtime(), true));
+        }
+
         $marker = [
             'sender'     => $sender,
             'isSubTalk'  => $is_sub_talk,
             'workerName' => $worker_name,
             'workerRole' => $worker_role,
             'sessionId'  => $this->session_id,
-            'messageId'  => hash('md5', uniqid(microtime(), true)),
+            'messageId'  => $message_id,
             'WindowName' => $window_name
         ];
 
-        unset($sender, $worker_name, $worker_role, $window_name, $is_sub_talk);
+        unset($sender, $worker_name, $worker_role, $window_name, $message_id, $is_sub_talk);
         return $marker;
     }
 

@@ -91,26 +91,11 @@ class procWorker extends Factory
                     if (isset($data['status']) && 'aborted' === $data['status']) {
                         $assistant_message = [
                             'role'              => 'assistant',
-                            'content'           => '[用户中断]',
+                            'content'           => '[系统提醒] 用户中断，忽略未完成内容。',
                             'reasoning_content' => ''
                         ];
 
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
-
-                        $tool_calls_buffer = [];
-                        return;
-                    }
-
-                    // Max token reached, content truncated
-                    if ('length' === $finish_reason) {
-                        $assistant_message = [
-                            'role'              => 'assistant',
-                            'content'           => '[截断] 忽略未完成内容',
-                            'reasoning_content' => ''
-                        ];
-
-                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
-                        $this->sendMsg($socket_id, 'stream', 'error', $metadata, '[系统提示] 内容过长被截断。试试拆分问题，或设置更大的输出长度。');
 
                         $tool_calls_buffer = [];
                         return;
@@ -121,6 +106,23 @@ class procWorker extends Factory
                         'content'           => $assistant_content,
                         'reasoning_content' => $reasons_content
                     ];
+
+                    if ('length' === $finish_reason) {
+                        // Max token reached, content truncated, auto-continue
+                        $user_message = [
+                            'role'    => 'user',
+                            'content' => '' !== $assistant_content
+                                ? '[续写] 紧接末尾，直接续写，不重复。'
+                                : '[续写] 直接输出最终内容。'
+                        ];
+
+                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
+                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $user_message);
+                        $this->sendMsg($socket_id, 'stream', 'length', $metadata, '[系统提示] 内容过长被截断。');
+
+                        $tool_calls_buffer = [];
+                        return;
+                    }
 
                     if (!empty($tool_calls_buffer)) {
                         $assistant_message['tool_calls'] = array_map(

@@ -184,18 +184,25 @@ class utils extends Factory
                             continue;
                         }
 
+                        $prev = $i - 1;
+
+                        if (isset($history[$prev]['role']) && 'user' === $history[$prev]['role']) {
+                            unset($history[$prev]);
+                        }
+
                         unset($tool_calls[$key]);
+
+                        if (empty($tool_calls)) {
+                            unset($history[$i]);
+                        } else {
+                            $history[$i]['tool_calls'] = array_values($tool_calls);
+                        }
+
                         ++$removed;
+                        break;
                     }
 
-                    if (empty($tool_calls)) {
-                        unset($history[$i]);
-                        continue;
-                    }
-
-                    $history[$i]['tool_calls'] = array_values($tool_calls);
-
-                    unset($tool_calls, $key, $values);
+                    unset($tool_calls, $key, $values, $prev);
                 }
             }
 

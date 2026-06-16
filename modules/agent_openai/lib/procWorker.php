@@ -142,8 +142,9 @@ class procWorker extends Factory
                     $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
 
                     if (!empty($tool_calls_buffer)) {
-                        $image_loader = [];
-                        $tool_results = $this->core->execTools($tool_calls_buffer);
+                        $image_loader  = [];
+                        $clean_context = [];
+                        $tool_results  = $this->core->execTools($tool_calls_buffer);
 
                         foreach ($tool_results as $result) {
                             if (str_starts_with($result['function_name'], 'WorkerBee-')) {
@@ -176,16 +177,20 @@ class procWorker extends Factory
                             $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_history);
 
                             if ('System-cleanContext' === $result['function_name']) {
-                                $result_data = json_decode($result['content'], true);
+                                $clean_context = json_decode($result['content'], true);
 
-                                $result_data['socket_id']   = $socket_id;
-                                $result_data['worker_name'] = $metadata['workerName'];
-                                $this->sendMsg($socket_id, 'context', 'cleanContext', $metadata, $result_data);
+                                $clean_context['socket_id']    = $socket_id;
+                                $clean_context['worker_name']  = $metadata['workerName'];
+                                $clean_context['tool_call_id'] = $result['tool_call_id'];
                             }
                         }
 
                         if (!empty($image_loader)) {
                             $this->sendMsg($socket_id, 'context', 'readImage', $metadata, $image_loader);
+                        }
+
+                        if (!empty($clean_context)) {
+                            $this->sendMsg($socket_id, 'context', 'cleanContext', $metadata, $clean_context);
                         }
                     }
 

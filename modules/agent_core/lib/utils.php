@@ -140,13 +140,14 @@ class utils extends Factory
      * Prune session history for a worker.
      *
      * @param string $worker_name
-     * @param int    $keep_normal     Min normal units (user + assistant w/o tool_calls)
-     * @param int    $keep_tool_pairs Min tool pairs (assistant with tool_calls + its tools)
-     * @param bool   $aggressive_mode Allow zero limits
+     * @param int    $keep_normal         Min normal units (user + assistant w/o tool_calls)
+     * @param int    $keep_tool_pairs     Min tool pairs (assistant with tool_calls + its tools)
+     * @param bool   $aggressive_mode     Allow zero limits
+     * @param string $remove_tool_call_id Specify clean context tool_call_id, will be removed
      *
      * @return array{removed_normal:int, removed_tools:int, current_count:int}
      */
-    public function cleanSessionHistory(string $worker_name, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $aggressive_mode = false): array
+    public function cleanSessionHistory(string $worker_name, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $aggressive_mode = false, string $remove_tool_call_id = ''): array
     {
         $history = $this->session_history[$worker_name];
 
@@ -159,7 +160,49 @@ class utils extends Factory
             $keep_normal     = max(0, $keep_normal);
         }
 
-        // 2. extract system message (first one)
+        // 2. Remove specified tool call pairs
+        if ('' !== $remove_tool_call_id) {
+            $removed  = 0;
+            $last_key = count($history) - 1;
+
+            for ($i = $last_key; $i >= 0; $i--) {
+                if (2 <= $removed) {
+                    break;
+                }
+
+                if (isset($history[$i]['tool_call_id']) && $remove_tool_call_id === $history[$i]['tool_call_id']) {
+                    unset($history[$i]);
+                    ++$removed;
+                    continue;
+                }
+
+                if (isset($history[$i]['tool_calls'])) {
+                    $tool_calls = $history[$i]['tool_calls'];
+
+                    foreach ($tool_calls as $key => $values) {
+                        if ($remove_tool_call_id !== $values['id']) {
+                            continue;
+                        }
+
+                        unset($tool_calls[$key]);
+                        ++$removed;
+                    }
+
+                    if (empty($tool_calls)) {
+                        unset($history[$i]);
+                        continue;
+                    }
+
+                    $history[$i]['tool_calls'] = array_values($tool_calls);
+
+                    unset($tool_calls, $key, $values);
+                }
+            }
+
+            unset($removed, $last_key);
+        }
+
+        // 3. extract system message (first one)
         $system = null;
         foreach ($history as $idx => $msg) {
             if ('system' === $msg['role']) {
@@ -172,7 +215,7 @@ class utils extends Factory
         $history = array_values($history);
         $total   = count($history);
 
-        // 3. split into units (normal / tool) and count original totals
+        // 4. split into units (normal / tool) and count original totals
         $units              = [];
         $total_normal_units = 0;
         $total_tool_units   = 0;
@@ -199,7 +242,7 @@ class utils extends Factory
             }
         }
 
-        // 4. handle keep_normal == 0 : only system may survive
+        // 5. handle keep_normal == 0 : only system may survive
         if (0 === $keep_normal || empty($history)) {
             $this->session_history[$worker_name] = !is_null($system) ? [$system] : [];
 
@@ -210,7 +253,7 @@ class utils extends Factory
             ];
         }
 
-        // 5. select units from end to front
+        // 6. select units from end to front
         $selected_normal = [];
         $selected_tools  = [];
 
@@ -236,7 +279,7 @@ class utils extends Factory
             }
         }
 
-        // 6. ensure first normal unit is 'user'
+        // 7. ensure first normal unit is 'user'
         if (!empty($selected_normal) && 'user' !== $selected_normal[0]['role']) {
             $first_idx = $selected_normal[0]['indices'][0];
             for ($i = $first_idx - 1; $i >= 0; $i--) {
@@ -248,7 +291,7 @@ class utils extends Factory
             }
         }
 
-        // 7. ensure each tool pair has a preceding user (add missing users)
+        // 8. ensure each tool pair has a preceding user (add missing users)
         $extra_user_indices = [];
         foreach ($selected_tools as $tool_unit) {
             $tool_start = $tool_unit['indices'][0];
@@ -271,7 +314,7 @@ class utils extends Factory
             }
         }
 
-        // 8. merge and sort units by original order
+        // 9. merge and sort units by original order
         $all_units = array_merge($selected_normal, $selected_tools);
 
         usort(
@@ -282,7 +325,7 @@ class utils extends Factory
             }
         );
 
-        // 9. count kept units and build new history
+        // 10. count kept units and build new history
         $kept_normal_units = 0;
         $kept_tool_units   = 0;
         $keep              = [];
@@ -306,19 +349,18 @@ class utils extends Factory
             }
         }
 
-        // 10. prepend system if exists
+        // 11. prepend system if exists
         if (null !== $system) {
             array_unshift($new_history, $system);
         }
 
         $this->session_history[$worker_name] = $new_history;
 
-        // 11. compute removed counts (non‑negative)
+        // 12. compute removed counts (non‑negative)
         $removed_normal = max(0, $total_normal_units - $kept_normal_units);
         $removed_tools  = max(0, $total_tool_units - $kept_tool_units);
 
-        // 12. clean temporary variables (ordered by definition, exclude $new_history)
-        unset($worker_name, $keep_normal, $keep_tool_pairs, $aggressive_mode, $history, $system, $total, $units, $i, $msg, $indices, $j, $selected_normal, $selected_tools, $need_normal, $need_tools, $unit_count, $idx, $unit, $first_idx, $user_unit, $extra_user_indices, $normal_idx_set, $uidx, $tool_unit, $tool_start, $all_units, $keep, $total_normal_units, $total_tool_units, $kept_normal_units, $kept_tool_units);
+        unset($worker_name, $keep_normal, $keep_tool_pairs, $aggressive_mode, $remove_tool_call_id, $history, $system, $total, $units, $i, $msg, $indices, $j, $selected_normal, $selected_tools, $need_normal, $need_tools, $unit_count, $idx, $unit, $first_idx, $user_unit, $extra_user_indices, $normal_idx_set, $uidx, $tool_unit, $tool_start, $all_units, $keep, $total_normal_units, $total_tool_units, $kept_normal_units, $kept_tool_units);
 
         return [
             'removed_normal' => $removed_normal,

@@ -422,7 +422,13 @@ class go extends Factory
                                 $payload['data']['worker_name'],
                                 $payload['data']['keep_normal'],
                                 $payload['data']['keep_tool_pairs'],
-                                $payload['data']['aggressive_mode']
+                                $payload['data']['aggressive_mode'],
+                                $payload['data']['tool_call_id']
+                            );
+
+                            $this->utils->addSessionHistory(
+                                $payload['data']['worker_name'],
+                                ['role' => 'user', 'content' => '[系统提醒] 上下文已清理，继续原有任务。']
                             );
                             break;
                     }
@@ -483,7 +489,7 @@ class go extends Factory
                                     break;
                                 } elseif (!$this->clean_warning) {
                                     $this->clean_warning     = true;
-                                    $this->onsend_messages[] = '[系统提醒] 历史 ' . $current_count . '/' . $max_ctx_len . '，超过 ' . $limit_count . ' 条将强制清理，建议主动清理：①总结关键信息(需求/回复/工具结果)→存记忆；②清理过期上下文及旧工具对；③简单告知用户；④**清理后立即继续原任务，不得中断。**';
+                                    $this->onsend_messages[] = '[系统提醒] 上下文 ' . $current_count . '/' . $max_ctx_len . '，超过 ' . $limit_count . ' 条将强制清理，建议主动清理：①保存关键信息到记忆；②清理过期上下文；③简单告知用户；④继续原任务。';
 
                                     $this->utils->debug($payload['sender'] . ': History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                 }
@@ -562,7 +568,7 @@ class go extends Factory
 
         $task_json = json_encode($task_jobs, JSON_FORMAT);
 
-        $task_content = '[定时任务] JSON:' . PHP_EOL . $task_json . PHP_EOL . '按序:①按任务要求执行(提醒/工具/问答) ②仅重要结果存daily(重要可+important),琐碎不存 ③完成后简述概要/结果/存储层级,语气自然。';
+        $task_content = '[定时任务] 任务：' . "\n" . $task_json . "\n" . '步骤：①执行（提醒/工具/问答）；②重要存 daily，特别重要存 important，琐事不存；③完成后简要汇报结果、层级，语气自然。';
 
         $llm_data = [];
 

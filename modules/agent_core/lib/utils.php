@@ -170,7 +170,7 @@ class utils extends Factory
                     break;
                 }
 
-                if (isset($history[$i]['tool_call_id']) && $remove_tool_call_id === $history[$i]['tool_call_id']) {
+                if (isset($history[$i]['tool_call_id']) && $history[$i]['tool_call_id'] === $remove_tool_call_id) {
                     unset($history[$i]);
                     ++$removed;
                     continue;
@@ -182,12 +182,6 @@ class utils extends Factory
                     foreach ($tool_calls as $key => $values) {
                         if ($remove_tool_call_id !== $values['id']) {
                             continue;
-                        }
-
-                        $prev = $i - 1;
-
-                        if (isset($history[$prev]['role']) && 'user' === $history[$prev]['role']) {
-                            unset($history[$prev]);
                         }
 
                         unset($tool_calls[$key]);
@@ -202,7 +196,7 @@ class utils extends Factory
                         break;
                     }
 
-                    unset($tool_calls, $key, $values, $prev);
+                    unset($tool_calls, $key, $values);
                 }
             }
 

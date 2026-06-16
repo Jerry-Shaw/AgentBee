@@ -154,19 +154,19 @@ class config extends Factory
             'agent_llm'      => [
                 'api_url'      => 'http://127.0.0.1:1234/v1',
                 'api_key'      => 'sk-lm-ru6XiZDE:WImxJO82hxm5L76fNcaK',
-                'model'        => 'qwen3.6-35b-a3b-genesis-v2-apex',
+                'model'        => 'gemma-4-26b-a4b-it-qat',
                 'org_id'       => '',
                 'hw_hash'      => '',
                 'timeout'      => 600,
-                'keep_reasons' => false,
+                'keep_reasons' => true,
                 'params'       => [
                     'max_completion_tokens' => 65536,
                     'temperature'           => 0.8,
-                    'min_p'                 => 0,
+                    'min_p'                 => 0.05,
                     'top_p'                 => 0.95,
-                    'top_k'                 => 40,
+                    'top_k'                 => 50,
                     'frequency_penalty'     => 0,
-                    'presence_penalty'      => 1,
+                    'presence_penalty'      => 0,
                     'repetition_penalty'    => 1,
                     'enable_thinking'       => false,
                     'stop'                  => [
@@ -180,7 +180,7 @@ class config extends Factory
                         'enable_thinking' => false,
                     ],
                     'thinking'              => [
-                        'type' => 'enable',
+                        'type' => 'false',
                     ],
                 ],
             ],

@@ -153,16 +153,6 @@ class procWorker extends Factory
                                 $this->sendMsg($socket_id, 'context', 'WorkerBee', $metadata, $result_data);
                             }
 
-                            if ('System-cleanContext' === $result['function_name']) {
-                                $this->sendMsg(
-                                    $socket_id,
-                                    'history',
-                                    'sync',
-                                    $metadata,
-                                    $this->core->utils->getSessionHistory($metadata['workerName'])
-                                );
-                            }
-
                             if ('System-readImage' === $result['function_name']) {
                                 $result_data = json_decode($result['content'], true);
 
@@ -184,6 +174,14 @@ class procWorker extends Factory
 
                             $this->sendMsg($socket_id, 'stream', 'tool_result', $metadata, $result);
                             $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_history);
+
+                            if ('System-cleanContext' === $result['function_name']) {
+                                $result_data = json_decode($result['content'], true);
+
+                                $result_data['socket_id']   = $socket_id;
+                                $result_data['worker_name'] = $metadata['workerName'];
+                                $this->sendMsg($socket_id, 'context', 'cleanContext', $metadata, $result_data);
+                            }
                         }
 
                         if (!empty($image_loader)) {

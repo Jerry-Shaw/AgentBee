@@ -27,13 +27,13 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'cleanContext',
-                'description' => '清理历史上下文(保留最近普通消息+工具对)。调用前必须先用记忆工具保存重要内容，否则会丢失。',
+                'description' => '异步清理历史（无返回）。主进程保留最近普通消息和工具对，调用后继续任务，不等待结果。务必先保存重要记忆。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'keep_normal'     => ['type' => 'integer', 'default' => 6, 'description' => '保留普通消息数(user/无工具assistant)'],
-                        'keep_tool_pairs' => ['type' => 'integer', 'default' => 2, 'description' => '保留工具对数(assistant带工具+响应)'],
-                        'force_prune'     => ['type' => 'boolean', 'default' => false, 'description' => '允许全清(0)'],
+                        'keep_normal'     => ['type' => 'integer', 'default' => 6, 'description' => '保留普通消息数'],
+                        'keep_tool_pairs' => ['type' => 'integer', 'default' => 2, 'description' => '保留工具对数'],
+                        'aggressive_mode' => ['type' => 'boolean', 'default' => false, 'description' => '允许低于下限'],
                     ],
                 ],
             ],

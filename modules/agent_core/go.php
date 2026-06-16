@@ -416,6 +416,15 @@ class go extends Factory
                                     break;
                             }
                             break;
+
+                        case 'cleanContext':
+                            $this->utils->cleanSessionHistory(
+                                $payload['data']['worker_name'],
+                                $payload['data']['keep_normal'],
+                                $payload['data']['keep_tool_pairs'],
+                                $payload['data']['aggressive_mode']
+                            );
+                            break;
                     }
                     break;
 

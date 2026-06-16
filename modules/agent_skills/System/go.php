@@ -36,23 +36,17 @@ class go extends Factory
     }
 
     /**
-     * Prune session history to stay within context limits.
-     * Assumes input history is valid. Does NOT auto-save; use memory tool first.
+     * Placeholder — intercepted by procWorker, forwarded to main process.
      *
-     * @param int  $keep_normal     Min normal messages (user + assistant w/o tool_calls)
-     * @param int  $keep_tool_pairs Min tool pairs (assistant with tool_calls + tools)
-     * @param bool $force_prune     Allow zero limits (fresh start)
+     * @param int  $keep_normal
+     * @param int  $keep_tool_pairs
+     * @param bool $aggressive_mode
      *
-     * @return array{status:string, message:string, remained:int}
+     * @return array
      */
-    public function cleanContext(int $keep_normal = 6, int $keep_tool_pairs = 2, bool $force_prune = false): array
+    public function cleanContext(int $keep_normal = 6, int $keep_tool_pairs = 2, bool $aggressive_mode = false): array
     {
-        $cleaned = $this->utils->cleanSessionHistory(WORKER_MAIN, $keep_normal, $keep_tool_pairs, $force_prune);
-
-        return [
-            'status'  => 'success',
-            'message' => 'Cleaned ' . $cleaned['removed_normal'] . ' normal messages and ' . $cleaned['removed_tools'] . ' tool pairs. Total messages remained: ' . $cleaned['current_count'] . '.'
-        ];
+        return ['status' => 'pending', 'keep_normal' => $keep_normal, 'keep_tool_pairs' => $keep_tool_pairs, 'aggressive_mode' => $aggressive_mode];
     }
 
     /**

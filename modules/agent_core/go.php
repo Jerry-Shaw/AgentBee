@@ -786,6 +786,13 @@ class go extends Factory
             }
         }
 
+        $current_count = $this->utils->countSessionHistory(WORKER_MAIN);
+
+        if ($current_count > $this->utils->agent_config['max_ctx_len'] * 3) {
+            $cleaned = $this->utils->cleanSessionHistory(WORKER_MAIN);
+            $this->utils->debug('System: History truncated (' . $current_count . ' -> ' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
+        }
+
         if (!empty($this->onsend_messages)) {
             $llm_data = [];
 
@@ -796,16 +803,10 @@ class go extends Factory
                 ];
             }
 
-            $current_count = $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
-
-            if ($current_count > $this->utils->agent_config['max_ctx_len'] * 3) {
-                $cleaned = $this->utils->cleanSessionHistory(WORKER_MAIN);
-                $this->utils->debug('System: History truncated (' . $current_count . '->' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
-            }
-
             $this->in_process = true;
 
-            $this->utils->debug('System: Send message to LLM', 'debug');
+            $this->utils->debug('System: Sending messages to LLM', 'debug');
+            $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
 
             $metadata = $this->utils->getMessageMarker(
                 WORKER_MAIN,
@@ -822,10 +823,10 @@ class go extends Factory
                 $metadata + ['socket_id' => $socket_id]
             );
 
-            unset($llm_data, $coming_message, $current_count, $metadata);
+            unset($llm_data, $coming_message, $metadata);
         }
 
-        unset($socket_id);
+        unset($socket_id, $current_count);
         return [];
     }
 

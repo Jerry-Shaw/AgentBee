@@ -129,6 +129,16 @@ class utils extends Factory
     /**
      * @param string $worker_name
      *
+     * @return int
+     */
+    public function countSessionHistory(string $worker_name): int
+    {
+        return count($this->session_history[$worker_name] ?? []);
+    }
+
+    /**
+     * @param string $worker_name
+     *
      * @return void
      */
     public function deleteSessionHistory(string $worker_name): void

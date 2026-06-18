@@ -33,7 +33,7 @@
         "enable_thinking": false
       },
       "thinking": {
-        "type": "false"
+        "type": "disabled"
       }
     }
   },

@@ -165,7 +165,8 @@ class go extends Factory
                 ->setEventListener('onSendString', [$this, 'onSendString'])
                 ->setEventListener('onClose', [$this, 'onClose'])
                 ->listenTo($server_host, true);
-        } catch (\Throwable) {
+        } catch (\Throwable $throwable) {
+            $this->utils->debug('Failed to start server: ' . $throwable->getMessage(), 'trace');
         }
     }
 

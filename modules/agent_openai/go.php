@@ -54,23 +54,53 @@ class go extends Factory
      * @return void
      * @throws \ReflectionException
      */
-    public function init(bool $reload = false): void
+    public function initMain(bool $reload = false): void
     {
-        $this->core->initCore($reload);
+        $this->init($reload);
 
-        if ($reload) {
-            Factory::destroy($this->libOpenAI);
-        }
+        $agent_skills = $this->utils->fetchSkills('modules/agent_skills');
+        $this->core->addSkills($agent_skills);
+        $custom_skills = $this->utils->fetchSkills('skills');
+        $this->core->addSkills($custom_skills);
 
-        $this->libOpenAI = libOpenAI::new(
-            $this->utils->agent_config['agent_llm']['api_url'],
-            $this->utils->agent_config['agent_llm']['api_key'],
-            '[DONE]'
+        $this->libOpenAI->setModelParams($this->core->getLLMParams());
+
+        unset($reload, $agent_skills, $custom_skills);
+    }
+
+    /**
+     * @param bool $reload
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function initChild(bool $reload = false): void
+    {
+        $this->init($reload);
+
+        $agent_skills = $this->utils->fetchSkills(
+            'modules/agent_skills',
+            'System',
+            [
+                'getTime', 'readImage', 'readFile', 'writeFile',
+                'copyFile', 'deleteFile', 'getFileSize', 'searchFiles',
+                'listDirectory', 'createDirectory', 'copyDirectory', 'deleteDirectory',
+            ]
         );
 
-        $this->libOpenAI->setOrgId($this->utils->agent_config['agent_llm']['org_id']);
-        $this->libOpenAI->setTimeout($this->utils->agent_config['agent_llm']['timeout']);
-        $this->libOpenAI->setApiModel($this->utils->agent_config['agent_llm']['model']);
+        $this->core->addSkills($agent_skills);
+
+        foreach (['OfficeSuite', 'WebCrawler'] as $core_skill) {
+            $agent_skills = $this->utils->fetchSkills('modules/agent_skills', $core_skill);
+            $this->core->addSkills($agent_skills);
+        }
+
+        $custom_skills = $this->utils->fetchSkills('skills');
+        $this->core->addSkills($custom_skills);
+
+        $this->libOpenAI->setModelParams($this->core->getLLMParams());
+
+        unset($reload, $agent_skills, $core_skill, $custom_skills);
     }
 
     /**
@@ -156,13 +186,7 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
 
-        $agent_skills = $this->utils->fetchSkills('modules/agent_skills');
-        $this->core->addSkills($agent_skills);
-        $custom_skills = $this->utils->fetchSkills('skills');
-        $this->core->addSkills($custom_skills);
-
-        $this->libOpenAI->setModelParams($this->core->getLLMParams());
-
+        $this->initMain();
         $this->setShmop(getmypid());
 
         while (true) {
@@ -175,7 +199,7 @@ class go extends Factory
             $job_line = trim($job_line);
 
             if (self::CMD_RELOAD === $job_line) {
-                $this->init(true);
+                $this->initMain(true);
                 $this->setShmop(getmypid());
                 continue;
             }
@@ -206,28 +230,7 @@ class go extends Factory
     {
         ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
 
-        $agent_skills = $this->utils->fetchSkills(
-            'modules/agent_skills',
-            'System',
-            [
-                'getTime', 'readImage', 'readFile', 'writeFile',
-                'copyFile', 'deleteFile', 'getFileSize', 'searchFiles',
-                'listDirectory', 'createDirectory', 'copyDirectory', 'deleteDirectory',
-            ]
-        );
-
-        $this->core->addSkills($agent_skills);
-
-        foreach (['OfficeSuite', 'WebCrawler'] as $core_skill) {
-            $agent_skills = $this->utils->fetchSkills('modules/agent_skills', $core_skill);
-            $this->core->addSkills($agent_skills);
-        }
-
-        $custom_skills = $this->utils->fetchSkills('skills');
-        $this->core->addSkills($custom_skills);
-
-        $this->libOpenAI->setModelParams($this->core->getLLMParams());
-
+        $this->initChild();
         $this->setShmop(getmypid());
 
         $socket_id = '';
@@ -270,5 +273,30 @@ class go extends Factory
                     break 2;
             }
         }
+    }
+
+    /**
+     * @param bool $reload
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    private function init(bool $reload = false): void
+    {
+        $this->core->initCore($reload);
+
+        if ($reload) {
+            Factory::destroy($this->libOpenAI);
+        }
+
+        $this->libOpenAI = libOpenAI::new(
+            $this->utils->agent_config['agent_llm']['api_url'],
+            $this->utils->agent_config['agent_llm']['api_key'],
+            '[DONE]'
+        );
+
+        $this->libOpenAI->setOrgId($this->utils->agent_config['agent_llm']['org_id']);
+        $this->libOpenAI->setTimeout($this->utils->agent_config['agent_llm']['timeout']);
+        $this->libOpenAI->setApiModel($this->utils->agent_config['agent_llm']['model']);
     }
 }

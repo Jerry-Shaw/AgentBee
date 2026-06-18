@@ -31,6 +31,7 @@ class message extends Factory
      *
      * @return array|string[]
      * @throws \ReflectionException
+     * @throws \Exception
      */
     public function process_setting(string $socket_id, array $data_content): array
     {

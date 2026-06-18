@@ -11,7 +11,7 @@
     "org_id": "",
     "hw_hash": "",
     "timeout": 600,
-    "keep_reasons": true,
+    "keep_reasons": false,
     "params": {
       "max_completion_tokens": 65536,
       "temperature": 0.8,

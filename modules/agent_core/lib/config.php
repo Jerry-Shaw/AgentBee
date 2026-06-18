@@ -132,6 +132,7 @@ class config extends Factory
             $config_data['agent_llm']['hw_hash'] = $key_data['hw_hash'];
         }
 
+        $config_data = array_merge($this->config, $config_data);
         $config_json = json_encode($config_data, JSON_PRETTY);
         $save_bytes  = file_put_contents($this->conf_system, $config_json);
 

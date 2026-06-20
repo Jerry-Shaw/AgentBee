@@ -293,7 +293,7 @@ class go extends Factory
                 if (isset($this->socket_session[$worker_info['socket_id']])) {
                     $this->core->sendMessage($worker_info['socket_id'], $worker_message);
                 } else {
-                    $this->utils->debug('Client offline, message from ' . AGENT_NAME . ' queued', 'trace');
+                    $this->utils->debug('WorkerBee: Client offline, message from ' . AGENT_NAME . ' queued', 'trace');
                     $this->message_buffers[] = $worker_message;
                 }
 
@@ -775,13 +775,13 @@ class go extends Factory
                 }
 
                 if (!empty($this->coming_messages)) {
-                    $this->utils->debug('LLM ready, fetching ' . count($this->onsend_messages) . ' message(s) from queue.', 'trace');
+                    $this->utils->debug('User: LLM ready, fetching ' . count($this->onsend_messages) . ' message(s) from queue.', 'trace');
                     while (!is_null($coming_message = array_shift($this->coming_messages))) {
                         $llm_data[] = $coming_message;
                     }
                 }
             } else {
-                $this->utils->debug('LLM in progress, new message queued.', 'trace');
+                $this->utils->debug('User: LLM in progress, new message queued.', 'trace');
                 $this->coming_messages = array_merge($this->coming_messages, $result['content']);
             }
 
@@ -803,7 +803,7 @@ class go extends Factory
 
         if (!empty($llm_data)) {
             $this->in_process = true;
-            $this->utils->debug('User: Send message to LLM', 'debug');
+            $this->utils->debug('User: Sending messages to LLM', 'trace');
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
 
@@ -859,7 +859,7 @@ class go extends Factory
 
             $this->in_process = true;
 
-            $this->utils->debug('System: Sending messages to LLM', 'debug');
+            $this->utils->debug('System: Sending messages to LLM', 'trace');
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
 
             $metadata = $this->utils->getMessageMarker(

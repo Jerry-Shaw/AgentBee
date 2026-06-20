@@ -30,7 +30,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'addTask',
-                'description' => '添加定时任务。参数:task_prompt,run_at(秒),repeat(默认false),repeat_interval(秒)。返回:成功{"status":"success","create_id":微秒ID},失败{"status":"error","error":str}',
+                'description' => '添加定时任务。参数:task_prompt,run_at(秒),repeat(默认false),repeat_interval(秒)。返回:{status, create_id} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -47,7 +47,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'removeTask',
-                'description' => '删除任务。参数:create_id(微秒ID)。返回:成功{"status":"success","message":str},失败{"status":"error","error":str}',
+                'description' => '删除任务。参数:create_id(微秒ID)。返回:{status, message} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -61,21 +61,21 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'listTasks',
-                'description' => '列出所有任务。返回{"status":"success","tasks":[{"create_id":微秒ID,"run_at":秒,"repeat":0/1,"interval":秒,"prompt":str,"run_time":"Y-m-d H:i:s","create_time":"Y-m-d H:i:s"}]}',
+                'description' => '列出所有任务。返回:{"status":"success","tasks":[{"create_id":int(微秒),"run_at":int(秒),"repeat":0/1,"interval":int(秒),"prompt":str,"run_time":时间,"create_time":时间}]}',
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'runTask',
-                'description' => '触发到期任务。返回prompt数组:["p1","p2"]',
+                'description' => '执行到期任务，返回prompt数组:["p1","p2"]。',
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'save',
-                'description' => '保存记忆。参数:level(system|important|daily|misc),role(user|assistant|system|tool),content。system强制role=system,misc层3天TTL。返回:成功{"status":"success","create_id":微秒ID},失败{"status":"error","error":str}',
+                'description' => '保存记忆。参数:level(system|important|daily|misc),role(user|assistant|system|tool),content；system强制role=system，misc层3天TTL。返回:{status, create_id} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -91,7 +91,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'update',
-                'description' => '更新记忆。参数:create_id(微秒ID),role,content。system强制role=system。返回:成功{"status":"success","affected_rows":0/1},失败{"status":"error","error":str}',
+                'description' => '更新记忆。参数:create_id(微秒ID),role,content；system强制role=system。返回:{status, affected_rows} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -107,14 +107,14 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'read',
-                'description' => '读取记忆。参数:level(含all),offset(0),length(默认100,0=全部),date(仅daily/misc,YYYYMMDD)。返回:成功{"status":"success","data":[{"role":str,"content":str,"create_id":微秒ID,"create_time":"Y-m-d H:i:s"}],"total":int},失败{"status":"error","error":str}',
+                'description' => '读取记忆。参数:level(system|important|daily|misc|all),offset(默认0),length(默认100,0=全部),date(YYYYMMDD，仅important/daily/misc有效)。返回:{status, data:[{role,content,create_id,create_time}], total} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'level'  => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '记忆层级(含all)'],
                         'offset' => ['type' => 'integer', 'default' => 0, 'description' => '分页偏移'],
                         'length' => ['type' => 'integer', 'default' => 100, 'description' => '读取条数(0=全部)'],
-                        'date'   => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '日期YYYYMMDD(仅daily/misc)']
+                        'date'   => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '日期YYYYMMDD(仅important/daily/misc)']
                     ],
                     'required'   => ['level']
                 ],
@@ -124,7 +124,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '全文搜索记忆。参数:level(含all),keywords(数组),mode(or|and),offset,length,start_date,end_date(YYYYMMDD)。返回同read()',
+                'description' => '全文搜索记忆。参数:level(system|important|daily|misc|all),keywords(数组),mode(or|and默认or),offset(默认0),length(默认100,0=全部),start_date(YYYYMMDD),end_date(YYYYMMDD)。返回:{"status":"success","data":[{"role":str,"content":str,"create_id":int(微秒),"create_time":时间}],"total":int}。注意:关键词短语匹配；多词拆数组；不支持纯Emoji。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -144,21 +144,20 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'delete',
-                'description' => '删除记忆。参数:level,keywords(逗号分隔),mode(or|and),start_date/end_date(YYYYMMDD),start_time/end_time(秒)。至少一组条件。返回:成功{"status":"success","deleted":int},失败{"status":"error","error":str}',
+                'description' => '删除记忆: 提供create_ids则按ID+level删除(忽略其他);否则按level、时间范围(start_time/end_time秒)和keywords数组AND组合删除。返回:{status, deleted} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '记忆层级'],
-                        'keywords'   => ['type' => 'string', 'default' => '', 'description' => '关键词(逗号分隔)'],
-                        'mode'       => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or', 'description' => '匹配模式'],
-                        'start_date' => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '起始日期YYYYMMDD'],
-                        'end_date'   => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '结束日期YYYYMMDD'],
-                        'start_time' => ['type' => 'integer', 'default' => 0, 'description' => '起始时间戳(秒)'],
-                        'end_time'   => ['type' => 'integer', 'default' => 0, 'description' => '结束时间戳(秒)']
+                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '记忆层级（配合 create_ids 时也生效，限定所属层级）'],
+                        'create_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => '要删除的微秒 ID 数组，提供则忽略时间/关键词，按 ID+level 删除'],
+                        'start_time' => ['type' => 'integer', 'description' => '起始时间戳（秒，0 不限）'],
+                        'end_time'   => ['type' => 'integer', 'description' => '结束时间戳（秒，0 不限）'],
+                        'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组，与时间范围 AND 组合'],
+                        'mode'       => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or', 'description' => '关键词匹配模式（仅当 keywords 提供时）']
                     ],
                     'required'   => ['level']
                 ],
             ],
-        ],
+        ]
     ];
 }

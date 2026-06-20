@@ -70,13 +70,14 @@ class go extends Factory
     ];
 
     private const DDL_FTS = '
-        CREATE VIRTUAL TABLE IF NOT EXISTS agent_memory_fts USING fts5(
-            content,
-            level,
-            role,
-            content=\'agent_memory\',
-            content_rowid=\'create_id\'
-        )';
+    CREATE VIRTUAL TABLE IF NOT EXISTS agent_memory_fts USING fts5(
+        content,
+        level,
+        role,
+        content=\'agent_memory\',
+        content_rowid=\'create_id\',
+        tokenize=\'unicode61\'
+    )';
 
     private const DDL_FTS_TRIGGERS = [
         'CREATE TRIGGER IF NOT EXISTS memory_insert AFTER INSERT ON agent_memory BEGIN
@@ -317,11 +318,15 @@ class go extends Factory
 
         $this->purgeExpired();
 
-        $query = $this->libSQLite->table('agent_memory')->select('role', 'content', 'create_id');
+        $query = $this->libSQLite
+            ->table('agent_memory')
+            ->select('role', 'content', 'create_id');
+
         if ('all' !== $level) {
             $query->where(['level', '=', $level]);
         }
-        if ('daily' === $level || 'misc' === $level) {
+
+        if (in_array($level, ['important', 'daily', 'misc'], true)) {
             $query->where(['date_key', '=', $date_int]);
         }
 
@@ -360,17 +365,40 @@ class go extends Factory
         if (!in_array($level, self::ALL_LEVELS)) {
             return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
         }
+
+        $keywords = array_filter(
+            $keywords,
+            function (string $word): bool
+            {
+                return '' !== trim($word);
+            }
+        );
+
         if (empty($keywords)) {
             return ['status' => 'success', 'data' => [], 'total' => 0];
         }
 
         $this->purgeExpired();
 
-        if (true === $this->fts_enabled) {
-            $result = $this->searchViaFts($level, $keywords, $mode, $offset, $length, $start_date, $end_date);
-        } else {
-            $result = $this->searchViaLike($level, $keywords, $mode, $offset, $length, $start_date, $end_date);
+        $use_fts = true;
+
+        foreach ($keywords as $word) {
+            if (1 === mb_strlen($word, 'UTF-8') && 1 < strlen($word)) {
+                $use_fts = false;
+                break;
+            }
+
+            foreach (['@', '(', ')', '{', '}', '[', ']', '*', '^', '?', '+', '-', '~', '&', '|', '<', '>', '=', '%', '_', '#', '$', '.', '/', ':', '"', "'", '\\'] as $char) {
+                if (str_contains($word, $char)) {
+                    $use_fts = false;
+                    break 2;
+                }
+            }
         }
+
+        $result = $this->fts_enabled && $use_fts
+            ? $this->searchViaFts($level, $keywords, $mode, $offset, $length, $start_date, $end_date)
+            : $this->searchViaLike($level, $keywords, $mode, $offset, $length, $start_date, $end_date);
 
         if (isset($result['data'])) {
             foreach ($result['data'] as &$msg) {
@@ -378,79 +406,114 @@ class go extends Factory
                     $msg['create_time'] = $this->formatMicroTime($msg['create_id']);
                 }
             }
+
             unset($msg);
         }
 
         $result['status'] = 'success';
 
-        unset($keywords, $mode, $offset, $length, $start_date, $end_date);
+        unset($level, $keywords, $mode, $offset, $length, $start_date, $end_date, $use_fts, $word, $msg);
         return $result;
     }
 
     /**
      * @param string $level
-     * @param string $keywords
-     * @param string $mode
-     * @param string $start_date
-     * @param string $end_date
+     * @param array  $create_ids
      * @param int    $start_time
      * @param int    $end_time
+     * @param array  $keywords
+     * @param string $mode
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
-    public function delete(string $level, string $keywords = '', string $mode = 'or', string $start_date = '', string $end_date = '', int $start_time = 0, int $end_time = 0): array
+    public function delete(string $level, array $create_ids = [], int $start_time = 0, int $end_time = 0, array $keywords = [], string $mode = 'or'): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
-            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
+            $result = ['status' => 'error', 'error' => 'Invalid level: ' . $level];
+
+            unset($level, $create_ids, $start_time, $end_time, $keywords, $mode);
+            return $result;
         }
 
-        $query = $this->libSQLite->table('agent_memory');
-        if ('all' !== $level) {
-            $query->where(['level', '=', $level]);
-        }
+        if (!empty($create_ids)) {
+            $valid_ids = array_filter(
+                $create_ids,
+                function (int $id): bool
+                {
+                    return false !== filter_var($id, FILTER_VALIDATE_INT) && 0 < $id;
+                }
+            );
 
-        $hasCondition   = false;
-        $start_date_int = ('' !== $start_date) ? (int)$start_date : 0;
-        $end_date_int   = ('' !== $end_date) ? (int)$end_date : 0;
+            $valid_ids = array_map('intval', $valid_ids);
 
-        if ('' !== $keywords) {
-            $this->applyKeywordFilter($query, $keywords, $mode);
-            $hasCondition = true;
-        }
+            if (empty($valid_ids)) {
+                $result = ['status' => 'error', 'error' => 'Invalid create_ids (must be positive integers)'];
+            } else {
+                $query = $this->libSQLite->table('agent_memory');
 
-        if (0 !== $start_date_int && 0 !== $end_date_int) {
-            $query->where(['date_key', '>=', $start_date_int], ['date_key', '<=', $end_date_int]);
-            $hasCondition = true;
-        } elseif (0 !== $start_date_int) {
-            $query->where(['date_key', '>=', $start_date_int]);
-            $hasCondition = true;
-        } elseif (0 !== $end_date_int) {
-            $query->where(['date_key', '<=', $end_date_int]);
-            $hasCondition = true;
-        }
+                if ('all' !== $level) {
+                    $query->where(['level', '=', $level]);
+                }
 
-        if (0 < $start_time || 0 < $end_time) {
-            if (0 < $start_time) {
-                $query->where(['create_id', '>=', $start_time * 1000000]);
+                $query->where(['create_id', 'IN', $valid_ids])
+                    ->delete()
+                    ->execute();
+
+                $result = ['status' => 'success', 'deleted' => $this->libSQLite->getAffectedRows()];
             }
-            if (0 < $end_time) {
-                $query->where(['create_id', '<=', $end_time * 1000000]);
+
+            unset($valid_ids);
+        } elseif (0 < $start_time || 0 < $end_time || !empty($keywords)) {
+            if (0 < $start_time && 0 < $end_time && $start_time > $end_time) {
+                $result = ['status' => 'error', 'error' => 'start_time cannot be greater than end_time'];
+            } else {
+                $query = $this->libSQLite->table('agent_memory');
+
+                if ('all' !== $level) {
+                    $query->where(['level', '=', $level]);
+                }
+
+                if (0 < $start_time) {
+                    $query->where(['create_id', '>=', $start_time * 1000000]);
+                }
+
+                if (0 < $end_time) {
+                    $query->where(['create_id', '<=', $end_time * 1000000]);
+                }
+
+                if (!empty($keywords)) {
+                    if ('and' === $mode) {
+                        foreach ($keywords as $word) {
+                            $query->where(['content', 'LIKE', '%' . $word . '%']);
+                        }
+                    } else {
+                        $conditions = [];
+
+                        foreach ($keywords as $idx => $word) {
+                            if (0 === $idx) {
+                                $conditions[] = ['content', 'LIKE', '%' . $word . '%'];
+                            } else {
+                                $conditions[] = ['or', 'content', 'LIKE', '%' . $word . '%'];
+                            }
+                        }
+
+                        $query->where(...$conditions);
+
+                        unset($conditions);
+                    }
+
+                    unset($idx, $word);
+                }
+
+                $query->delete()->execute();
+                $result = ['status' => 'success', 'deleted' => $this->libSQLite->getAffectedRows()];
             }
-            $hasCondition = true;
+        } else {
+            $result = ['status' => 'error', 'error' => 'No deletion criteria provided.'];
         }
 
-        if (!$hasCondition) {
-            unset($query, $hasCondition, $keywords, $mode, $start_date, $end_date, $start_time, $end_time, $start_date_int, $end_date_int);
-            return ['status' => 'error', 'error' => 'No deletion criteria provided.'];
-        }
-
-        $query->delete()->execute();
-
-        $affected = $this->libSQLite->getAffectedRows();
-        $result   = ['status' => 'success', 'deleted' => $affected];
-
-        unset($query, $hasCondition, $affected, $keywords, $mode, $start_date, $end_date, $start_time, $end_time, $start_date_int, $end_date_int);
+        unset($level, $create_ids, $start_time, $end_time, $keywords, $mode, $query);
         return $result;
     }
 
@@ -504,13 +567,11 @@ class go extends Factory
         $this->libSQLite->table('agent_task')->where(['create_id', '=', $create_id])->delete()->execute();
         $affected = $this->libSQLite->getAffectedRows();
 
-        if (0 < $affected) {
-            $result = ['status' => 'success', 'message' => $affected . ' task(s) were removed.'];
-        } else {
-            $result = ['status' => 'error', 'error' => 'Task not found.'];
-        }
+        $result = 0 < $affected
+            ? ['status' => 'success', 'message' => $affected . ' task(s) were removed.']
+            : ['status' => 'error', 'error' => 'Task not found.'];
 
-        unset($affected);
+        unset($create_id, $affected);
         return $result;
     }
 
@@ -581,43 +642,6 @@ class go extends Factory
     // =========================================================================
 
     /**
-     * @param        $query
-     * @param string $keywords
-     * @param string $mode
-     *
-     * @return void
-     */
-    private function applyKeywordFilter($query, string $keywords, string $mode): void
-    {
-        $keywords  = trim($keywords);
-        $word_list = str_contains($keywords, ',') ? explode(',', $keywords) : [$keywords];
-        $word_list = array_filter($word_list);
-
-        if (empty($word_list)) {
-            unset($query, $keywords, $mode, $word_list);
-            return;
-        }
-
-        if ('and' === $mode) {
-            foreach ($word_list as $kw) {
-                $query->where(['content', 'LIKE', '%' . $kw . '%']);
-            }
-        } else {
-            $conditions = [];
-            foreach ($word_list as $idx => $kw) {
-                if (0 === $idx) {
-                    $conditions[] = ['content', 'LIKE', '%' . $kw . '%'];
-                } else {
-                    $conditions[] = ['or', 'content', 'LIKE', '%' . $kw . '%'];
-                }
-            }
-            $query->where(...$conditions);
-            unset($conditions);
-        }
-        unset($word_list, $kw, $idx);
-    }
-
-    /**
      * @param string $level
      * @param array  $keywords
      * @param string $mode
@@ -627,78 +651,54 @@ class go extends Factory
      * @param string $end_date
      *
      * @return array
+     * @throws \ReflectionException
      */
     private function searchViaFts(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
     {
-        $escaped = array_map(
-            function (string $k): string
+        $keywords = array_map(
+            function (string $word): string
             {
-                return '"' . str_replace('"', '""', $k) . '"';
+                return in_array(strtoupper($word), ['AND', 'OR', 'NOT'], true) ? '"' . str_replace('"', '""', $word) . '"' : $word;
             },
             $keywords
         );
 
-        $kwString = ('and' === $mode)
-            ? implode(' AND ', $escaped)
-            : implode(' OR ', $escaped);
+        $kw_string = ('and' === strtolower($mode))
+            ? implode(' AND ', $keywords)
+            : implode(' OR ', $keywords);
 
         $start_date_int = ('' !== $start_date) ? (int)$start_date : 0;
         $end_date_int   = ('' !== $end_date) ? (int)$end_date : 0;
 
-        // Build WHERE clause (shared between COUNT and SELECT)
-        $where  = 'WHERE agent_memory_fts MATCH ?';
-        $params = [$kwString];
+        $query = $this->libSQLite
+            ->table('agent_memory')
+            ->join('agent_memory_fts', 'INNER')
+            ->on(['agent_memory.create_id', '=', 'agent_memory_fts.rowid'])
+            ->select('agent_memory.role', 'agent_memory.content', 'agent_memory.create_id');
 
         if ('all' !== $level) {
-            $where    .= ' AND agent_memory.level = ?';
-            $params[] = $level;
+            $query->where(['agent_memory.level', '=', $level]);
         }
+
         if (0 !== $start_date_int && 0 !== $end_date_int) {
-            $where    .= ' AND agent_memory.date_key BETWEEN ? AND ?';
-            $params[] = $start_date_int;
-            $params[] = $end_date_int;
+            $query->where(['agent_memory.date_key', 'BETWEEN', [$start_date_int, $end_date_int]]);
         } elseif (0 !== $start_date_int) {
-            $where    .= ' AND agent_memory.date_key >= ?';
-            $params[] = $start_date_int;
+            $query->where(['agent_memory.date_key', '>=', $start_date_int]);
         } elseif (0 !== $end_date_int) {
-            $where    .= ' AND agent_memory.date_key <= ?';
-            $params[] = $end_date_int;
+            $query->where(['agent_memory.date_key', '<=', $end_date_int]);
         }
 
-        // 1. Get total count
-        $countSql = "SELECT COUNT(*) AS total
-                 FROM agent_memory 
-                 JOIN agent_memory_fts ON agent_memory.create_id = agent_memory_fts.rowid
-                 $where";
-        $stmt     = $this->libSQLite->pdo->prepare($countSql);
-        $stmt->execute($params);
-        $total = (int)($stmt->fetch(\PDO::FETCH_ASSOC)['total'] ?? 0);
+        $query->match(['agent_memory_fts', $kw_string])->order(['agent_memory.create_id' => 'ASC']);
 
-        // 2. Get paginated results
-        $offset = max(0, $offset);
-        $length = max(0, $length);
-
-        // Build SELECT query with proper LIMIT/OFFSET (handle length=0 as "no limit")
-        $sql = "SELECT agent_memory.role, agent_memory.content, agent_memory.create_id
-            FROM agent_memory 
-            JOIN agent_memory_fts ON agent_memory.create_id = agent_memory_fts.rowid
-            $where
-            ORDER BY agent_memory.create_id ASC";
-
-        if (0 === $length) {
-            $sql      .= " LIMIT -1 OFFSET ?";
-            $params[] = $offset;
-        } else {
-            $sql      .= " LIMIT ? OFFSET ?";
-            $params[] = $length;
-            $params[] = $offset;
+        if (0 < $length) {
+            $query->limit($offset, $length);
         }
 
-        $stmt = $this->libSQLite->pdo->prepare($sql);
-        $stmt->execute($params);
-        $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        $data  = $query->fetchAll();
+        $total = $query->getLastFoundRows();
 
-        return ['data' => $results, 'total' => $total];
+        unset($level, $keywords, $mode, $offset, $length, $start_date, $end_date, $kw_string, $start_date_int, $end_date_int, $query);
+        return ['data' => $data, 'total' => $total];
     }
 
     /**
@@ -715,7 +715,10 @@ class go extends Factory
      */
     private function searchViaLike(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
     {
-        $query = $this->libSQLite->table('agent_memory')->select('role', 'content', 'create_id');
+        $query = $this->libSQLite
+            ->table('agent_memory')
+            ->select('role', 'content', 'create_id');
+
         if ('all' !== $level) {
             $query->where(['level', '=', $level]);
         }

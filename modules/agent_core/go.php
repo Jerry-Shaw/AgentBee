@@ -701,7 +701,7 @@ class go extends Factory
             return;
         }
 
-        $this->utils->debug('UserMessage: receiving [' . (!$is_binary ? 'TEXT' : 'BINARY') . '] message', 'debug');
+        $this->utils->debug('User: receiving [' . (!$is_binary ? 'TEXT' : 'BINARY') . '] message', 'debug');
 
         if ($is_binary) {
             $message = $this->message->process_binary($socket_id, $message);
@@ -727,15 +727,15 @@ class go extends Factory
             }
 
             if ('stop' === $data['type']) {
+                $this->utils->debug('User: Send abort to LLM', 'debug');
                 $this->openai->abort($socket_id);
-                $this->utils->debug('UserMessage: Send abort to LLM', 'debug');
                 continue;
             }
 
             $type_method = 'process_' . $data['type'];
 
             if (!method_exists($this->message, $type_method)) {
-                $this->utils->debug('UserMessage: Incorrect message type: ' . $data['type'], 'debug');
+                $this->utils->debug('User: Incorrect message type: ' . $data['type'], 'debug');
                 continue;
             }
 
@@ -743,7 +743,7 @@ class go extends Factory
 
             if (!$result['need_llm']) {
                 // Other actions
-                $this->utils->debug('UserMessage: ' . $data['type'] . '->' . ($result['data']['act'] ?? 'Unsupported'), 'debug');
+                $this->utils->debug('User: ' . $data['type'] . '->' . ($result['data']['act'] ?? 'Unsupported'), 'debug');
 
                 $response = ['type' => $data['type']] + $result['data'];
                 $this->core->sendMessage($socket_id, json_encode($response, JSON_FORMAT));
@@ -752,7 +752,7 @@ class go extends Factory
                 if ('saveConfig' === $result['data']['act']) {
                     $this->init(true);
                     $this->openai->reload();
-                    $this->utils->debug('UserMessage: ' . $data['type'] . '->reloaded', 'trace');
+                    $this->utils->debug('User: ' . $data['type'] . '->reloaded', 'trace');
                 }
 
                 unset($socket_id, $message, $is_binary, $messages, $line, $data, $type_method, $result, $response);
@@ -775,11 +775,13 @@ class go extends Factory
                 }
 
                 if (!empty($this->coming_messages)) {
+                    $this->utils->debug('LLM ready, fetching ' . count($this->onsend_messages) . ' message(s) from queue.', 'trace');
                     while (!is_null($coming_message = array_shift($this->coming_messages))) {
                         $llm_data[] = $coming_message;
                     }
                 }
             } else {
+                $this->utils->debug('LLM in progress, new message queued.', 'trace');
                 $this->coming_messages = array_merge($this->coming_messages, $result['content']);
             }
 
@@ -801,7 +803,7 @@ class go extends Factory
 
         if (!empty($llm_data)) {
             $this->in_process = true;
-            $this->utils->debug('UserMessage: Send message to LLM', 'debug');
+            $this->utils->debug('User: Send message to LLM', 'debug');
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
 
@@ -845,6 +847,8 @@ class go extends Factory
 
         if (!empty($this->onsend_messages)) {
             $llm_data = [];
+
+            $this->utils->debug('System: LLM ready, fetching ' . count($this->onsend_messages) . ' message(s) from queue.', 'trace');
 
             while (!is_null($coming_message = array_shift($this->onsend_messages))) {
                 $llm_data[] = [

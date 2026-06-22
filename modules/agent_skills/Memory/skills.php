@@ -124,7 +124,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '全文搜索记忆。参数:level(system|important|daily|misc|all),keywords(数组),mode(or|and默认or),offset(默认0),length(默认100,0=全部),start_date(YYYYMMDD),end_date(YYYYMMDD)。返回:{"status":"success","data":[{"role":str,"content":str,"create_id":int(微秒),"create_time":时间}],"total":int}。注意:关键词短语匹配；多词拆数组；不支持纯Emoji。',
+                'description' => '全文搜索记忆。参数:level(system|important|daily|misc|all),keywords(数组),mode(or|and默认or),offset(默认0),length(默认100,0=全部),start_date(YYYYMMDD),end_date(YYYYMMDD)。返回:{"status":"success","data":[{"role":str,"content":str,"create_id":int(微秒),"create_time":时间}],"total":int}。注意：关键词建议 ≥2 字符，单字可能匹配不准；纯 Emoji 无效。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

@@ -658,13 +658,30 @@ class go extends Factory
      */
     private function buildTokens(string $text): string
     {
+        $text = preg_replace('/[^\p{L}\p{N}_]/u', ' ', $text);
+        $text = preg_replace('/\s+/', ' ', $text);
+
+        $asian_tokens = [];
+
+        $tokens = explode(' ', $text);
+        $tokens = array_filter($tokens, 'strlen');
+        $tokens = array_values($tokens);
+
+        foreach ($tokens as $key => $value) {
+            if (4 >= mb_strlen($value, 'UTF-8') || 8 >= strlen($value)) {
+                $asian_tokens[] = $value;
+                unset($tokens[$key]);
+            }
+        }
+
+        $tokens = array_values($tokens);
+        $text   = implode(' ', $tokens);
+
         $segments = $this->NGram->splitText($text);
 
         $latin_tokens = explode(' ', $segments['latin']);
         $latin_tokens = array_filter($latin_tokens, 'strlen');
         $latin_tokens = array_map('strtolower', $latin_tokens);
-
-        $asian_tokens = [];
 
         if ('' !== $segments['asian']) {
             $asian_texts = explode(' ', $segments['asian']);
@@ -686,7 +703,7 @@ class go extends Factory
         $content_tokens = array_unique($content_tokens);
         $indexed_tokens = implode(' ', $content_tokens);
 
-        unset($text, $segments, $latin_tokens, $asian_tokens, $content_tokens);
+        unset($text, $tokens, $key, $value, $segments, $asian_tokens, $latin_tokens, $content_tokens);
         return $indexed_tokens;
     }
 
@@ -707,13 +724,25 @@ class go extends Factory
         $keywords = array_map([$this, 'buildTokens'], $keywords);
         $keywords = array_filter($keywords, 'strlen');
 
-        $keywords = array_map(
-            function (string $word): string
+        if (empty($keywords)) {
+            return ['data' => [], 'total' => 0];
+        }
+
+        $keywords = array_map(function ($text)
+        {
+            $tokens = explode(' ', $text);
+            $tokens = array_filter($tokens, 'strlen');
+
+            $escaped = array_map(function ($token)
             {
-                return in_array(strtoupper($word), ['AND', 'OR', 'NOT'], true) ? '"' . str_replace('"', '""', $word) . '"' : $word;
-            },
-            $keywords
-        );
+                return in_array(strtoupper($token), ['AND', 'OR', 'NOT'], true)
+                    ? '"' . str_replace('"', '""', $token) . '"'
+                    : $token;
+            }, $tokens);
+
+            unset($text, $tokens);
+            return implode(' AND ', $escaped);
+        }, $keywords);
 
         $kw_string = ('and' === strtolower($mode))
             ? implode(' AND ', $keywords)

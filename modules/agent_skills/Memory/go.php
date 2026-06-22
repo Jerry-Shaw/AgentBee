@@ -7,6 +7,7 @@
  * focusing on noise reduction and structural extraction to optimize LLM token usage.
  *
  * Copyright 2026 AgentBee self developed
+ * Copyright 2026 秋水之冰 <27206617@qq.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +26,14 @@ namespace modules\agent_skills\Memory;
 
 use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
+use Nervsys\Ext\Algo\NGram;
 use Nervsys\Ext\libPDO;
 use Nervsys\Ext\libSQLite;
 
 class go extends Factory
 {
     public utils     $utils;
+    public NGram     $NGram;
     public libPDO    $libPDO;
     public libSQLite $libSQLite;
 
@@ -49,7 +52,8 @@ class go extends Factory
             date_key  INTEGER NOT NULL,
             level     TEXT NOT NULL,
             role      TEXT NOT NULL,
-            content   TEXT NOT NULL
+            content   TEXT NOT NULL,
+            tokens    TEXT NOT NULL
         )';
 
     private const DDL_TASK = '
@@ -70,23 +74,23 @@ class go extends Factory
     ];
 
     private const DDL_FTS = '
-    CREATE VIRTUAL TABLE IF NOT EXISTS agent_memory_fts USING fts5(
-        content,
-        level,
-        role,
-        content=\'agent_memory\',
-        content_rowid=\'create_id\',
-        tokenize=\'unicode61\'
-    )';
+        CREATE VIRTUAL TABLE IF NOT EXISTS agent_memory_fts USING fts5(
+            tokens,
+            level,
+            role,
+            content=\'agent_memory\',
+            content_rowid=\'create_id\',
+            tokenize="unicode61 tokenchars \'_\'"
+        )';
 
     private const DDL_FTS_TRIGGERS = [
         'CREATE TRIGGER IF NOT EXISTS memory_insert AFTER INSERT ON agent_memory BEGIN
-            INSERT INTO agent_memory_fts(rowid, content, level, role) VALUES (new.create_id, new.content, new.level, new.role); END',
+            INSERT INTO agent_memory_fts(rowid, tokens, level, role) VALUES (new.create_id, new.tokens, new.level, new.role); END',
         'CREATE TRIGGER IF NOT EXISTS memory_delete AFTER DELETE ON agent_memory BEGIN
-            INSERT INTO agent_memory_fts(agent_memory_fts, rowid, content, level, role) VALUES (\'delete\', old.create_id, old.content, old.level, old.role); END',
+            INSERT INTO agent_memory_fts(agent_memory_fts, rowid, tokens, level, role) VALUES (\'delete\', old.create_id, old.tokens, old.level, old.role); END',
         'CREATE TRIGGER IF NOT EXISTS memory_update AFTER UPDATE ON agent_memory BEGIN
-            INSERT INTO agent_memory_fts(agent_memory_fts, rowid, content, level, role) VALUES (\'delete\', old.create_id, old.content, old.level, old.role);
-            INSERT INTO agent_memory_fts(rowid, content, level, role) VALUES (new.create_id, new.content, new.level, new.role); END'
+            INSERT INTO agent_memory_fts(agent_memory_fts, rowid, tokens, level, role) VALUES (\'delete\', old.create_id, old.tokens, old.level, old.role);
+            INSERT INTO agent_memory_fts(rowid, tokens, level, role) VALUES (new.create_id, new.tokens, new.level, new.role); END'
     ];
 
     /**
@@ -95,6 +99,7 @@ class go extends Factory
     public function __construct()
     {
         $this->utils   = utils::new();
+        $this->NGram   = NGram::new();
         $this->db_path = $this->utils->app->root_path . DIRECTORY_SEPARATOR . 'memory' . DIRECTORY_SEPARATOR;
 
         if (!is_dir($this->db_path)) {
@@ -102,109 +107,6 @@ class go extends Factory
         }
 
         $this->initDatabase();
-    }
-
-    /**
-     * @return void
-     * @throws \ReflectionException
-     */
-    private function initDatabase(): void
-    {
-        $db_file      = $this->db_path . 'agent_memory.db';
-        $this->libPDO = libPDO::new('sqlite', $db_file);
-        $this->libPDO->connect();
-
-        $this->libSQLite = libSQLite::new();
-        $this->libSQLite->bindLibPdo($this->libPDO);
-        $this->libSQLite->autoCleanup();
-
-        $this->libSQLite->pdo->setAttribute(\PDO::ATTR_EMULATE_PREPARES, true);
-        $this->libSQLite->exec('PRAGMA strict=OFF');
-        $this->libSQLite->exec('PRAGMA journal_mode=WAL');
-        $this->libSQLite->exec('PRAGMA busy_timeout = 5000');
-        $this->libSQLite->exec('PRAGMA cache_size = -4000');
-
-        $this->setupSchema();
-        unset($db_file);
-    }
-
-    /**
-     * @return void
-     * @throws \ReflectionException
-     */
-    private function setupSchema(): void
-    {
-        // Create memory table if not exists
-        $this->libSQLite->exec(self::DDL_MEMORY);
-
-        // Create task table if not exists
-        $this->libSQLite->exec(self::DDL_TASK);
-
-        // Create indexes if not exists
-        foreach (self::DDL_INDEXES as $sql) {
-            $this->libSQLite->exec($sql);
-        }
-
-        // Create FTS5 virtual table and triggers if not exists (if FTS is available)
-        try {
-            $this->libSQLite->exec(self::DDL_FTS);
-
-            foreach (self::DDL_FTS_TRIGGERS as $trigger) {
-                $this->libSQLite->exec($trigger);
-            }
-
-            $this->fts_enabled = true;
-        } catch (\Throwable) {
-            $this->fts_enabled = false;
-        }
-    }
-
-    /**
-     * @return void
-     * @throws \ReflectionException
-     */
-    private function purgeExpired(): void
-    {
-        $this->libSQLite->table('agent_memory')
-            ->where(['expire_at', '>', 0], ['expire_at', '<', time()])
-            ->delete()
-            ->execute();
-    }
-
-    /**
-     * @param string $table
-     *
-     * @return int
-     * @throws \ReflectionException
-     */
-    private function generateMicroTimestamp(string $table): int
-    {
-        $ts = (int)(microtime(true) * 1000000);
-
-        $exists = $this->libSQLite->table($table)
-            ->select('create_id')
-            ->where(['create_id', '=', $ts])
-            ->fetch();
-
-        while (!empty($exists)) {
-            ++$ts;
-            $exists = $this->libSQLite->table($table)
-                ->select('create_id')
-                ->where(['create_id', '=', $ts])
-                ->fetch();
-        }
-
-        return $ts;
-    }
-
-    /**
-     * @param int $micro
-     *
-     * @return string
-     */
-    private function formatMicroTime(int $micro): string
-    {
-        return date('Y-m-d H:i:s', (int)($micro / 1000000));
     }
 
     // =========================================================================
@@ -248,7 +150,8 @@ class go extends Factory
             'date_key'  => $date_key,
             'level'     => $level,
             'role'      => $role,
-            'content'   => $content
+            'content'   => $content,
+            'tokens'    => $this->buildTokens($content)
         ])->execute();
 
         $result = ['status' => 'success', 'create_id' => $create_id];
@@ -292,7 +195,11 @@ class go extends Factory
 
         $this->libSQLite->table('agent_memory')
             ->where(['create_id', '=', $create_id])
-            ->update(['role' => $role, 'content' => $content])
+            ->update([
+                'role'    => $role,
+                'content' => $content,
+                'tokens'  => $this->buildTokens($content)
+            ])
             ->execute();
 
         unset($create_id, $role, $content, $record, $level);
@@ -642,6 +549,148 @@ class go extends Factory
     // =========================================================================
 
     /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    private function initDatabase(): void
+    {
+        $db_file      = $this->db_path . 'agent_memory.db';
+        $this->libPDO = libPDO::new('sqlite', $db_file);
+        $this->libPDO->connect();
+
+        $this->libSQLite = libSQLite::new();
+        $this->libSQLite->bindLibPdo($this->libPDO);
+        $this->libSQLite->autoCleanup();
+
+        $this->libSQLite->pdo->setAttribute(\PDO::ATTR_EMULATE_PREPARES, true);
+        $this->libSQLite->exec('PRAGMA strict=OFF');
+        $this->libSQLite->exec('PRAGMA journal_mode=WAL');
+        $this->libSQLite->exec('PRAGMA busy_timeout = 5000');
+        $this->libSQLite->exec('PRAGMA cache_size = -4000');
+
+        $this->setupSchema();
+        unset($db_file);
+    }
+
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    private function setupSchema(): void
+    {
+        // Create memory table if not exists
+        $this->libSQLite->exec(self::DDL_MEMORY);
+
+        // Create task table if not exists
+        $this->libSQLite->exec(self::DDL_TASK);
+
+        // Create indexes if not exists
+        foreach (self::DDL_INDEXES as $sql) {
+            $this->libSQLite->exec($sql);
+        }
+
+        // Create FTS5 virtual table and triggers if not exists (if FTS is available)
+        try {
+            $this->libSQLite->exec(self::DDL_FTS);
+
+            foreach (self::DDL_FTS_TRIGGERS as $trigger) {
+                $this->libSQLite->exec($trigger);
+            }
+
+            $this->fts_enabled = true;
+        } catch (\Throwable) {
+            $this->fts_enabled = false;
+        }
+    }
+
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    private function purgeExpired(): void
+    {
+        $this->libSQLite->table('agent_memory')
+            ->where(['expire_at', '>', 0], ['expire_at', '<', time()])
+            ->delete()
+            ->execute();
+    }
+
+    /**
+     * @param string $table
+     *
+     * @return int
+     * @throws \ReflectionException
+     */
+    private function generateMicroTimestamp(string $table): int
+    {
+        $ts = (int)(microtime(true) * 1000000);
+
+        $exists = $this->libSQLite->table($table)
+            ->select('create_id')
+            ->where(['create_id', '=', $ts])
+            ->fetch();
+
+        while (!empty($exists)) {
+            ++$ts;
+            $exists = $this->libSQLite->table($table)
+                ->select('create_id')
+                ->where(['create_id', '=', $ts])
+                ->fetch();
+        }
+
+        return $ts;
+    }
+
+    /**
+     * @param int $micro
+     *
+     * @return string
+     */
+    private function formatMicroTime(int $micro): string
+    {
+        return date('Y-m-d H:i:s', (int)($micro / 1000000));
+    }
+
+    /**
+     * @param string $text
+     *
+     * @return string
+     */
+    private function buildTokens(string $text): string
+    {
+        $segments = $this->NGram->splitText($text);
+
+        $latin_tokens = explode(' ', $segments['latin']);
+        $latin_tokens = array_filter($latin_tokens, 'strlen');
+        $latin_tokens = array_map('strtolower', $latin_tokens);
+
+        $asian_tokens = [];
+
+        if ('' !== $segments['asian']) {
+            $asian_texts = explode(' ', $segments['asian']);
+            $asian_texts = array_filter($asian_texts, 'strlen');
+
+            foreach ($asian_texts as $asian_text) {
+                if (4 >= mb_strlen($asian_text, 'UTF-8')) {
+                    $asian_tokens[] = $asian_text;
+                } else {
+                    $asian_grams  = $this->NGram->getGrams($asian_text, 2);
+                    $asian_tokens = array_merge($asian_tokens, $asian_grams);
+                }
+            }
+
+            unset($asian_texts, $asian_text, $asian_grams);
+        }
+
+        $content_tokens = array_merge($asian_tokens, $latin_tokens);
+        $content_tokens = array_unique($content_tokens);
+        $indexed_tokens = implode(' ', $content_tokens);
+
+        unset($text, $segments, $latin_tokens, $asian_tokens, $content_tokens);
+        return $indexed_tokens;
+    }
+
+    /**
      * @param string $level
      * @param array  $keywords
      * @param string $mode
@@ -655,6 +704,9 @@ class go extends Factory
      */
     private function searchViaFts(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
     {
+        $keywords = array_map([$this, 'buildTokens'], $keywords);
+        $keywords = array_filter($keywords, 'strlen');
+
         $keywords = array_map(
             function (string $word): string
             {

@@ -668,15 +668,13 @@ class go extends Factory
         $tokens = array_values($tokens);
 
         foreach ($tokens as $key => $value) {
-            if (4 >= mb_strlen($value, 'UTF-8') || 8 >= strlen($value)) {
+            if (2 >= mb_strlen($value, 'UTF-8')) {
                 $asian_tokens[] = $value;
                 unset($tokens[$key]);
             }
         }
 
-        $tokens = array_values($tokens);
-        $text   = implode(' ', $tokens);
-
+        $text     = implode(' ', $tokens);
         $segments = $this->NGram->splitText($text);
 
         $latin_tokens = explode(' ', $segments['latin']);
@@ -688,7 +686,7 @@ class go extends Factory
             $asian_texts = array_filter($asian_texts, 'strlen');
 
             foreach ($asian_texts as $asian_text) {
-                if (4 >= mb_strlen($asian_text, 'UTF-8')) {
+                if (2 >= mb_strlen($asian_text, 'UTF-8')) {
                     $asian_tokens[] = $asian_text;
                 } else {
                     $asian_grams  = $this->NGram->getGrams($asian_text, 2);

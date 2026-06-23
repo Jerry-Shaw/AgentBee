@@ -76,17 +76,16 @@ class config extends Factory
             $config_data['agent_llm']['hw_hash'] ??= '';
 
             if ('' !== $config_data['agent_llm']['hw_hash']) {
-                $config_data['agent_llm']['api_key'] = $this->decryptKey($config_data['agent_llm']['api_key'], $config_data['agent_llm']['hw_hash']);
+                $api_key = $this->decryptKey($config_data['agent_llm']['api_key'], $config_data['agent_llm']['hw_hash']);
+
+                if ($api_key !== $config_data['agent_llm']['api_key']) {
+                    $config_data['agent_llm']['api_key'] = $api_key;
+                } else {
+                    $config_data['agent_llm']['hw_hash'] = '';
+                    $config_data['agent_llm']['hw_hash'] = $this->save($config_data);
+                }
             } else {
-                $to_config = $config_data;
-                $key_data  = $this->encryptKey($config_data['agent_llm']['api_key']);
-
-                $to_config['agent_llm']['api_key']   = $key_data['api_key'];
-                $to_config['agent_llm']['hw_hash']   = $key_data['hw_hash'];
-                $config_data['agent_llm']['hw_hash'] = $key_data['hw_hash'];
-
-                file_put_contents($this->conf_system, json_encode($to_config, JSON_PRETTY));
-                unset($to_config, $key_data);
+                $config_data['agent_llm']['hw_hash'] = $this->save($config_data);
             }
 
             $this->config = $config_data;
@@ -108,10 +107,10 @@ class config extends Factory
     /**
      * @param array $config_data
      *
-     * @return int
+     * @return string
      * @throws \Exception
      */
-    public function save(array $config_data): int
+    public function save(array $config_data): string
     {
         $config_data['agent_llm']['api_key'] ??= '';
         $config_data['agent_llm']['hw_hash'] ??= '';
@@ -134,10 +133,12 @@ class config extends Factory
 
         $config_data = array_merge($this->config, $config_data);
         $config_json = json_encode($config_data, JSON_PRETTY);
-        $save_bytes  = file_put_contents($this->conf_system, $config_json);
+        $config_hash = $config_data['agent_llm']['hw_hash'];
+
+        file_put_contents($this->conf_system, $config_json);
 
         unset($config_data, $api_key, $key_data, $config_json);
-        return (int)$save_bytes;
+        return $config_hash;
     }
 
     /**

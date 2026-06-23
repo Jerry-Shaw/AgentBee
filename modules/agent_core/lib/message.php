@@ -50,14 +50,14 @@ class message extends Factory
                 break;
 
             case 'saveConfig':
-                $save_bytes = config::new()->save($data_content['data']);
-                $content    = [
+                $config_hash = config::new()->save($data_content['data']);
+                $content     = [
                     'status' => 'success',
                     'act'    => $act,
-                    'data'   => 'Bytes written: ' . $save_bytes,
+                    'data'   => $config_hash,
                 ];
 
-                unset($save_bytes);
+                unset($config_hash);
                 break;
 
             case 'getDefaultConfig':

@@ -774,12 +774,14 @@ class go extends Factory
                     );
                 }
 
-                if (!empty($this->coming_messages)) {
-                    $this->utils->debug('User: LLM ready, fetching ' . count($this->onsend_messages) . ' message(s) from queue.', 'trace');
+                $count_coming_message = count($this->onsend_messages);
+                if (0 < $count_coming_message) {
+                    $this->utils->debug('User: LLM ready, fetching ' . $count_coming_message . ' message(s) from queue.', 'trace');
                     while (!is_null($coming_message = array_shift($this->coming_messages))) {
                         $llm_data[] = $coming_message;
                     }
                 }
+                unset($count_coming_message);
             } else {
                 $this->utils->debug('User: LLM in progress, new message queued.', 'trace');
                 $this->coming_messages = array_merge($this->coming_messages, $result['content']);
@@ -789,23 +791,25 @@ class go extends Factory
             $end_data[] = $data;
         }
 
-        $message_metadata = $this->utils->getMessageMarker(
-            WORKER_MAIN,
-            WORKER_MAIN,
-            'Assistant',
-            AGENT_NAME,
-            0
-        );
-
         foreach ($end_data as $end_packet) {
             $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $end_packet));
         }
 
-        if (!empty($llm_data)) {
+        $count_llm_data = count($llm_data);
+        if (0 < $count_llm_data) {
+            $this->utils->debug('User: Sending ' . $count_llm_data . ' message(s) to LLM', 'trace');
+
             $this->in_process = true;
-            $this->utils->debug('User: Sending messages to LLM', 'trace');
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
+
+            $message_metadata = $this->utils->getMessageMarker(
+                WORKER_MAIN,
+                WORKER_MAIN,
+                'Assistant',
+                AGENT_NAME,
+                0
+            );
 
             $this->openai->talk(
                 $this->utils->getMainIDX(),
@@ -815,7 +819,7 @@ class go extends Factory
             );
         }
 
-        unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet);
+        unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet, $count_llm_data);
     }
 
     /**
@@ -845,11 +849,11 @@ class go extends Factory
             $this->utils->debug('System: History truncated (' . $current_count . ' -> ' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
         }
 
-        if (!empty($this->onsend_messages)) {
+        $count_onsend_message = count($this->onsend_messages);
+        if (0 < $count_onsend_message) {
+            $this->utils->debug('System: LLM ready, fetching ' . $count_onsend_message . ' message(s) from queue.', 'trace');
+
             $llm_data = [];
-
-            $this->utils->debug('System: LLM ready, fetching ' . count($this->onsend_messages) . ' message(s) from queue.', 'trace');
-
             while (!is_null($coming_message = array_shift($this->onsend_messages))) {
                 $llm_data[] = [
                     'type' => 'text',
@@ -857,30 +861,35 @@ class go extends Factory
                 ];
             }
 
-            $this->in_process = true;
+            $count_llm_data = count($llm_data);
+            if (0 < $count_llm_data) {
+                $this->utils->debug('System: Sending ' . $count_llm_data . ' message(s) to LLM', 'trace');
 
-            $this->utils->debug('System: Sending messages to LLM', 'trace');
-            $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
+                $this->in_process = true;
+                $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
 
-            $metadata = $this->utils->getMessageMarker(
-                WORKER_MAIN,
-                WORKER_MAIN,
-                'Assistant',
-                AGENT_NAME,
-                0
-            );
+                $metadata = $this->utils->getMessageMarker(
+                    WORKER_MAIN,
+                    WORKER_MAIN,
+                    'Assistant',
+                    AGENT_NAME,
+                    0
+                );
 
-            $this->openai->talk(
-                $this->utils->getMainIDX(),
-                'talk',
-                $this->utils->getSessionHistory(WORKER_MAIN),
-                $metadata + ['socket_id' => $socket_id]
-            );
+                $this->openai->talk(
+                    $this->utils->getMainIDX(),
+                    'talk',
+                    $this->utils->getSessionHistory(WORKER_MAIN),
+                    $metadata + ['socket_id' => $socket_id]
+                );
 
-            unset($llm_data, $coming_message, $metadata);
+                unset($metadata);
+            }
+
+            unset($llm_data, $coming_message, $count_llm_data);
         }
 
-        unset($socket_id, $current_count);
+        unset($socket_id, $buffer, $current_count, $count_onsend_message);
         return [];
     }
 

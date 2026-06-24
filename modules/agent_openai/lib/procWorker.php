@@ -149,16 +149,17 @@ class procWorker extends Factory
                         $tool_results  = $this->core->execTools($tool_calls_buffer);
 
                         foreach ($tool_results as $result) {
-                            if (str_starts_with($result['function_name'], 'WorkerBee-')) {
-                                $result_data = json_decode($result['content'], true);
+                            $result_data = json_decode($result['content'], true);
 
+                            if (isset($result_data['handler'])) {
                                 $result_data['socket_id'] = $socket_id;
-                                $this->sendMsg($socket_id, 'context', 'WorkerBee', $metadata, $result_data);
+                                $this->sendMsg($socket_id, 'context', 'callHandler', $metadata, $result_data);
+
+                                unset($result_data['handler']);
+                                $result['content'] = json_encode($result_data, JSON_FORMAT);
                             }
 
                             if ('System-readImage' === $result['function_name']) {
-                                $result_data = json_decode($result['content'], true);
-
                                 if (is_array($result_data) && 'success' === $result_data['status']) {
                                     $image_loader[] = ['type' => 'text', 'text' => $result_data['filename'] . ' (按需使用)'];
                                     $image_loader[] = ['type' => 'image_url', 'image_url' => ['url' => $result_data['content']]];

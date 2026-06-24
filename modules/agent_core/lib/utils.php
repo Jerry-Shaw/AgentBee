@@ -44,6 +44,14 @@ class utils extends Factory
 
     public array $session_history = [];
 
+    public array $child_workers  = [];
+    public array $socket_session = [];
+    public array $stream_buffers = [];
+
+    public array $coming_messages = [];
+    public array $onsend_messages = [];
+    public array $message_buffers = [];
+
     /**
      * @throws \ReflectionException
      */

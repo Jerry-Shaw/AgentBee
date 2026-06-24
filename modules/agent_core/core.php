@@ -32,6 +32,7 @@ final class core extends Factory
     use System;
 
     public utils     $utils;
+    public Error     $error;
     public SocketMgr $socketMgr;
 
     public array $llm_tools   = [];
@@ -51,6 +52,7 @@ final class core extends Factory
         $this->init();
 
         $this->utils     = utils::new();
+        $this->error     = Error::new();
         $this->socketMgr = SocketMgr::new();
 
         $this->utils->agent_config = $this->utils->config->get(true, $reload);
@@ -80,7 +82,7 @@ final class core extends Factory
 
                 $skill_metadata = array_merge($skill_metadata, $skill['meta']);
             } catch (\Throwable $throwable) {
-                Error::new()->exceptionHandler($throwable, false, false);
+                $this->error->exceptionHandler($throwable, false, false);
                 unset($throwable);
             }
         }
@@ -131,7 +133,7 @@ final class core extends Factory
                     $result_content = json_encode(['status' => 'error', 'message' => json_last_error_msg()], JSON_FORMAT);
                 }
             } catch (\Throwable $throwable) {
-                Error::new()->exceptionHandler(
+                $this->error->exceptionHandler(
                     new \InvalidArgumentException($fn_name . ': ' . $throwable->getMessage(), $throwable->getCode(), $throwable),
                     false,
                     false

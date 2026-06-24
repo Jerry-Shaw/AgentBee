@@ -39,14 +39,6 @@ class go extends Factory
     public bool $in_process    = false;
     public bool $clean_warning = false;
 
-    public array $child_workers  = [];
-    public array $socket_session = [];
-    public array $stream_buffers = [];
-
-    public array $coming_messages = [];
-    public array $onsend_messages = [];
-    public array $message_buffers = [];
-
     /**
      * @throws \ReflectionException
      * @throws \Exception
@@ -196,191 +188,6 @@ class go extends Factory
     }
 
     /**
-     * @param array $payload_data
-     *
-     * @return void
-     * @throws \ReflectionException
-     * @throws \Exception
-     */
-    public function callWorkBee(array $payload_data): void
-    {
-        switch ($payload_data['action']) {
-            case 'start':
-                if (isset($this->child_workers[$payload_data['worker_name']])) {
-                    // WorkerBee already exists, change name or talk
-                    $this->utils->debug('WorkerBee already exists: ' . $payload_data['worker_name'] . ' | ' . $this->child_workers[$payload_data['worker_name']]['worker_role'] . ' already exists!', 'trace');
-
-                    $this->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $this->child_workers[$payload_data['worker_name']]['worker_role'] . ')';
-                    break;
-                }
-
-                $proc_idx = $this->runProcWorker(
-                    $this->utils->getWorkerIDX(),
-                    WORKER_CHILD,
-                    [$this, 'streamWorkerHandler']
-                );
-
-                $this->utils->debug('WorkerBee started: ' . $payload_data['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload_data['worker_role'] . ')', 'trace');
-
-                $this->child_workers[$payload_data['worker_name']] = [
-                    'proc_idx'    => $proc_idx,
-                    'socket_id'   => $payload_data['socket_id'],
-                    'worker_name' => $payload_data['worker_name'],
-                    'worker_role' => $payload_data['worker_role'],
-                    'status'      => 'processing',
-                    'last_talk'   => date('Y-m-d H:i:s'),
-                    'talk_count'  => 0
-                ];
-
-                $child_prompt = $this->utils->getChildPrompt(
-                    $payload_data['worker_name'],
-                    $payload_data['worker_role']
-                );
-
-                $this->utils->setSessionHistory($payload_data['worker_name'], [$child_prompt]);
-                $this->utils->addSessionHistory(
-                    $payload_data['worker_name'],
-                    ['role' => 'user', 'content' => '[用户要求] ' . $payload_data['init_prompt'] . ' | 用一句话概述你的名字，角色，阅读用户要求，并回复“已就绪”']
-                );
-
-                $metadata = $this->utils->getMessageMarker(
-                    WORKER_CHILD,
-                    $payload_data['worker_name'],
-                    $payload_data['worker_role'],
-                    $payload_data['worker_name'],
-                    1
-                );
-
-                $this->openai->talk(
-                    $proc_idx,
-                    'start',
-                    $this->utils->getSessionHistory($payload_data['worker_name']),
-                    $metadata + ['socket_id' => $payload_data['socket_id']]
-                );
-
-                unset($proc_idx, $child_prompt, $metadata);
-                break;
-
-            case 'talk':
-                $worker_info = $this->child_workers[$payload_data['worker_name']] ?? [];
-
-                if (empty($worker_info) || 0 === $this->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
-                    // WorkerBee died, notice main worker
-                    $this->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败';
-                    break;
-                }
-
-                if ('ready' !== $this->child_workers[$worker_info['worker_name']]['status']) {
-                    $this->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is busy', 'trace');
-                    $this->onsend_messages[] = '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
-                    break;
-                }
-
-                $this->child_workers[$worker_info['worker_name']]['status'] = 'processing';
-
-                $worker_message = json_encode(
-                    $this->utils->getMessageMarker(
-                        WORKER_MAIN,
-                        WORKER_MAIN,
-                        'Assistant',
-                        $worker_info['worker_name'],
-                        1
-                    ) + [
-                        'type' => 'content',
-                        'data' => AGENT_NAME . ': ' . $payload_data['message']
-                    ], JSON_FORMAT);
-
-                if (isset($this->socket_session[$worker_info['socket_id']])) {
-                    $this->core->sendMessage($worker_info['socket_id'], $worker_message);
-                } else {
-                    $this->utils->debug('WorkerBee: Client offline, message from ' . AGENT_NAME . ' queued', 'trace');
-                    $this->message_buffers[] = $worker_message;
-                }
-
-                $this->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' started task', 'trace');
-
-                $this->utils->addSessionHistory(
-                    $worker_info['worker_name'],
-                    ['role' => 'user', 'content' => $payload_data['message']]
-                );
-
-                $metadata = $this->utils->getMessageMarker(
-                    WORKER_CHILD,
-                    $worker_info['worker_name'],
-                    $worker_info['worker_role'],
-                    $worker_info['worker_name'],
-                    1
-                );
-
-                $this->openai->talk(
-                    $worker_info['proc_idx'],
-                    'talk',
-                    $this->utils->getSessionHistory($worker_info['worker_name']),
-                    $metadata + ['socket_id' => $payload_data['socket_id']]
-                );
-
-                unset($worker_info, $worker_message, $metadata);
-                break;
-
-            case 'close':
-                $worker_info = $this->child_workers[$payload_data['worker_name']] ?? [];
-
-                if (!empty($worker_info) && 0 < $this->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
-                    $this->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
-
-                    $metadata = $this->utils->getMessageMarker(
-                        WORKER_CHILD,
-                        $worker_info['worker_name'],
-                        $worker_info['worker_role'],
-                        $worker_info['worker_name'],
-                        1
-                    );
-
-                    $this->openai->talk(
-                        $worker_info['proc_idx'],
-                        'close',
-                        $this->utils->getSessionHistory($worker_info['worker_name']),
-                        $metadata + ['socket_id' => $payload_data['socket_id']]
-                    );
-
-                    $this->core->utils->procMgr->close($worker_info['proc_idx']);
-                    $this->core->utils->deleteSessionHistory($worker_info['worker_name']);
-
-                    unset($this->child_workers[$payload_data['worker_name']]);
-                } else {
-                    $this->utils->debug('WorkerBee not found: ' . $worker_info['worker_name'], 'trace');
-                }
-
-                $this->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止';
-
-                unset($worker_info, $metadata);
-                break;
-
-            case 'list':
-                $now   = time();
-                $lines = ['[WorkerBee] 当前活跃Worker列表：'];
-
-                foreach ($this->child_workers as $worker) {
-                    $elapsed = $now - strtotime($worker['last_talk']);
-
-                    $lines[] = '- "' . $worker['worker_name']
-                        . '" (ID:' . $worker['proc_idx'] . ')'
-                        . ' | 角色:' . $worker['worker_role']
-                        . ' | 状态:' . $worker['status']
-                        . ' | 对话:' . $worker['talk_count'] . '轮'
-                        . ' | 沉默:' . $elapsed . '秒';
-                }
-
-                $this->onsend_messages[] = implode("\n", $lines);
-
-                unset($now, $lines, $worker);
-                break;
-        }
-
-        unset($payload_data);
-    }
-
-    /**
      * Callback for external stream (stdout from worker).
      *
      * @param string $external_stream_id
@@ -396,11 +203,11 @@ class go extends Factory
         $data_chunk    = fread($stdout_stream, 8192);
 
         if (false === $data_chunk || '' === $data_chunk) {
-            unset($this->stream_buffers[$external_stream_id]);
+            unset($this->utils->stream_buffers[$external_stream_id]);
             return;
         }
 
-        $buffer = &$this->stream_buffers[$external_stream_id];
+        $buffer = &$this->utils->stream_buffers[$external_stream_id];
         $buffer .= $data_chunk;
 
         while (false !== ($line_pos = strpos($buffer, "\n"))) {
@@ -437,7 +244,7 @@ class go extends Factory
 
                         $proc_idx = WORKER_MAIN === $payload['sender']
                             ? $this->utils->getMainIDX()
-                            : ($this->child_workers[$payload['workerName']]['proc_idx'] ?? -1);
+                            : ($this->utils->child_workers[$payload['workerName']]['proc_idx'] ?? -1);
 
                         if (-1 !== $proc_idx) {
                             $this->openai->talk(
@@ -453,14 +260,14 @@ class go extends Factory
 
                     $stream_msg = json_encode($payload, JSON_FORMAT);
 
-                    if (isset($this->socket_session[$message['socket_id']])) {
+                    if (isset($this->utils->socket_session[$message['socket_id']])) {
                         $this->core->sendMessage($message['socket_id'], $stream_msg);
                     } else {
-                        $this->message_buffers[] = $stream_msg;
+                        $this->utils->message_buffers[] = $stream_msg;
                     }
 
                     if ('error' === $payload_type) {
-                        unset($this->stream_buffers[$external_stream_id]);
+                        unset($this->utils->stream_buffers[$external_stream_id]);
                     }
                     break;
 
@@ -484,11 +291,24 @@ class go extends Factory
 
                     switch ($payload_type) {
                         case 'readImage':
-                            $this->coming_messages = array_merge($this->coming_messages, $payload['data']);
+                            $this->utils->coming_messages = array_merge($this->utils->coming_messages, $payload['data']);
                             break;
 
-                        case 'WorkerBee':
-                            $this->callWorkBee($payload['data']);
+                        case 'callHandler':
+                            if (!isset($payload['data']['handler']) || !isset($payload['data']['action'])) {
+                                $this->utils->debug('Handler: handler or action NOT found!', 'trace');
+                                break;
+                            }
+
+                            try {
+                                $handler = $payload['data']['handler']::new();
+                                $handler->{$payload['data']['action']}($payload['data'], $this);
+                            } catch (\Throwable $throwable) {
+                                $this->utils->debug('Handler: ' . $payload['data']['handler'] . '->' . $payload['data']['action'] . ' (' . $throwable->getMessage() . ')', 'trace');
+                                $this->core->error->exceptionHandler($throwable, false, false);
+                                unset($throwable);
+                            }
+                            unset($handler);
                             break;
 
                         case 'cleanContext':
@@ -520,14 +340,14 @@ class go extends Factory
 
                                 $worker_idx = $this->utils->getMainIDX();
                             } else {
-                                if (!isset($this->child_workers[$payload['workerName']])) {
+                                if (!isset($this->utils->child_workers[$payload['workerName']])) {
                                     break;
                                 }
 
-                                $worker_info = $this->child_workers[$payload['workerName']];
+                                $worker_info = $this->utils->child_workers[$payload['workerName']];
                                 $worker_idx  = $worker_info['proc_idx'];
 
-                                $this->child_workers[$worker_info['worker_name']]['status'] = 'calling_tools';
+                                $this->utils->child_workers[$worker_info['worker_name']]['status'] = 'calling_tools';
                             }
 
                             $metadata = $this->utils->getMessageMarker(
@@ -563,8 +383,8 @@ class go extends Factory
                                     $this->clean_warning = false;
                                     break;
                                 } elseif (!$this->clean_warning) {
-                                    $this->clean_warning     = true;
-                                    $this->onsend_messages[] = '[系统提醒] 上下文 ' . $current_count . '/' . $max_ctx_len . '，超过 ' . $limit_count . ' 条将强制清理，建议主动清理：①保存关键信息到记忆；②清理过期上下文；③简单告知用户；④继续原任务。';
+                                    $this->clean_warning            = true;
+                                    $this->utils->onsend_messages[] = '[系统提醒] 上下文 ' . $current_count . '/' . $max_ctx_len . '，超过 ' . $limit_count . ' 条将强制清理，建议主动清理：①保存关键信息到记忆；②清理过期上下文；③简单告知用户；④继续原任务。';
 
                                     $this->utils->debug($payload['sender'] . ': History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                 }
@@ -572,16 +392,16 @@ class go extends Factory
                                 $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' finished reply', 'trace');
 
                                 if ('' !== $payload['data']) {
-                                    $this->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
+                                    $this->utils->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
                                 }
 
-                                $this->child_workers[$payload['workerName']]['status']     = 'ready';
-                                $this->child_workers[$payload['workerName']]['last_talk']  = date('Y-m-d H:i:s');
-                                $this->child_workers[$payload['workerName']]['talk_count'] = $payload['talk_count'];
+                                $this->utils->child_workers[$payload['workerName']]['status']     = 'ready';
+                                $this->utils->child_workers[$payload['workerName']]['last_talk']  = date('Y-m-d H:i:s');
+                                $this->utils->child_workers[$payload['workerName']]['talk_count'] = $payload['talk_count'];
 
                                 if ($payload['talk_count'] > $limit_count) {
                                     $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
-                                    $this->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker，必要时可重启继续任务。';
+                                    $this->utils->onsend_messages[] = '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限，请保存重要内容后关闭Worker，必要时可重启继续任务。';
                                 }
                             }
                             break;
@@ -591,7 +411,7 @@ class go extends Factory
         }
 
         if (feof($stdout_stream)) {
-            unset($this->stream_buffers[$external_stream_id]);
+            unset($this->utils->stream_buffers[$external_stream_id]);
         }
 
         unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $current_history);
@@ -649,8 +469,8 @@ class go extends Factory
 
         $this->in_process = true;
 
-        if (!empty($this->onsend_messages)) {
-            while (!is_null($coming_message = array_shift($this->onsend_messages))) {
+        if (!empty($this->utils->onsend_messages)) {
+            while (!is_null($coming_message = array_shift($this->utils->onsend_messages))) {
                 $llm_data[] = [
                     'type' => 'text',
                     'text' => $coming_message
@@ -707,7 +527,7 @@ class go extends Factory
             $message = $this->message->process_binary($socket_id, $message);
         }
 
-        $this->socket_session[$socket_id] = $this->utils->getMessageMarker(
+        $this->utils->socket_session[$socket_id] = $this->utils->getMessageMarker(
             WORKER_MAIN,
             WORKER_MAIN,
             'Assistant',
@@ -774,17 +594,17 @@ class go extends Factory
                     );
                 }
 
-                $count_coming_message = count($this->onsend_messages);
+                $count_coming_message = count($this->utils->onsend_messages);
                 if (0 < $count_coming_message) {
                     $this->utils->debug('User: LLM ready, fetching ' . $count_coming_message . ' message(s) from queue.', 'trace');
-                    while (!is_null($coming_message = array_shift($this->coming_messages))) {
+                    while (!is_null($coming_message = array_shift($this->utils->coming_messages))) {
                         $llm_data[] = $coming_message;
                     }
                 }
                 unset($count_coming_message);
             } else {
                 $this->utils->debug('User: LLM in progress, new message queued.', 'trace');
-                $this->coming_messages = array_merge($this->coming_messages, $result['content']);
+                $this->utils->coming_messages = array_merge($this->utils->coming_messages, $result['content']);
             }
 
             unset($data['content']);
@@ -836,8 +656,8 @@ class go extends Factory
             return [];
         }
 
-        if (!empty($this->message_buffers)) {
-            while (!is_null($buffer = array_shift($this->message_buffers))) {
+        if (!empty($this->utils->message_buffers)) {
+            while (!is_null($buffer = array_shift($this->utils->message_buffers))) {
                 $this->core->sendMessage($socket_id, $buffer);
             }
         }
@@ -849,12 +669,12 @@ class go extends Factory
             $this->utils->debug('System: History truncated (' . $current_count . ' -> ' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
         }
 
-        $count_onsend_message = count($this->onsend_messages);
+        $count_onsend_message = count($this->utils->onsend_messages);
         if (0 < $count_onsend_message) {
             $this->utils->debug('System: LLM ready, fetching ' . $count_onsend_message . ' message(s) from queue.', 'trace');
 
             $llm_data = [];
-            while (!is_null($coming_message = array_shift($this->onsend_messages))) {
+            while (!is_null($coming_message = array_shift($this->utils->onsend_messages))) {
                 $llm_data[] = [
                     'type' => 'text',
                     'text' => $coming_message
@@ -903,6 +723,6 @@ class go extends Factory
     public function onClose(string $socket_id): void
     {
         $this->utils->debug('Socket: Client closed: ' . $socket_id, 'trace');
-        unset($this->socket_session[$socket_id], $socket_id);
+        unset($this->utils->socket_session[$socket_id], $socket_id);
     }
 }

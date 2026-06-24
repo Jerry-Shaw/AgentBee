@@ -35,7 +35,7 @@ class go extends Factory
      */
     public function start(string $worker_name, string $worker_role, string $init_prompt): array
     {
-        return ['status' => 'pending', 'action' => 'start', 'worker_name' => $worker_name, 'worker_role' => $worker_role, 'init_prompt' => $init_prompt];
+        return ['status' => 'pending', 'action' => 'start', 'worker_name' => $worker_name, 'worker_role' => $worker_role, 'init_prompt' => $init_prompt, 'handler' => handler::class];
     }
 
     /**
@@ -48,7 +48,7 @@ class go extends Factory
      */
     public function talk(string $worker_name, string $message): array
     {
-        return ['status' => 'pending', 'action' => 'talk', 'worker_name' => $worker_name, 'message' => $message];
+        return ['status' => 'pending', 'action' => 'talk', 'worker_name' => $worker_name, 'message' => $message, 'handler' => handler::class];
     }
 
     /**
@@ -60,7 +60,7 @@ class go extends Factory
      */
     public function close(string $worker_name): array
     {
-        return ['status' => 'pending', 'action' => 'close', 'worker_name' => $worker_name];
+        return ['status' => 'pending', 'action' => 'close', 'worker_name' => $worker_name, 'handler' => handler::class];
     }
 
     /**
@@ -70,6 +70,6 @@ class go extends Factory
      */
     public function list(): array
     {
-        return ['status' => 'pending', 'action' => 'list'];
+        return ['status' => 'pending', 'action' => 'list', 'handler' => handler::class];
     }
 }

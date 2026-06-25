@@ -244,7 +244,7 @@ class go extends Factory
 
                         $proc_idx = WORKER_MAIN === $payload['sender']
                             ? $this->utils->getMainIDX()
-                            : ($this->utils->child_workers[$payload['workerName']]['proc_idx'] ?? -1);
+                            : ($this->utils->getChildWorker('WorkerBee', $payload['workerName'])['proc_idx'] ?? -1);
 
                         if (-1 !== $proc_idx) {
                             $this->openai->talk(
@@ -340,14 +340,14 @@ class go extends Factory
 
                                 $worker_idx = $this->utils->getMainIDX();
                             } else {
-                                if (!isset($this->utils->child_workers[$payload['workerName']])) {
+                                $worker_info = $this->utils->getChildWorker('WorkerBee', $payload['workerName']);
+
+                                if (empty($worker_info)) {
                                     break;
                                 }
 
-                                $worker_info = $this->utils->child_workers[$payload['workerName']];
-                                $worker_idx  = $worker_info['proc_idx'];
-
-                                $this->utils->child_workers[$worker_info['worker_name']]['status'] = 'calling_tools';
+                                $worker_idx = $worker_info['proc_idx'];
+                                $this->utils->setChildWorker('WorkerBee', $worker_info['worker_name'], 'status', 'calling_tools');
                             }
 
                             $metadata = $this->utils->getMessageMarker(
@@ -395,9 +395,9 @@ class go extends Factory
                                     $this->utils->onsend_messages[] = '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data'];
                                 }
 
-                                $this->utils->child_workers[$payload['workerName']]['status']     = 'ready';
-                                $this->utils->child_workers[$payload['workerName']]['last_talk']  = date('Y-m-d H:i:s');
-                                $this->utils->child_workers[$payload['workerName']]['talk_count'] = $payload['talk_count'];
+                                $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'ready');
+                                $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'last_talk', date('Y-m-d H:i:s'));
+                                $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'talk_count', $payload['talk_count']);
 
                                 if ($payload['talk_count'] > $limit_count) {
                                     $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');

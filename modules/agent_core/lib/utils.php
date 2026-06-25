@@ -149,7 +149,7 @@ class utils extends Factory
      *
      * @return void
      */
-    public function deleteSessionHistory(string $worker_name): void
+    public function removeSessionHistory(string $worker_name): void
     {
         unset($this->session_history[$worker_name]);
     }
@@ -386,6 +386,59 @@ class utils extends Factory
             'removed_tools'  => $removed_tools,
             'current_count'  => count($new_history)
         ];
+    }
+
+    /**
+     * @param string $type
+     * @param string $name
+     * @param array  $data
+     *
+     * @return void
+     */
+    public function addChildWorker(string $type, string $name, array $data): void
+    {
+        $this->child_workers[$type][$name] = $data;
+        unset($type, $name, $data);
+    }
+
+    /**
+     * @param string $type
+     * @param string $name
+     * @param string $key
+     * @param mixed  $value
+     *
+     * @return void
+     */
+    public function setChildWorker(string $type, string $name, string $key, mixed $value): void
+    {
+        $this->child_workers[$type][$name][$key] = $value;
+        unset($type, $name, $key, $value);
+    }
+
+    /**
+     * @param string $type
+     * @param string $name
+     *
+     * @return array
+     */
+    public function getChildWorker(string $type, string $name = ''): array
+    {
+        return '' === $name ? ($this->child_workers[$type] ?? []) : ($this->child_workers[$type][$name] ?? []);
+    }
+
+    /**
+     * @param string $type
+     * @param string $name
+     *
+     * @return void
+     */
+    public function removeChildWorker(string $type, string $name): void
+    {
+        unset($this->child_workers[$type][$name]);
+
+        if (empty($this->child_workers[$type])) {
+            unset($this->child_workers[$type]);
+        }
     }
 
     /**

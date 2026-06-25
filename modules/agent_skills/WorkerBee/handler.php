@@ -16,11 +16,12 @@ class handler extends Factory
      */
     public function start(array $payload_data, agent_core $agent_core): void
     {
-        if (isset($agent_core->utils->child_workers[$payload_data['worker_name']])) {
-            // WorkerBee already exists, change name or talk
-            $agent_core->utils->debug('WorkerBee already exists: ' . $payload_data['worker_name'] . ' | ' . $agent_core->utils->child_workers[$payload_data['worker_name']]['worker_role'] . ' already exists!', 'trace');
+        $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
-            $agent_core->utils->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $agent_core->utils->child_workers[$payload_data['worker_name']]['worker_role'] . ')';
+        if (!empty($worker_info)) {
+            // WorkerBee already exists, change name or talk
+            $agent_core->utils->debug('WorkerBee already exists: ' . $payload_data['worker_name'] . ' | ' . $worker_info['worker_role'] . ' already exists!', 'trace');
+            $agent_core->utils->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
             return;
         }
 
@@ -32,15 +33,18 @@ class handler extends Factory
 
         $agent_core->utils->debug('WorkerBee started: ' . $payload_data['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload_data['worker_role'] . ')', 'trace');
 
-        $agent_core->utils->child_workers[$payload_data['worker_name']] = [
-            'proc_idx'    => $proc_idx,
-            'socket_id'   => $payload_data['socket_id'],
-            'worker_name' => $payload_data['worker_name'],
-            'worker_role' => $payload_data['worker_role'],
-            'status'      => 'processing',
-            'last_talk'   => date('Y-m-d H:i:s'),
-            'talk_count'  => 0
-        ];
+        $agent_core->utils->addChildWorker(
+            'WorkerBee',
+            $payload_data['worker_name'], [
+                'proc_idx'    => $proc_idx,
+                'socket_id'   => $payload_data['socket_id'],
+                'worker_name' => $payload_data['worker_name'],
+                'worker_role' => $payload_data['worker_role'],
+                'status'      => 'processing',
+                'last_talk'   => date('Y-m-d H:i:s'),
+                'talk_count'  => 0
+            ]
+        );
 
         $child_prompt = $agent_core->utils->getChildPrompt(
             $payload_data['worker_name'],
@@ -81,7 +85,7 @@ class handler extends Factory
      */
     public function talk(array $payload_data, agent_core $agent_core): void
     {
-        $worker_info = $agent_core->utils->child_workers[$payload_data['worker_name']] ?? [];
+        $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
         if (empty($worker_info) || 0 === $agent_core->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             // WorkerBee died, notice main worker
@@ -89,13 +93,13 @@ class handler extends Factory
             return;
         }
 
-        if ('ready' !== $agent_core->utils->child_workers[$worker_info['worker_name']]['status']) {
+        if ('ready' !== $worker_info['status']) {
             $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is busy', 'trace');
             $agent_core->utils->onsend_messages[] = '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
             return;
         }
 
-        $agent_core->utils->child_workers[$worker_info['worker_name']]['status'] = 'processing';
+        $agent_core->utils->setChildWorker('WorkerBee', $worker_info['worker_name'], 'status', 'processing');
 
         $worker_message = json_encode(
             $agent_core->utils->getMessageMarker(
@@ -150,7 +154,7 @@ class handler extends Factory
      */
     public function close(array $payload_data, agent_core $agent_core): void
     {
-        $worker_info = $agent_core->utils->child_workers[$payload_data['worker_name']] ?? [];
+        $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
         if (!empty($worker_info) && 0 < $agent_core->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             $agent_core->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
@@ -171,9 +175,8 @@ class handler extends Factory
             );
 
             $agent_core->core->utils->procMgr->close($worker_info['proc_idx']);
-            $agent_core->core->utils->deleteSessionHistory($worker_info['worker_name']);
-
-            unset($agent_core->utils->child_workers[$payload_data['worker_name']]);
+            $agent_core->core->utils->removeSessionHistory($worker_info['worker_name']);
+            $agent_core->utils->removeChildWorker('WorkerBee', $payload_data['worker_name']);
         } else {
             $agent_core->utils->debug('WorkerBee not found: ' . $worker_info['worker_name'], 'trace');
         }
@@ -192,8 +195,9 @@ class handler extends Factory
     public function list(array $payload_data, agent_core $agent_core): void
     {
         $lines = ['[WorkerBee] 当前活跃Worker列表：'];
+        $list  = $agent_core->utils->getChildWorker('WorkerBee');
 
-        foreach ($agent_core->utils->child_workers as $worker) {
+        foreach ($list as $worker) {
             $lines[] = '- "' . $worker['worker_name']
                 . '" (ID:' . $worker['proc_idx'] . ')'
                 . ' | 角色:' . $worker['worker_role']
@@ -204,6 +208,6 @@ class handler extends Factory
 
         $agent_core->utils->onsend_messages[] = implode("\n", $lines);
 
-        unset($payload_data, $agent_core, $lines, $worker);
+        unset($payload_data, $agent_core, $lines, $list, $worker);
     }
 }

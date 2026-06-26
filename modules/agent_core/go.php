@@ -104,7 +104,7 @@ class go extends Factory
             [
                 $this->core->OSMgr->getPhpPath(),
                 $this->core->app->script_path,
-                '-c=agent_openai/' . $worker_name
+                '-c', 'agent_openai/' . $worker_name
             ]
         )->run($proc_idx);
 

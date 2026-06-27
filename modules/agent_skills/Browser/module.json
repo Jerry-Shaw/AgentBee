@@ -1,0 +1,13 @@
+{
+  "name": "Browser",
+  "version": "1.0.0",
+  "description": "Browser automation via Chrome/Edge DevTools Protocol.",
+  "author": "秋水之冰",
+  "email": "27206617@qq.com",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  }
+}

@@ -189,6 +189,7 @@ class config extends Factory
             'max_ctx_len'    => 50,
             'memory_limit'   => '4G',
             'sandbox_mode'   => false,
+            'chrome_path'    => 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
             'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
             'agent_debug'    => 'trace',
             'socket_debug'   => false,

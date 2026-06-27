@@ -114,8 +114,8 @@ class go extends Factory
         $this->utils->debug('Register Output Handler', 'debug');
 
         $this->core->socketMgr->addExternalProc(
-            $this->core->utils->procMgr->getProc($proc_idx),
-            $output_handler
+            $this->core->utils->procMgr->getProc($proc_idx, 'stdout', 'process'),
+            ['stdout' => $output_handler]
         );
 
         if (WORKER_MAIN === $worker_name) {
@@ -301,6 +301,8 @@ class go extends Factory
                             }
 
                             try {
+                                $payload['data']['ext_id'] = $context['ext_id'];
+
                                 $handler = $payload['data']['handler']::new();
                                 $handler->{$payload['data']['action']}($payload['data'], $this);
                             } catch (\Throwable $throwable) {

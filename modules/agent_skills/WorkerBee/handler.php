@@ -81,7 +81,6 @@ class handler extends Factory
      *
      * @return void
      * @throws \ReflectionException
-     * @throws \Exception
      */
     public function talk(array $payload_data, agent_core $agent_core): void
     {

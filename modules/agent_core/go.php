@@ -331,11 +331,29 @@ class go extends Factory
                     break;
 
                 case 'end':
-                    $current_history = $this->utils->getSessionHistory($payload['workerName']);
-
                     switch ($payload_type) {
                         case 'tools':
-                            $this->utils->debug($payload['workerName'] . ': LLM Tool calls', 'trace');
+                            if (0 < count($this->utils->onsend_messages)) {
+                                $this->utils->debug('System: Tool calls completed, fetching queued messages.', 'trace');
+
+                                $llm_data = [];
+                                while (!is_null($coming_message = array_shift($this->utils->onsend_messages))) {
+                                    $llm_data[] = [
+                                        'type' => 'text',
+                                        'text' => $coming_message
+                                    ];
+                                }
+
+                                $count_llm_data = count($llm_data);
+                                if (0 < $count_llm_data) {
+                                    $this->utils->debug('System: Adding ' . $count_llm_data . ' message(s) to history', 'trace');
+                                    $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
+                                }
+
+                                unset($llm_data, $coming_message, $count_llm_data);
+                            }
+
+                            $this->utils->debug($payload['workerName'] . ': LLM collecting tool results', 'trace');
 
                             if (WORKER_MAIN === $payload['sender']) {
                                 $this->in_process = true;
@@ -364,7 +382,7 @@ class go extends Factory
                             $this->openai->talk(
                                 $worker_idx,
                                 'talk',
-                                $current_history,
+                                $this->utils->getSessionHistory($payload['workerName']),
                                 $metadata + ['socket_id' => $payload['socket_id']]
                             );
                             break;
@@ -379,7 +397,7 @@ class go extends Factory
                             if (WORKER_MAIN === $payload['sender']) {
                                 $this->in_process = false;
 
-                                $current_count = count($current_history);
+                                $current_count = $this->utils->countSessionHistory($payload['workerName']);
 
                                 if ($current_count < $warning_count) {
                                     $this->clean_warning = false;
@@ -416,7 +434,7 @@ class go extends Factory
             unset($this->utils->stream_buffers[$external_stream_id]);
         }
 
-        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $current_history);
+        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type);
     }
 
     /**

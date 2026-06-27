@@ -179,6 +179,9 @@ class handler extends Factory
                         return;
                     }
 
+                    $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'ready');
+                    $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', 'idle');
+
                     $data = json_decode($line, true);
 
                     if (is_array($data)) {
@@ -694,9 +697,6 @@ class handler extends Factory
         $data['action'] ??= '未知操作';
 
         $agent_core->utils->debug('Browser: ' . $worker_name . ' returned from ' . $data['action'] . '.', 'trace');
-
-        $agent_core->utils->setChildWorker('Browser', $worker_name, 'status', 'ready');
-        $agent_core->utils->setChildWorker('Browser', $worker_name, 'action', 'idle');
 
         if ('screenshot' === $data['action'] && isset($data['id']) && isset($this->screenshot[$data['id']])) {
             $save_path = $agent_core->utils->securePath($this->screenshot[$data['id']]);

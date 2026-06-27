@@ -48,9 +48,9 @@ class skills
                     'type'       => 'object',
                     'properties' => [
                         'worker_name' => ['type' => 'string', 'description' => 'Worker名称'],
-                        'message'     => ['type' => 'string', 'description' => '消息内容']
+                        'content'     => ['type' => 'string', 'description' => '消息内容']
                     ],
-                    'required'   => ['worker_name', 'message']
+                    'required'   => ['worker_name', 'content']
                 ],
             ],
         ],

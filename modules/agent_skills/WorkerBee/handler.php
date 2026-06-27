@@ -109,7 +109,7 @@ class handler extends Factory
                 1
             ) + [
                 'type' => 'content',
-                'data' => AGENT_NAME . ': ' . $payload_data['message']
+                'data' => AGENT_NAME . ': ' . $payload_data['content']
             ], JSON_FORMAT);
 
         if (isset($agent_core->utils->socket_session[$worker_info['socket_id']])) {
@@ -123,7 +123,7 @@ class handler extends Factory
 
         $agent_core->utils->addSessionHistory(
             $worker_info['worker_name'],
-            ['role' => 'user', 'content' => $payload_data['message']]
+            ['role' => 'user', 'content' => $payload_data['content']]
         );
 
         $metadata = $agent_core->utils->getMessageMarker(
@@ -177,7 +177,7 @@ class handler extends Factory
             $agent_core->core->utils->removeSessionHistory($worker_info['worker_name']);
             $agent_core->utils->removeChildWorker('WorkerBee', $payload_data['worker_name']);
         } else {
-            $agent_core->utils->debug('WorkerBee not found: ' . $worker_info['worker_name'], 'trace');
+            $agent_core->utils->debug('WorkerBee not found: ' . $payload_data['worker_name'], 'trace');
         }
 
         $agent_core->utils->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止';

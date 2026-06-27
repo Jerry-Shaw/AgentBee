@@ -35,20 +35,33 @@ class go extends Factory
      */
     public function start(string $worker_name, string $worker_role, string $init_prompt): array
     {
-        return ['status' => 'pending', 'action' => 'start', 'worker_name' => $worker_name, 'worker_role' => $worker_role, 'init_prompt' => $init_prompt, 'handler' => handler::class];
+        return [
+            'action'      => 'start',
+            'worker_name' => $worker_name,
+            'worker_role' => $worker_role,
+            'init_prompt' => $init_prompt,
+            'handler'     => handler::class,
+            'message'     => '启动Worker操作已提交，稍后会自动推送结果，待就绪后即可发送消息。'
+        ];
     }
 
     /**
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $worker_name
-     * @param string $message
+     * @param string $content
      *
      * @return string[]
      */
-    public function talk(string $worker_name, string $message): array
+    public function talk(string $worker_name, string $content): array
     {
-        return ['status' => 'pending', 'action' => 'talk', 'worker_name' => $worker_name, 'message' => $message, 'handler' => handler::class];
+        return [
+            'action'      => 'talk',
+            'worker_name' => $worker_name,
+            'content'     => $content,
+            'handler'     => handler::class,
+            'message'     => '消息已发送，请等待回复。请勿重复发送消息。'
+        ];
     }
 
     /**
@@ -60,7 +73,12 @@ class go extends Factory
      */
     public function close(string $worker_name): array
     {
-        return ['status' => 'pending', 'action' => 'close', 'worker_name' => $worker_name, 'handler' => handler::class];
+        return [
+            'action'      => 'close',
+            'worker_name' => $worker_name,
+            'handler'     => handler::class,
+            'message'     => '关闭Worker操作已提交，稍后会自动推送结果。'
+        ];
     }
 
     /**
@@ -70,6 +88,10 @@ class go extends Factory
      */
     public function list(): array
     {
-        return ['status' => 'pending', 'action' => 'list', 'handler' => handler::class];
+        return [
+            'action'  => 'list',
+            'handler' => handler::class,
+            'message' => '列出Worker操作已提交，稍后会自动推送结果。'
+        ];
     }
 }

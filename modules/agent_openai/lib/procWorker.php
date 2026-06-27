@@ -152,10 +152,13 @@ class procWorker extends Factory
                             $result_data = json_decode($result['content'], true);
 
                             if (isset($result_data['handler'])) {
-                                $result_data['socket_id'] = $socket_id;
+                                $result_data['socket_id']    = $socket_id;
+                                $result_data['tool_call_id'] = $result['tool_call_id'];
                                 $this->sendMsg($socket_id, 'context', 'callHandler', $metadata, $result_data);
 
-                                unset($result_data['handler']);
+                                unset($result_data['handler'], $result_data['content']);
+                                $result_data['message'] ??= '操作已提交，稍后会自动推送结果，请勿重复调用工具。';
+
                                 $result['content'] = json_encode($result_data, JSON_FORMAT);
                             }
 

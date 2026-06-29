@@ -345,13 +345,13 @@ class go extends Factory
 
                 case 'end':
                     $this->in_process = false;
+                    $new_messages     = $this->utils->refreshSessionHistory(WORKER_MAIN);
 
                     switch ($payload_type) {
                         case 'tools':
                             if (WORKER_MAIN === $payload['sender']) {
                                 $this->in_process = true;
-                                $this->utils->refreshSessionHistory(WORKER_MAIN);
-                                $worker_idx = $this->utils->getMainIDX();
+                                $worker_idx       = $this->utils->getMainIDX();
                             } else {
                                 $worker_info = $this->utils->getChildWorker('WorkerBee', $payload['workerName']);
 
@@ -373,7 +373,7 @@ class go extends Factory
                                 $payload['workerRole'],
                                 $payload['workerName'],
                                 $payload['isSubTalk'],
-                                $payload['messageId']
+                                0 === $new_messages ? $payload['messageId'] : ''
                             );
 
                             $this->openai->talk(
@@ -392,8 +392,6 @@ class go extends Factory
                             $limit_count   = $max_ctx_len * 3;
 
                             if (WORKER_MAIN === $payload['sender']) {
-                                $new_messages = $this->utils->refreshSessionHistory(WORKER_MAIN);
-
                                 if (0 < $new_messages) {
                                     $this->in_process = true;
 

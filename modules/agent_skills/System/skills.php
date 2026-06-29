@@ -66,7 +66,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'readImage',
-                'description' => '读取图片返回Data URL。返回status,content,filename,mime_type等。',
+                'description' => '读取图片。返回status,content (Data URL),filename,mime_type等。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => ['file_path' => ['type' => 'string', 'description' => '图片文件路径']],

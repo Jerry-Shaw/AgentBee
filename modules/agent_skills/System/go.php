@@ -46,7 +46,15 @@ class go extends Factory
      */
     public function cleanContext(int $keep_normal = 6, int $keep_tool_pairs = 2, bool $aggressive_mode = false): array
     {
-        return ['status' => 'pending', 'keep_normal' => $keep_normal, 'keep_tool_pairs' => $keep_tool_pairs, 'aggressive_mode' => $aggressive_mode];
+        return [
+            'async'           => false,
+            'action'          => __FUNCTION__,
+            'worker_name'     => WORKER_MAIN,
+            'keep_normal'     => $keep_normal,
+            'keep_tool_pairs' => $keep_tool_pairs,
+            'aggressive_mode' => $aggressive_mode,
+            'handler'         => handler::class
+        ];
     }
 
     /**
@@ -142,7 +150,7 @@ class go extends Factory
     }
 
     /**
-     * Read image file and return Data URL.
+     * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $file_path
      *
@@ -150,48 +158,12 @@ class go extends Factory
      */
     public function readImage(string $file_path): array
     {
-        $full_path = $this->utils->securePath($file_path);
-
-        if (!is_file($full_path)) {
-            return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
-        }
-
-        if (!is_readable($full_path)) {
-            return ['status' => 'error', 'error' => 'File not readable: ' . $full_path];
-        }
-
-        $info = getimagesize($full_path);
-
-        if (false === $info || empty($info['mime'])) {
-            return ['status' => 'error', 'error' => 'Cannot identify image type or unsupported format'];
-        }
-
-        $mime_type = $info['mime'];
-        $allowed   = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
-
-        if (!in_array($mime_type, $allowed, true)) {
-            return ['status' => 'error', 'error' => 'Unsupported image type: ' . $mime_type];
-        }
-
-        $data = file_get_contents($full_path);
-
-        if (false === $data) {
-            return ['status' => 'error', 'error' => 'Failed to read image data: ' . $full_path];
-        }
-
-        $base64    = base64_encode($data);
-        $image_url = 'data:' . $mime_type . ';base64,' . $base64;
-
-        $result = [
-            'status'    => 'success',
-            'content'   => $image_url,
-            'filename'  => basename($full_path),
-            'mime_type' => $mime_type,
-            'file_path' => $full_path
+        return [
+            'async'     => false,
+            'action'    => __FUNCTION__,
+            'file_path' => $file_path,
+            'handler'   => handler::class
         ];
-
-        unset($file_path, $full_path, $info, $mime_type, $allowed, $data, $base64, $image_url);
-        return $result;
     }
 
     /**

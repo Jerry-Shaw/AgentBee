@@ -90,7 +90,7 @@ class go extends Factory
 
         $this->core->addSkills($agent_skills);
 
-        foreach (['OfficeSuite', 'WebCrawler'] as $core_skill) {
+        foreach (['Browser', 'OfficeSuite', 'WebCrawler'] as $core_skill) {
             $agent_skills = $this->utils->fetchSkills('modules/agent_skills', $core_skill);
             $this->core->addSkills($agent_skills);
         }

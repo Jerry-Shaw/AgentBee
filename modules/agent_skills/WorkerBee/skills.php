@@ -72,7 +72,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '列出所有Worker及其状态（ready/processing/calling_tools等）。异步，结果稍后推送。仅用于偶尔查看，禁止高频调用，以免阻塞通信。'
+                'description' => '列出所有Worker及其状态（ready/processing/calling_tools等）。仅用于偶尔查看，禁止高频调用，以免阻塞通信。'
             ],
         ]
     ];

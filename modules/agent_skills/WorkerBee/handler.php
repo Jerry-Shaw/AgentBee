@@ -4,6 +4,7 @@ namespace modules\agent_skills\WorkerBee;
 
 use modules\agent_core\go as agent_core;
 use Nervsys\Core\Factory;
+use Random\RandomException;
 
 class handler extends Factory
 {
@@ -11,18 +12,18 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return string
      * @throws \Exception
      */
-    public function start(array $payload_data, agent_core $agent_core): void
+    public function start(array $payload_data, agent_core $agent_core): string
     {
         $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
         if (!empty($worker_info)) {
             // WorkerBee already exists, change name or talk
             $agent_core->utils->debug('WorkerBee already exists: ' . $payload_data['worker_name'] . ' | ' . $worker_info['worker_role'] . ' already exists!', 'trace');
-            $agent_core->utils->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
-            return;
+            $agent_core->utils->addOnsendMessage('WorkerBee', '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')');
+            return '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
         }
 
         $proc_idx = $agent_core->runProcWorker(
@@ -73,29 +74,31 @@ class handler extends Factory
         );
 
         unset($payload_data, $agent_core, $proc_idx, $child_prompt, $metadata);
+        return '启动Worker操作已提交，稍后会自动推送结果，待就绪后即可发送消息。';
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return string
      * @throws \ReflectionException
+     * @throws RandomException
      */
-    public function talk(array $payload_data, agent_core $agent_core): void
+    public function talk(array $payload_data, agent_core $agent_core): string
     {
         $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
         if (empty($worker_info) || 0 === $agent_core->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             // WorkerBee died, notice main worker
-            $agent_core->utils->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败';
-            return;
+            $agent_core->utils->addOnsendMessage('WorkerBee', '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败');
+            return '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败';
         }
 
         if ('ready' !== $worker_info['status']) {
             $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is busy', 'trace');
-            $agent_core->utils->onsend_messages[] = '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
-            return;
+            $agent_core->utils->addOnsendMessage('WorkerBee', '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。');
+            return '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
         }
 
         $agent_core->utils->setChildWorker('WorkerBee', $worker_info['worker_name'], 'status', 'processing');
@@ -112,14 +115,9 @@ class handler extends Factory
                 'data' => AGENT_NAME . ': ' . $payload_data['content']
             ], JSON_FORMAT);
 
-        if (isset($agent_core->utils->socket_session[$worker_info['socket_id']])) {
-            $agent_core->core->sendMessage($worker_info['socket_id'], $worker_message);
-        } else {
-            $agent_core->utils->debug('WorkerBee: Client offline, message from ' . AGENT_NAME . ' queued', 'trace');
-            $agent_core->utils->message_buffers[] = $worker_message;
-        }
+        $agent_core->core->sendMessage($worker_info['socket_id'], $worker_message);
 
-        $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' started task', 'trace');
+        $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');
 
         $agent_core->utils->addSessionHistory(
             $worker_info['worker_name'],
@@ -142,16 +140,17 @@ class handler extends Factory
         );
 
         unset($payload_data, $agent_core, $worker_info, $worker_message, $metadata);
+        return '消息已发送，请等待回复。请勿重复发送消息。';
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return string
      * @throws \Exception
      */
-    public function close(array $payload_data, agent_core $agent_core): void
+    public function close(array $payload_data, agent_core $agent_core): string
     {
         $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
@@ -180,33 +179,34 @@ class handler extends Factory
             $agent_core->utils->debug('WorkerBee not found: ' . $payload_data['worker_name'], 'trace');
         }
 
-        $agent_core->utils->onsend_messages[] = '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止';
+        $message = '"' . $payload_data['worker_name'] . '" 进程已终止';
 
         unset($payload_data, $agent_core, $worker_info, $metadata);
+        return $message;
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
      */
-    public function list(array $payload_data, agent_core $agent_core): void
+    public function list(array $payload_data, agent_core $agent_core): array
     {
-        $lines = ['[WorkerBee] 当前活跃Worker列表：'];
-        $list  = $agent_core->utils->getChildWorker('WorkerBee');
+        $list    = [];
+        $workers = $agent_core->utils->getChildWorker('WorkerBee');
 
-        foreach ($list as $worker) {
-            $lines[] = '- "' . $worker['worker_name']
-                . '" (ID:' . $worker['proc_idx'] . ')'
-                . ' | 角色:' . $worker['worker_role']
-                . ' | 状态:' . $worker['status']
-                . ' | 对话:' . $worker['talk_count'] . '轮'
-                . ' | 沉默:' . (time() - strtotime($worker['last_talk'])) . '秒';
+        foreach ($workers as $worker) {
+            $list[] = [
+                'worker_name'   => $worker['worker_name'],
+                'worker_role'   => $worker['worker_role'],
+                'worker_status' => $worker['status'],
+                'talk_count'    => $worker['talk_count'],
+                'idle_sec'      => time() - strtotime($worker['last_talk'])
+            ];
         }
 
-        $agent_core->utils->onsend_messages[] = implode("\n", $lines);
-
-        unset($payload_data, $agent_core, $lines, $list, $worker);
+        unset($payload_data, $agent_core, $workers, $worker);
+        return $list;
     }
 }

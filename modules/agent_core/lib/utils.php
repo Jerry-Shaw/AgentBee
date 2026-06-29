@@ -185,14 +185,22 @@ class utils extends Factory
      * Prune session history for a worker.
      *
      * @param string $worker_name
-     * @param int    $keep_normal         Min normal units (user + assistant w/o tool_calls)
-     * @param int    $keep_tool_pairs     Min tool pairs (assistant with tool_calls + its tools)
-     * @param bool   $aggressive_mode     Allow zero limits
-     * @param string $remove_tool_call_id Specify clean context tool_call_id, will be removed
+     * @param int    $keep_normal               Min normal units (user + assistant w/o tool_calls)
+     * @param int    $keep_tool_pairs           Min tool pairs (assistant with tool_calls + its tools)
+     * @param bool   $aggressive_mode           Allow zero limits
+     * @param string $remove_tool_call_id       Specify clean context tool_call_id, will be removed
+     * @param int    $remove_tool_call_id_limit Specify how many tool_call_ids will be removed, tool_calls and tool_result
      *
      * @return array{removed_normal:int, removed_tools:int, current_count:int}
      */
-    public function cleanSessionHistory(string $worker_name, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $aggressive_mode = false, string $remove_tool_call_id = ''): array
+    public function cleanSessionHistory(
+        string $worker_name,
+        int    $keep_normal = 6,
+        int    $keep_tool_pairs = 2,
+        bool   $aggressive_mode = false,
+        string $remove_tool_call_id = '',
+        int    $remove_tool_call_id_limit = 2
+    ): array
     {
         $history = $this->session_history[$worker_name];
 
@@ -211,7 +219,7 @@ class utils extends Factory
             $last_key = count($history) - 1;
 
             for ($i = $last_key; $i >= 0; $i--) {
-                if (2 <= $removed) {
+                if ($removed >= $remove_tool_call_id_limit) {
                     break;
                 }
 
@@ -406,7 +414,7 @@ class utils extends Factory
         $removed_normal = max(0, $total_normal_units - $kept_normal_units);
         $removed_tools  = max(0, $total_tool_units - $kept_tool_units);
 
-        unset($worker_name, $keep_normal, $keep_tool_pairs, $aggressive_mode, $remove_tool_call_id, $history, $system, $total, $units, $i, $msg, $indices, $j, $selected_normal, $selected_tools, $need_normal, $need_tools, $unit_count, $idx, $unit, $first_idx, $user_unit, $extra_user_indices, $normal_idx_set, $uidx, $tool_unit, $tool_start, $all_units, $keep, $total_normal_units, $total_tool_units, $kept_normal_units, $kept_tool_units);
+        unset($worker_name, $keep_normal, $keep_tool_pairs, $aggressive_mode, $remove_tool_call_id, $remove_tool_call_id_limit, $history, $system, $total, $units, $i, $msg, $indices, $j, $selected_normal, $selected_tools, $need_normal, $need_tools, $unit_count, $idx, $unit, $first_idx, $user_unit, $extra_user_indices, $normal_idx_set, $uidx, $tool_unit, $tool_start, $all_units, $keep, $total_normal_units, $total_tool_units, $kept_normal_units, $kept_tool_units);
 
         return [
             'removed_normal' => $removed_normal,

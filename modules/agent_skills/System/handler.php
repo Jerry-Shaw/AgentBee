@@ -20,7 +20,8 @@ class handler extends Factory
             $payload_data['keep_normal'],
             $payload_data['keep_tool_pairs'],
             $payload_data['aggressive_mode'],
-            $payload_data['tool_call_id']
+            $payload_data['tool_call_id'],
+            1
         );
 
         return '[系统提醒] 上下文已清理，继续原有任务。';

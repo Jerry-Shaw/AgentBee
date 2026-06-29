@@ -53,6 +53,7 @@ class go extends Factory
             'keep_normal'     => $keep_normal,
             'keep_tool_pairs' => $keep_tool_pairs,
             'aggressive_mode' => $aggressive_mode,
+            'skip_history'    => true,
             'handler'         => handler::class
         ];
     }

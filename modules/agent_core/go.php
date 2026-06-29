@@ -372,7 +372,8 @@ class go extends Factory
                                 $payload['workerName'],
                                 $payload['workerRole'],
                                 $payload['workerName'],
-                                $payload['isSubTalk']
+                                $payload['isSubTalk'],
+                                $payload['messageId']
                             );
 
                             $this->openai->talk(

@@ -344,13 +344,13 @@ class go extends Factory
                     break;
 
                 case 'end':
-                    $new_messages = $this->utils->refreshSessionHistory(WORKER_MAIN);
+                    $this->in_process = false;
 
                     switch ($payload_type) {
                         case 'tools':
                             if (WORKER_MAIN === $payload['sender']) {
                                 $this->in_process = true;
-
+                                $this->utils->refreshSessionHistory(WORKER_MAIN);
                                 $worker_idx = $this->utils->getMainIDX();
                             } else {
                                 $worker_info = $this->utils->getChildWorker('WorkerBee', $payload['workerName']);
@@ -372,8 +372,7 @@ class go extends Factory
                                 $payload['workerName'],
                                 $payload['workerRole'],
                                 $payload['workerName'],
-                                $payload['isSubTalk'],
-                                $payload['messageId']
+                                $payload['isSubTalk']
                             );
 
                             $this->openai->talk(
@@ -392,6 +391,8 @@ class go extends Factory
                             $limit_count   = $max_ctx_len * 3;
 
                             if (WORKER_MAIN === $payload['sender']) {
+                                $new_messages = $this->utils->refreshSessionHistory(WORKER_MAIN);
+
                                 if (0 < $new_messages) {
                                     $this->in_process = true;
 
@@ -400,8 +401,7 @@ class go extends Factory
                                         $payload['workerName'],
                                         $payload['workerRole'],
                                         $payload['workerName'],
-                                        $payload['isSubTalk'],
-                                        $payload['messageId']
+                                        $payload['isSubTalk']
                                     );
 
                                     $this->openai->talk(
@@ -411,9 +411,7 @@ class go extends Factory
                                         $metadata + ['socket_id' => $payload['socket_id']]
                                     );
                                 } else {
-                                    $this->in_process = false;
-                                    $current_count    = $this->utils->countSessionHistory($payload['workerName']);
-
+                                    $current_count = $this->utils->countSessionHistory($payload['workerName']);
                                     if ($current_count < $warning_count) {
                                         $this->clean_warning = false;
                                         break;
@@ -421,16 +419,27 @@ class go extends Factory
                                         $this->clean_warning = true;
 
                                         $this->utils->debug($payload['sender'] . ': History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
-                                        $this->utils->addOnsendMessage('System', '[系统提醒] 上下文已达临界值，即将强制清理。必须闭环：①保存进度快照 → ②执行上下文清理 → ③同步任务目标与最新状态 → ④衔接原任务指令 → ⑤通知用户。禁止中断，自动继续原任务。');
+                                        $this->utils->addMessageQueue(
+                                            'System',
+                                            [
+                                                'type' => 'text',
+                                                'text' => '[系统提醒] 上下文已达临界值，即将强制清理。必须闭环：①保存进度快照 → ②执行上下文清理 → ③同步任务目标与最新状态 → ④衔接原任务指令 → ⑤通知用户。禁止中断，自动继续原任务。'
+                                            ]
+                                        );
                                     }
-
                                     unset($current_count, $limit_count);
                                 }
                             } else {
                                 $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' reply completed, ready.', 'trace');
 
                                 if ('' !== $payload['data']) {
-                                    $this->utils->addOnsendMessage('WorkerBee', '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data']);
+                                    $this->utils->addMessageQueue(
+                                        'WorkerBee',
+                                        [
+                                            'type' => 'text',
+                                            'text' => '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data']
+                                        ]
+                                    );
                                 }
 
                                 $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'ready');
@@ -439,7 +448,13 @@ class go extends Factory
 
                                 if ($payload['talk_count'] > $limit_count) {
                                     $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
-                                    $this->utils->addOnsendMessage('WorkerBee', '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限。必须闭环：①保存状态 → ②关闭进程 → ③重启加载 → ④注入关键历史（从记忆提取摘要）→ ⑤继续原任务指令 → ⑥通知用户。禁止中断，自动接续。');
+                                    $this->utils->addMessageQueue(
+                                        'WorkerBee',
+                                        [
+                                            'type' => 'text',
+                                            'text' => '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限。必须闭环：①保存状态 → ②关闭进程 → ③重启加载 → ④注入关键历史（从记忆提取摘要）→ ⑤继续原任务指令 → ⑥通知用户。禁止中断，自动接续。'
+                                        ]
+                                    );
                                 }
                             }
 
@@ -609,8 +624,6 @@ class go extends Factory
             }
 
             if (!$this->in_process) {
-                $this->utils->refreshSessionHistory(WORKER_MAIN);
-
                 $llm_data = $result['content'];
 
                 if (empty($this->utils->getSessionHistory(WORKER_MAIN))) {
@@ -626,7 +639,12 @@ class go extends Factory
                 }
             } else {
                 $this->utils->debug('User: LLM in progress, new message queued.', 'trace');
-                $this->utils->coming_messages = array_merge($this->utils->coming_messages, $result['content']);
+
+                foreach ($result['content'] as $msg_line) {
+                    $this->utils->addMessageQueue('User', $msg_line);
+                }
+
+                unset($msg_line);
             }
 
             unset($data['content']);
@@ -642,6 +660,7 @@ class go extends Factory
             $this->utils->debug('User: Sending ' . $count_llm_data . ' message(s) to ' . WORKER_MAIN, 'trace');
 
             $this->in_process = true;
+            $this->utils->refreshSessionHistory(WORKER_MAIN);
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
 

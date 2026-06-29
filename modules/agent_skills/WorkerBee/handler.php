@@ -22,7 +22,13 @@ class handler extends Factory
         if (!empty($worker_info)) {
             // WorkerBee already exists, change name or talk
             $agent_core->utils->debug('WorkerBee already exists: ' . $payload_data['worker_name'] . ' | ' . $worker_info['worker_role'] . ' already exists!', 'trace');
-            $agent_core->utils->addOnsendMessage('WorkerBee', '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')');
+            $agent_core->utils->addMessageQueue(
+                'WorkerBee',
+                [
+                    'type' => 'text',
+                    'text' => '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')'
+                ]
+            );
             return '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
         }
 
@@ -92,13 +98,25 @@ class handler extends Factory
 
         if (empty($worker_info) || 0 === $agent_core->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             // WorkerBee died, notice main worker
-            $agent_core->utils->addOnsendMessage('WorkerBee', '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败');
+            $agent_core->utils->addMessageQueue(
+                'WorkerBee',
+                [
+                    'type' => 'text',
+                    'text' => '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败'
+                ]
+            );
             return '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败';
         }
 
         if ('ready' !== $worker_info['status']) {
             $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is busy', 'trace');
-            $agent_core->utils->addOnsendMessage('WorkerBee', '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。');
+            $agent_core->utils->addMessageQueue(
+                'WorkerBee',
+                [
+                    'type' => 'text',
+                    'text' => '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。'
+                ]
+            );
             return '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
         }
 

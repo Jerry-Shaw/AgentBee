@@ -48,8 +48,7 @@ class utils extends Factory
     public array $socket_session = [];
     public array $stream_buffers = [];
 
-    public array $coming_messages = [];
-    public array $onsend_messages = [];
+    public array $message_queue   = [];
     public array $message_buffers = [];
 
     /**
@@ -161,17 +160,14 @@ class utils extends Factory
      */
     public function refreshSessionHistory(string $worker_name): int
     {
-        if (empty($this->onsend_messages)) {
+        if (empty($this->message_queue)) {
             return 0;
         }
 
         $messages = [];
 
-        while (!is_null($message = array_shift($this->onsend_messages))) {
-            $messages[] = [
-                'type' => 'text',
-                'text' => $message['message']
-            ];
+        while (!is_null($message = array_shift($this->message_queue))) {
+            $messages[] = $message['message'];
         }
 
         $count_messages = count($messages);
@@ -448,13 +444,13 @@ class utils extends Factory
 
     /**
      * @param string $id
-     * @param string $message
+     * @param array  $message
      *
      * @return void
      */
-    public function addOnsendMessage(string $id, string $message): void
+    public function addMessageQueue(string $id, array $message): void
     {
-        $this->onsend_messages[] = ['id' => $id, 'message' => $message];
+        $this->message_queue[] = ['id' => $id, 'message' => $message];
         unset($id, $message);
     }
 
@@ -464,18 +460,18 @@ class utils extends Factory
      *
      * @return array
      */
-    public function getOnsendMessages(string $id = '', bool $popout = false): array
+    public function getMessageQueue(string $id = '', bool $popout = false): array
     {
         $messages = [];
 
         if ('' === $id) {
-            $messages = $this->onsend_messages;
+            $messages = $this->message_queue;
 
             if ($popout) {
-                $this->onsend_messages = [];
+                $this->message_queue = [];
             }
         } else {
-            foreach ($this->onsend_messages as $key => $item) {
+            foreach ($this->message_queue as $key => $item) {
                 if ($item['id'] !== $id) {
                     continue;
                 }
@@ -483,7 +479,7 @@ class utils extends Factory
                 $messages[] = $item;
 
                 if ($popout) {
-                    unset($this->onsend_messages[$key]);
+                    unset($this->message_queue[$key]);
                 }
             }
 

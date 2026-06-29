@@ -84,6 +84,7 @@ class handler extends Factory
      * @return string
      * @throws \ReflectionException
      * @throws RandomException
+     * @throws \Exception
      */
     public function talk(array $payload_data, agent_core $agent_core): string
     {
@@ -101,6 +102,7 @@ class handler extends Factory
             return '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
         }
 
+        $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');
         $agent_core->utils->setChildWorker('WorkerBee', $worker_info['worker_name'], 'status', 'processing');
 
         $worker_message = json_encode(
@@ -116,8 +118,6 @@ class handler extends Factory
             ], JSON_FORMAT);
 
         $agent_core->core->sendMessage($worker_info['socket_id'], $worker_message);
-
-        $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');
 
         $agent_core->utils->addSessionHistory(
             $worker_info['worker_name'],

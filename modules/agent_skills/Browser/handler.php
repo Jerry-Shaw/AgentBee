@@ -443,19 +443,34 @@ class handler extends Factory
     {
         $worker_info = $agent_core->utils->getChildWorker('Browser', $payload_data['worker_name']);
 
-        if (empty($worker_info)) {
-            return '实例 "' . $payload_data['worker_name'] . '" 已关闭。';
+        if (!empty($worker_info)) {
+            $this->closeProcess($agent_core, $worker_info, $payload_data['worker_name']);
         }
-
-        $agent_core->utils->OSMgr->killProc($worker_info['browser_pid']);
-        $agent_core->utils->procMgr->close($worker_info['browser_idx']);
-        $agent_core->utils->removeChildWorker('Browser', $payload_data['worker_name']);
-        $agent_core->utils->libFileIO->delDir($worker_info['data_dir']);
 
         $message = '实例 "' . $payload_data['worker_name'] . '" 已关闭。';
 
         unset($payload_data, $agent_core, $worker_info);
         return $message;
+    }
+
+    /**
+     * @param agent_core $agent_core
+     * @param array      $worker_info
+     * @param string     $worker_name
+     *
+     * @return void
+     */
+    private function closeProcess(agent_core $agent_core, array $worker_info, string $worker_name): void
+    {
+        try {
+            $agent_core->utils->removeChildWorker('Browser', $worker_name);
+            $agent_core->utils->OSMgr->killProc($worker_info['browser_pid']);
+            $agent_core->utils->procMgr->close($worker_info['browser_idx']);
+            $agent_core->utils->libFileIO->delDir($worker_info['data_dir']);
+        } catch (\Throwable) {
+        }
+
+        unset($agent_core, $worker_info, $worker_name);
     }
 
     /**
@@ -511,6 +526,9 @@ class handler extends Factory
             );
 
             if (1 === (int)stream_select($master_sock, $write, $except, 30, 0)) {
+                $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'ready');
+                $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', 'idle');
+
                 $message  = $socketMgr->readMessage($master_id, true);
                 $msg_data = json_decode($message, true);
 
@@ -580,11 +598,9 @@ class handler extends Factory
                 ];
             }
         } catch (\Throwable $throwable) {
-            $agent_core->core->error->exceptionHandler($throwable, false, false);
             $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' closed due to communication errors. (' . $throwable->getMessage() . ')', 'trace');
-            $agent_core->utils->OSMgr->killProc($worker_info['browser_pid']);
-            $agent_core->utils->procMgr->close($worker_info['browser_idx']);
-            $agent_core->utils->removeChildWorker('Browser', $payload_data['worker_name']);
+
+            $this->closeProcess($agent_core, $worker_info, $payload_data['worker_name']);
 
             unset($throwable);
             return [
@@ -592,10 +608,7 @@ class handler extends Factory
                 'error'  => '实例 "' . $payload_data['worker_name'] . '" 通信错误，已关闭实例。',
             ];
         } finally {
-            $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'ready');
-            $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', 'idle');
             Factory::destroy($socketMgr);
-
             unset($agent_core, $payload_data, $action, $worker_info, $socketMgr, $cmd_id, $write, $except, $master_id, $master_sock, $message, $msg_data, $runtime_error);
         }
     }

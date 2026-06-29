@@ -89,6 +89,8 @@ class procWorker extends Factory
                 } else {
                     // User abort
                     if (isset($data['status']) && 'aborted' === $data['status']) {
+                        $finish_reason     = 'abort';
+                        $tool_calls_buffer = [];
                         $assistant_message = [
                             'role'              => 'assistant',
                             'content'           => '[系统提醒] 用户中断，忽略未完成内容。',
@@ -96,8 +98,6 @@ class procWorker extends Factory
                         ];
 
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
-
-                        $tool_calls_buffer = [];
                         return;
                     }
 
@@ -178,6 +178,7 @@ class procWorker extends Factory
             } catch (\Throwable $throwable) {
                 $this->sendMsg($socket_id, 'stream', 'error', $metadata, $throwable->getMessage());
                 Error::new()->exceptionHandler($throwable, false, false);
+                $finish_reason = 'error';
                 unset($throwable);
             }
 
@@ -192,12 +193,14 @@ class procWorker extends Factory
             unset($throwable);
         }
 
-        $this->sendMsg($socket_id, 'stream', 'end', $metadata);
+        if (!in_array($finish_reason, ['length', 'abort', 'error'], true)) {
+            $this->sendMsg($socket_id, 'stream', 'end', $metadata);
 
-        if (empty($tool_calls_buffer)) {
-            $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
-        } else {
-            $this->sendMsg($socket_id, 'end', 'tools', $metadata, $tool_calls_buffer);
+            if (empty($tool_calls_buffer)) {
+                $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
+            } else {
+                $this->sendMsg($socket_id, 'end', 'tools', $metadata, $tool_calls_buffer);
+            }
         }
 
         unset($socket_id, $metadata, $history, $libOpenAI);

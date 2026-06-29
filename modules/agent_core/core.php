@@ -53,7 +53,7 @@ final class core extends Factory
 
         $this->utils     = utils::new();
         $this->error     = Error::new();
-        $this->socketMgr = SocketMgr::new();
+        $this->socketMgr = SocketMgr::new(WORKER_MAIN);
 
         $this->utils->agent_config = $this->utils->config->get(true, $reload);
 
@@ -171,11 +171,16 @@ final class core extends Factory
      * @param string $message
      *
      * @return void
-     * @throws \ReflectionException
+     * @throws \ReflectionException|\Random\RandomException
      */
     public function sendMessage(string $socket_id, string $message): void
     {
-        $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
+        if (isset($this->utils->socket_session[$socket_id])) {
+            $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
+        } else {
+            $this->utils->message_buffers[] = $message;
+        }
+
         unset($socket_id, $message);
     }
 }

@@ -144,63 +144,35 @@ class procWorker extends Factory
                     $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
 
                     if (!empty($tool_calls_buffer)) {
-                        $image_loader  = [];
-                        $clean_context = [];
-                        $tool_results  = $this->core->execTools($tool_calls_buffer);
+                        $tool_results = $this->core->execTools($tool_calls_buffer);
 
                         foreach ($tool_results as $result) {
                             $result_data = json_decode($result['content'], true);
 
-                            if (isset($result_data['handler'])) {
-                                $result_data['socket_id']    = $socket_id;
-                                $result_data['tool_call_id'] = $result['tool_call_id'];
+                            if (!isset($result_data['handler'])) {
+                                // Sync tools
+                                $tool_history = [
+                                    'role'         => 'tool',
+                                    'tool_call_id' => $result['tool_call_id'],
+                                    'content'      => $result['content']
+                                ];
+
+                                $this->core->utils->addSessionHistory($metadata['workerName'], $tool_history);
+
+                                $this->sendMsg($socket_id, 'stream', 'tool_result', $metadata, $result);
+                                $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_history);
+                            } else {
+                                // Async tools
+                                $result_data['socket_id']     = $socket_id;
+                                $result_data['tool_call_id']  = $result['tool_call_id'];
+                                $result_data['function_name'] = $result['function_name'];
+
                                 $this->sendMsg($socket_id, 'context', 'callHandler', $metadata, $result_data);
-
-                                unset($result_data['handler'], $result_data['content'], $result_data['socket_id'], $result_data['tool_call_id']);
-                                $result_data['message'] ??= '操作已提交，稍后会自动推送结果，请勿重复调用工具。';
-
-                                $result['content'] = json_encode($result_data, JSON_FORMAT);
                             }
-
-                            if ('System-readImage' === $result['function_name']) {
-                                if (is_array($result_data) && 'success' === $result_data['status']) {
-                                    $image_loader[] = ['type' => 'text', 'text' => $result_data['filename'] . ' (按需使用)'];
-                                    $image_loader[] = ['type' => 'image_url', 'image_url' => ['url' => $result_data['content']]];
-
-                                    $result['content'] = '图片已加载（按需使用，禁止分析）';
-                                }
-                            }
-
-                            $tool_history = [
-                                'role'         => 'tool',
-                                'tool_call_id' => $result['tool_call_id'],
-                                'content'      => $result['content']
-                            ];
-
-                            $this->core->utils->addSessionHistory($metadata['workerName'], $tool_history);
-
-                            $this->sendMsg($socket_id, 'stream', 'tool_result', $metadata, $result);
-                            $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_history);
-
-                            if ('System-cleanContext' === $result['function_name']) {
-                                $clean_context = json_decode($result['content'], true);
-
-                                $clean_context['socket_id']    = $socket_id;
-                                $clean_context['worker_name']  = $metadata['workerName'];
-                                $clean_context['tool_call_id'] = $result['tool_call_id'];
-                            }
-                        }
-
-                        if (!empty($image_loader)) {
-                            $this->sendMsg($socket_id, 'context', 'readImage', $metadata, $image_loader);
-                        }
-
-                        if (!empty($clean_context)) {
-                            $this->sendMsg($socket_id, 'context', 'cleanContext', $metadata, $clean_context);
                         }
                     }
 
-                    unset($assistant_message, $tool_results, $image_loader, $result, $result_data, $tool_history);
+                    unset($assistant_message, $tool_results, $result, $result_data, $tool_history);
                 }
             } catch (\Throwable $throwable) {
                 $this->sendMsg($socket_id, 'stream', 'error', $metadata, $throwable->getMessage());

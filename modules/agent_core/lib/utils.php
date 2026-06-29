@@ -155,6 +155,37 @@ class utils extends Factory
     }
 
     /**
+     * @param string $worker_name
+     *
+     * @return int
+     */
+    public function refreshSessionHistory(string $worker_name): int
+    {
+        if (empty($this->onsend_messages)) {
+            return 0;
+        }
+
+        $messages = [];
+
+        while (!is_null($message = array_shift($this->onsend_messages))) {
+            $messages[] = [
+                'type' => 'text',
+                'text' => $message['message']
+            ];
+        }
+
+        $count_messages = count($messages);
+
+        if (0 < $count_messages) {
+            $this->debug('System: Adding ' . $count_messages . ' message(s) to history', 'trace');
+            $this->addSessionHistory($worker_name, ['role' => 'user', 'content' => $messages]);
+        }
+
+        unset($worker_name, $messages, $message);
+        return $count_messages;
+    }
+
+    /**
      * Prune session history for a worker.
      *
      * @param string $worker_name
@@ -386,6 +417,81 @@ class utils extends Factory
             'removed_tools'  => $removed_tools,
             'current_count'  => count($new_history)
         ];
+    }
+
+    /**
+     * @param string $worker_name
+     * @param string $tool_call_id
+     * @param string $content
+     *
+     * @return void
+     */
+    public function replaceToolResult(string $worker_name, string $tool_call_id, string $content): void
+    {
+        if (!isset($this->session_history[$worker_name])) {
+            return;
+        }
+
+        $last_key = count($this->session_history[$worker_name]) - 1;
+
+        for ($i = $last_key; $i >= 0; --$i) {
+            $message = $this->session_history[$worker_name][$i];
+
+            if ('tool' === $message['role'] && $tool_call_id === $message['tool_call_id']) {
+                $this->session_history[$worker_name][$i]['content'] = $content;
+                break;
+            }
+        }
+
+        unset($worker_name, $tool_call_id, $content, $last_key, $message, $i);
+    }
+
+    /**
+     * @param string $id
+     * @param string $message
+     *
+     * @return void
+     */
+    public function addOnsendMessage(string $id, string $message): void
+    {
+        $this->onsend_messages[] = ['id' => $id, 'message' => $message];
+        unset($id, $message);
+    }
+
+    /**
+     * @param string $id
+     * @param bool   $popout
+     *
+     * @return array
+     */
+    public function getOnsendMessages(string $id = '', bool $popout = false): array
+    {
+        $messages = [];
+
+        if ('' === $id) {
+            $messages = $this->onsend_messages;
+
+            if ($popout) {
+                $this->onsend_messages = [];
+            }
+        } else {
+            foreach ($this->onsend_messages as $key => $item) {
+                if ($item['id'] !== $id) {
+                    continue;
+                }
+
+                $messages[] = $item;
+
+                if ($popout) {
+                    unset($this->onsend_messages[$key]);
+                }
+            }
+
+            unset($key, $item);
+        }
+
+        unset($id, $popout);
+        return $messages;
     }
 
     /**

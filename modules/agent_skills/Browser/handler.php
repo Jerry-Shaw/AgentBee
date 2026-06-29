@@ -21,19 +21,13 @@
 namespace modules\agent_skills\Browser;
 
 use modules\agent_core\go as agent_core;
-use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
-use Nervsys\Core\Mgr\OSMgr;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Ext\libHttp;
 
 class handler extends Factory
 {
-    public OSMgr $OSMgr;
-
     public int $cmd_id = 0;
-
-    private array $screenshot = [];
 
     private const START_ARGS = [
         '--remote-debugging-port=0',
@@ -54,28 +48,19 @@ class handler extends Factory
     ];
 
     /**
-     * @throws \ReflectionException
-     */
-    public function __construct()
-    {
-        $this->OSMgr = OSMgr::new();
-    }
-
-    /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return string
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function start(array $payload_data, agent_core $agent_core): void
+    public function start(array $payload_data, agent_core $agent_core): string
     {
         $worker_info = $agent_core->utils->getChildWorker('Browser', $payload_data['worker_name']);
 
         if (!empty($worker_info)) {
-            $agent_core->utils->onsend_messages[] = '[Browser] 浏览器实例 "' . $payload_data['worker_name'] . '" 已存在，可直接调用。';
-            return;
+            return '实例 "' . $payload_data['worker_name'] . '" 已存在，可直接调用。';
         }
 
         $start_args = self::START_ARGS;
@@ -93,14 +78,12 @@ class handler extends Factory
                     $agent_core->utils->agent_config['chrome_path'],
                     ...$start_args
                 ]
-            )
-            ->run($agent_core->utils->getProcIDX());
+            )->run($agent_core->utils->getProcIDX());
 
-        $browser_pid = $agent_core->utils->procMgr->getPid($browser_idx);
+        $browser_pid     = $agent_core->utils->procMgr->getPid($browser_idx);
+        $browser_address = '';
 
         $agent_core->utils->debug('Browser started: ' . $payload_data['worker_name'] . ' (PID: ' . $browser_pid . ')', 'trace');
-
-        $browser_address = '';
 
         for ($i = 0; $i < 10; ++$i) {
             $err_msg = trim($agent_core->utils->procMgr->readProc($browser_idx, 'stderr'));
@@ -115,10 +98,10 @@ class handler extends Factory
 
         if ('' === $browser_address) {
             $agent_core->utils->debug('Browser ERROR: Failed to fetch address, closing ' . $payload_data['worker_name'] . ' (PID: ' . $browser_pid . ')', 'trace');
-            $this->closeBrowser($browser_pid);
+            $agent_core->utils->OSMgr->killProc($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
-            $agent_core->utils->onsend_messages[] = '[Browser] 无法获取浏览器 WebSocket 地址，浏览器实例已关闭。';
-            return;
+
+            return '无法获取浏览器 WebSocket 地址，实例已关闭。';
         }
 
         $ws_address = '';
@@ -141,68 +124,21 @@ class handler extends Factory
         }
 
         if ('' === $ws_address) {
-            $this->closeBrowser($browser_pid);
+            $agent_core->utils->OSMgr->killProc($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
-            $agent_core->utils->onsend_messages[] = '[Browser] 无法获取目标页面 WebSocket 地址，浏览器实例已关闭。';
-            return;
+
+            return '无法获取目标页面 WebSocket 地址，实例已关闭。';
         }
-
-        $worker_idx = $agent_core->utils->procMgr
-            ->command(
-                [
-                    $agent_core->utils->OSMgr->getPhpPath(),
-                    $agent_core->utils->app->script_path,
-                    '-c', '/' . __CLASS__ . '/startClient',
-                    '-d', 'address=' . $ws_address,
-                ]
-            )
-            ->run($agent_core->utils->getProcIDX());
-
-        $worker_pid = $agent_core->utils->procMgr->getPid($worker_idx);
-
-        $agent_core->utils->debug('Browser Bridge started (PID: ' . $worker_pid . ')', 'trace');
-
-        $agent_core->core->socketMgr->addExternalProc(
-            $agent_core->utils->procMgr->getProc($worker_idx, 'stdout', 'process'),
-            [
-                'stdout' => function (string $socket_id, array $context) use ($agent_core, $payload_data): void
-                {
-                    $line = fgets($context['stdout']);
-
-                    if (false === $line) {
-                        return;
-                    }
-
-                    $line = trim($line);
-
-                    if ('' === $line) {
-                        return;
-                    }
-
-                    $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'ready');
-                    $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', 'idle');
-
-                    $data = json_decode($line, true);
-
-                    if (is_array($data)) {
-                        $this->handleResponse($data, $agent_core, $payload_data['worker_name']);
-                    }
-
-                    unset($socket_id, $context, $line, $data);
-                }
-            ]
-        );
 
         $agent_core->utils->addChildWorker(
             'Browser',
             $payload_data['worker_name'],
             [
-                'worker_idx'  => $worker_idx,
-                'worker_pid'  => $worker_pid,
                 'browser_idx' => $browser_idx,
                 'browser_pid' => $browser_pid,
-                'socket_id'   => $payload_data['socket_id'],
                 'worker_name' => $payload_data['worker_name'],
+                'socket_id'   => $payload_data['socket_id'],
+                'socket_addr' => $ws_address,
                 'status'      => 'ready',
                 'action'      => 'idle',
                 'open_at'     => date('Y-m-d H:i:s'),
@@ -210,424 +146,316 @@ class handler extends Factory
             ]
         );
 
+        $agent_core->utils->debug('Browser: WebSocket Debugger Url is ' . $ws_address . ', ready for connections.', 'trace');
         $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is ready!', 'trace');
-        $agent_core->utils->onsend_messages[] = '[Browser] "' . $payload_data['worker_name'] . '" 已就绪。';
 
-        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_address, $i, $err_msg, $ws_address, $local_port, $json_addr, $dev_json, $dev_data, $target, $worker_idx, $worker_pid, $payload_data, $agent_core);
+        $message = '实例 "' . $payload_data['worker_name'] . '" 已就绪。';
+
+        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_address, $i, $err_msg, $ws_address, $local_port, $json_addr, $dev_json, $dev_data, $target);
+        return $message;
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function navigate(array $payload_data, agent_core $agent_core): void
+    public function navigate(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function click(array $payload_data, agent_core $agent_core): void
+    public function click(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function type(array $payload_data, agent_core $agent_core): void
+    public function type(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function submit(array $payload_data, agent_core $agent_core): void
+    public function submit(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function getUrl(array $payload_data, agent_core $agent_core): void
+    public function getUrl(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function getTitle(array $payload_data, agent_core $agent_core): void
+    public function getTitle(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function getContent(array $payload_data, agent_core $agent_core): void
+    public function getContent(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function getValue(array $payload_data, agent_core $agent_core): void
+    public function getValue(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function getAttribute(array $payload_data, agent_core $agent_core): void
+    public function getAttribute(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function setAttribute(array $payload_data, agent_core $agent_core): void
+    public function setAttribute(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function scrollIntoView(array $payload_data, agent_core $agent_core): void
+    public function scrollIntoView(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function selectOption(array $payload_data, agent_core $agent_core): void
+    public function selectOption(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function evaluate(array $payload_data, agent_core $agent_core): void
+    public function evaluate(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function screenshot(array $payload_data, agent_core $agent_core): void
+    public function screenshot(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function waitForSelector(array $payload_data, agent_core $agent_core): void
+    public function waitForSelector(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function waitForPageLoad(array $payload_data, agent_core $agent_core): void
+    public function waitForPageLoad(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function waitForText(array $payload_data, agent_core $agent_core): void
+    public function waitForText(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function waitForElementVisible(array $payload_data, agent_core $agent_core): void
+    public function waitForElementVisible(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function waitForUrl(array $payload_data, agent_core $agent_core): void
+    public function waitForUrl(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function hover(array $payload_data, agent_core $agent_core): void
+    public function hover(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    public function pressKey(array $payload_data, agent_core $agent_core): void
+    public function pressKey(array $payload_data, agent_core $agent_core): array
     {
-        $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
-        unset($payload_data, $agent_core);
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return array
      */
-    public function list(array $payload_data, agent_core $agent_core): void
+    public function list(array $payload_data, agent_core $agent_core): array
     {
+        $list    = [];
+        $now     = time();
         $workers = $agent_core->utils->getChildWorker('Browser');
 
-        if (empty($workers)) {
-            $agent_core->utils->onsend_messages[] = '[Browser] 当前没有活跃的浏览器实例。';
-            return;
-        }
-
-        $lines = ['[Browser] 浏览器实例:'];
-
         foreach ($workers as $name => $info) {
-            $lines[] = '- "' . $name . '"'
-                . ' | 状态:' . ($info['status'])
-                . ' | 当前操作:' . ($info['action'])
-                . ' | 用户目录:' . ($info['data_dir'])
-                . ' | 运行:' . (time() - strtotime($info['open_at'])) . '秒';
+            $list[] = [
+                'worker_name'   => $name,
+                'status'        => $info['status'],
+                'action'        => $info['action'],
+                'running_sec'   => $now - strtotime($info['open_at']),
+                'user_data_dir' => $info['data_dir'],
+            ];
         }
 
-        $agent_core->utils->onsend_messages[] = implode("\n", $lines);
-
-        unset($payload_data, $agent_core, $workers, $lines, $name, $info);
+        unset($payload_data, $agent_core, $now, $workers, $name, $info);
+        return $list;
     }
 
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return void
+     * @return string
      */
-    public function close(array $payload_data, agent_core $agent_core): void
+    public function close(array $payload_data, agent_core $agent_core): string
     {
         $worker_info = $agent_core->utils->getChildWorker('Browser', $payload_data['worker_name']);
 
         if (empty($worker_info)) {
-            $agent_core->utils->onsend_messages[] = '[Browser] 实例 "' . $payload_data['worker_name'] . '" 已关闭。';
-            return;
+            return '实例 "' . $payload_data['worker_name'] . '" 已关闭。';
         }
 
-        $this->closeBrowser($worker_info['browser_pid']);
-        $agent_core->utils->procMgr->close($worker_info['worker_idx']);
+        $agent_core->utils->OSMgr->killProc($worker_info['browser_pid']);
         $agent_core->utils->procMgr->close($worker_info['browser_idx']);
         $agent_core->utils->removeChildWorker('Browser', $payload_data['worker_name']);
         $agent_core->utils->libFileIO->delDir($worker_info['data_dir']);
 
-        $agent_core->utils->onsend_messages[] = '[Browser] 实例 "' . $payload_data['worker_name'] . '" 已关闭。';
+        $message = '实例 "' . $payload_data['worker_name'] . '" 已关闭。';
 
         unset($payload_data, $agent_core, $worker_info);
-    }
-
-    /**
-     * @param string $address
-     *
-     * @return void
-     * @throws \Exception
-     * @throws \Throwable
-     */
-    public function startClient(string $address): void
-    {
-        $memory_limit = utils::new()->agent_config['memory_limit'] ?? '4G';
-        ini_set('memory_limit', $memory_limit);
-
-        $pending   = [];
-        $SocketMgr = SocketMgr::new();
-
-        $SocketMgr->addExternalProc(
-            ['stdin' => STDIN],
-            [
-                'stdin' => function (string $ext_id, array $context) use ($SocketMgr, &$pending): void
-                {
-                    $line = trim(fgets($context['stdin']));
-
-                    if ('' === $line) {
-                        return;
-                    }
-
-                    $data = json_decode($line, true);
-
-                    if (!is_array($data)) {
-                        return;
-                    }
-
-                    $cdp_cmd = $this->buildCommand($data['action'], $data['params'], $data['id']);
-
-                    if ('' === $cdp_cmd) {
-                        return;
-                    }
-
-                    if ('' === $SocketMgr->master_id || !isset($SocketMgr->connections[$SocketMgr->master_id])) {
-                        return;
-                    }
-
-                    $pending[$data['id']] = $data['action'];
-
-                    $SocketMgr->sendMessage($SocketMgr->master_id, $SocketMgr->wsEncode($cdp_cmd, false, true));
-
-                    unset($ext_id, $context, $line, $data, $cdp_cmd);
-                }
-            ]
-        );
-
-        $SocketMgr->setEventListener(
-            'onMessage',
-            function (string $socket_id, string $message, bool $is_binary) use (&$pending): void
-            {
-                if ('' === $message) {
-                    return;
-                }
-
-                if (true === $is_binary) {
-                    $message = base64_encode($message);
-                }
-
-                $response = json_decode($message, true);
-
-                if (!is_array($response)) {
-                    return;
-                }
-
-                $cmd_id = $response['id'];
-                $action = $pending[$cmd_id] ?? 'Browser-Action';
-
-                unset($pending[$cmd_id]);
-
-                $output = ['action' => $action, 'id' => $cmd_id];
-
-                if (isset($response['result'])) {
-                    $output['result'] = $response['result'];
-                } elseif (isset($response['error'])) {
-                    $output['error'] = $response['error']['message'] ?? 'CDP error';
-                } else {
-                    $output['result'] = $response;
-                }
-
-                echo json_encode($output, JSON_FORMAT) . "\n";
-
-                flush();
-                fflush(STDOUT);
-
-                unset($socket_id, $message, $is_binary, $response, $cmd_id, $action, $output);
-            }
-        );
-
-        $SocketMgr->connectTo($address, true);
-    }
-
-    /**
-     * @param int $browser_pid
-     *
-     * @return void
-     */
-    private function closeBrowser(int $browser_pid): void
-    {
-        $this->OSMgr->killProc($browser_pid);
+        return $message;
     }
 
     /**
@@ -635,118 +463,169 @@ class handler extends Factory
      * @param array      $payload_data
      * @param string     $action
      *
-     * @return void
+     * @return array
+     * @throws \ReflectionException
      */
-    private function sendCommand(agent_core $agent_core, array $payload_data, string $action): void
+    private function sendCommand(agent_core $agent_core, array $payload_data, string $action): array
     {
         $worker_info = $agent_core->utils->getChildWorker('Browser', $payload_data['worker_name']);
 
         if (empty($worker_info)) {
             $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' NOT found!', 'trace');
-            $agent_core->utils->onsend_messages[] = '[Browser] 实例 "' . $payload_data['worker_name'] . '" 不存在，请启动后操作。';
-            return;
+            return [
+                'status' => 'error',
+                'error'  => '实例 "' . $payload_data['worker_name'] . '" 不存在，请启动后操作。'
+            ];
         }
 
         if ('ready' !== $worker_info['status'] || 'idle' !== $worker_info['action']) {
             $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is busy on ' . $action . '!', 'trace');
-            $agent_core->utils->onsend_messages[] = '[Browser] ' . $payload_data['worker_name'] . ' 忙碌中 (操作: ' . $worker_info['action'] . ')，请等待结果返回，不要重复发送命令。';
-            return;
+            return [
+                'status' => 'error',
+                'error'  => '实例 ' . $payload_data['worker_name'] . ' 忙碌中 (操作: ' . $worker_info['action'] . ')，待结束后再操作。',
+            ];
         }
+
+        $socketMgr = SocketMgr::new($payload_data['worker_name']);
 
         try {
             $cmd_id = $this->cmd_id++;
 
-            if ('screenshot' === $action && isset($payload_data['params']['save_path'])) {
-                $this->screenshot[$cmd_id] = $payload_data['params']['save_path'];
-            }
-
-            $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is working on ' . $action . '!', 'trace');
+            $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is working on ' . $action . '.', 'trace');
             $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'busy');
             $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', $action);
 
-            $agent_core->utils->procMgr->writeProc(
-                $worker_info['worker_idx'],
-                json_encode([
-                    'action' => $action,
-                    'params' => $payload_data['params'] ?? [],
-                    'id'     => $cmd_id
-                ], JSON_FORMAT)
+            $socketMgr->createWSClient($worker_info['socket_addr']);
+
+            $write       = $except = [];
+            $master_id   = $socketMgr->master_id;
+            $master_sock = $socketMgr->master_sock;
+
+            $socketMgr->sendMessage(
+                $master_id,
+                $socketMgr->wsEncode(
+                    $this->buildCommand($action, $payload_data['params'] ?? [], $cmd_id),
+                    false,
+                    true
+                )
             );
-        } catch (\Throwable) {
-            $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' closed due to communication errors.', 'trace');
-            $agent_core->utils->onsend_messages[] = '[Browser] 实例 "' . $payload_data['worker_name'] . '" 发生错误，无法通信，已强制关闭。';
-            $this->closeBrowser($worker_info['browser_pid']);
-            $agent_core->utils->procMgr->close($worker_info['worker_idx']);
+
+            if (1 === (int)stream_select($master_sock, $write, $except, 30, 0)) {
+                $message  = $socketMgr->readMessage($master_id, true);
+                $msg_data = json_decode($message, true);
+
+                if (is_null($msg_data)) {
+                    return [
+                        'status'  => 'error',
+                        'error'   => '执行失败，响应格式异常。',
+                        'content' => $message
+                    ];
+                }
+
+                if (isset($msg_data['error'])) {
+                    return [
+                        'status' => 'error',
+                        'error'  => 'CDP 协议错误，请检查浏览器状态: ' . ($msg_data['error']['message'] ?? '未知错误'),
+                    ];
+                }
+
+                $runtime_error = '';
+
+                if (isset($msg_data['result']['exceptionDetails'])) {
+                    $runtime_error = $msg_data['result']['exceptionDetails']['text'] ?? '脚本异常';
+                } elseif (isset($msg_data['result']['result']['subtype'])
+                    && 'error' === $msg_data['result']['result']['subtype']
+                ) {
+                    $runtime_error = $msg_data['result']['result']['description'] ?? '脚本执行错误';
+                } elseif (isset($msg_data['result']['result']['value'])
+                    && is_string($msg_data['result']['result']['value'])
+                    && str_starts_with($msg_data['result']['result']['value'], 'Error:')
+                ) {
+                    $runtime_error = $msg_data['result']['result']['value'];
+                }
+
+                if ('' !== $runtime_error) {
+                    return [
+                        'status' => 'error',
+                        'error'  => '脚本执行错误，请检查选择器或页面状态: ' . $runtime_error,
+                    ];
+                }
+
+                if ('screenshot' === $action) {
+                    if (!isset($msg_data['result']['data'])) {
+                        return ['status' => 'error', 'error' => '截图数据缺失'];
+                    }
+
+                    $saved_path = $this->saveScreenshot($agent_core, $msg_data['result']['data'], $payload_data['params']['save_path']);
+
+                    if ('' === $saved_path) {
+                        return ['status' => 'error', 'error' => '截图保存失败'];
+                    }
+
+                    $data = ['saved_path' => $saved_path];
+                    unset($saved_path);
+                } else {
+                    $data = $msg_data['result']['result']['value'] ?? $msg_data['result'] ?? [];
+                }
+
+                return [
+                    'status'  => 'success',
+                    'data'    => $data,
+                    'message' => $this->getMessage($action),
+                ];
+            } else {
+                return [
+                    'status' => 'error',
+                    'error'  => '执行 "' . $action . '" 操作超时（30秒），请检查网络或实例状态。',
+                ];
+            }
+        } catch (\Throwable $throwable) {
+            $agent_core->core->error->exceptionHandler($throwable, false, false);
+            $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' closed due to communication errors. (' . $throwable->getMessage() . ')', 'trace');
+            $agent_core->utils->OSMgr->killProc($worker_info['browser_pid']);
             $agent_core->utils->procMgr->close($worker_info['browser_idx']);
             $agent_core->utils->removeChildWorker('Browser', $payload_data['worker_name']);
-        }
 
-        unset($agent_core, $payload_data, $action, $worker_info, $cmd_id);
+            unset($throwable);
+            return [
+                'status' => 'error',
+                'error'  => '实例 "' . $payload_data['worker_name'] . '" 通信错误，已关闭实例。',
+            ];
+        } finally {
+            $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'ready');
+            $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', 'idle');
+            Factory::destroy($socketMgr);
+
+            unset($agent_core, $payload_data, $action, $worker_info, $socketMgr, $cmd_id, $write, $except, $master_id, $master_sock, $message, $msg_data, $runtime_error);
+        }
     }
 
     /**
-     * @param array      $data
      * @param agent_core $agent_core
-     * @param string     $worker_name
+     * @param string     $img_base64
+     * @param string     $file_path
      *
-     * @return void
-     * @throws \ReflectionException
+     * @return string
      */
-    private function handleResponse(array $data, agent_core $agent_core, string $worker_name): void
+    private function saveScreenshot(agent_core $agent_core, string $img_base64, string $file_path): string
     {
-        $data['action'] ??= '未知操作';
+        $image_data = base64_decode($img_base64);
 
-        $agent_core->utils->debug('Browser: ' . $worker_name . ' returned from ' . $data['action'] . '.', 'trace');
-
-        if ('screenshot' === $data['action'] && isset($data['id']) && isset($this->screenshot[$data['id']])) {
-            $save_path = $agent_core->utils->securePath($this->screenshot[$data['id']]);
-            $agent_core->utils->libFileIO->mkPath(dirname($save_path));
-
-            if (isset($data['result']['data'])) {
-                $image_data = base64_decode($data['result']['data']);
-
-                if (false !== $image_data && 0 < file_put_contents($save_path, $image_data)) {
-                    $data['result'] = ['saved_path' => $save_path];
-                } else {
-                    $data['error'] = '写入截图文件失败: ' . $save_path;
-                }
-            } else {
-                $data['error'] = '截图数据缺失';
-            }
-
-            unset($save_path, $image_data, $this->screenshot[$data['id']]);
+        if (false === $image_data) {
+            return '';
         }
 
-        $wait_actions = ['waitForSelector', 'waitForPageLoad', 'waitForText', 'waitForElementVisible', 'waitForUrl'];
+        $file_path = $agent_core->utils->securePath($file_path);
+        $dir_path  = dirname($file_path);
 
-        if (in_array($data['action'], $wait_actions, true) && isset($data['result']) && false === $data['result']) {
-            $agent_core->utils->debug('Browser: ' . $worker_name . ' timed out on ' . $data['action'] . '.', 'trace');
-            $data['error'] = '等待超时';
-            unset($data['result']);
+        if (!is_dir($dir_path) && !mkdir($dir_path, 0755, true)) {
+            return '';
         }
 
-        $prefix = '[Browser] "' . $worker_name . '"';
+        $save = file_put_contents($file_path, $image_data);
 
-        if (isset($data['error'])) {
-            $agent_core->utils->debug('Browser: ' . $worker_name . ' error on ' . $data['action'] . '.', 'trace');
-            $agent_core->utils->onsend_messages[] = $prefix . ' "' . $data['action'] . '" 错误: ' . $data['error'];
-            return;
-        }
-
-        if (isset($data['result'])) {
-            $message = $prefix . ' "' . $data['action'] . '" 已完成';
-
-            if (!empty($data['result'])) {
-                $message .= ': ' . json_encode($data['result'], JSON_FORMAT);
-            }
-
-            $agent_core->utils->onsend_messages[] = $message;
-            unset($message);
-        } else {
-            $agent_core->utils->onsend_messages[] = $prefix . ' "' . $data['action'] . '" 返回未知格式: ' . json_encode($data, JSON_FORMAT);
-        }
-
-        unset($data, $agent_core, $worker_name, $wait_actions, $prefix);
+        unset($agent_core, $img_base64, $image_data, $dir_path);
+        return false !== $save ? $file_path : '';
     }
 
     /**
@@ -767,18 +646,54 @@ class handler extends Factory
                 break;
 
             case 'click':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ').click();', 'returnByValue' => false];
+                $cdp_params = [
+                    'expression'    => "
+                        (function() {
+                            const el = document.querySelector($selector);
+                            if (!el) throw new Error('Element not found: ' + $selector);
+                            el.click();
+                            return true;
+                        })()
+                    ",
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'type':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $text       = json_encode($params['text'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ').value = ' . json_encode($params['text'], JSON_FORMAT) . ';', 'returnByValue' => false];
+                $cdp_params = [
+                    'expression'    => "
+                        (function() {
+                            const el = document.querySelector($selector);
+                            if (!el) throw new Error('Element not found: ' + $selector);
+                            el.value = $text;
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                            return true;
+                        })()
+                    ",
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'submit':
+                $selector   = json_encode($params['selector'] ?? 'form', JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'] ?? 'form', JSON_FORMAT) . ').submit();', 'returnByValue' => false];
+                $cdp_params = [
+                    'expression'    => "
+                        (function() {
+                            const el = document.querySelector($selector);
+                            if (!el) throw new Error('Form not found: ' + $selector);
+                            el.submit();
+                            return true;
+                        })()
+                    ",
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'getUrl':
@@ -858,8 +773,8 @@ class handler extends Factory
                 break;
 
             case 'waitForElementVisible':
-                $method     = 'Runtime.evaluate';
                 $expr       = 'new Promise(resolve => { let s=Date.now(); const c=()=>{ const el=document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . '); if(el && getComputedStyle(el).display!=="none" && getComputedStyle(el).visibility!=="hidden") resolve(true); else if(Date.now()-s>' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })';
+                $method     = 'Runtime.evaluate';
                 $cdp_params = ['expression' => $expr, 'returnByValue' => true];
                 break;
 
@@ -878,21 +793,73 @@ class handler extends Factory
 
             case 'pressKey':
                 $mod_code = '';
+
                 foreach (($params['modifiers'] ?? []) as $mod) {
                     $mod_code .= 'event.' . $mod . 'Key = true;';
                 }
+
                 $method     = 'Runtime.evaluate';
                 $cdp_params = ['expression' => 'document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key:' . json_encode($params['key'], JSON_FORMAT) . ', bubbles:true })); ' . $mod_code, 'returnByValue' => false];
                 break;
 
-            case 'close':
             default:
                 return '';
         }
 
         $command = json_encode(['id' => $cmd_id, 'method' => $method, 'params' => $cdp_params], JSON_FORMAT);
 
-        unset($action, $params, $cmd_id, $method, $cdp_params, $timeout_ms);
+        unset($action, $params, $cmd_id, $timeout_ms, $method, $cdp_params);
         return $command;
+    }
+
+    /**
+     * @param string $action
+     *
+     * @return string
+     */
+    private function getMessage(string $action): string
+    {
+        switch ($action) {
+            case 'navigate':
+                return '导航已启动，页面加载中。';
+            case 'click':
+                return '点击元素操作成功。';
+            case 'type':
+                return '文本输入成功。';
+            case 'submit':
+                return '表单已提交。';
+            case 'getUrl':
+                return '当前页面 URL 已获取。';
+            case 'getTitle':
+                return '页面标题已获取。';
+            case 'getContent':
+                return '页面内容已获取。';
+            case 'getValue':
+                return '元素值已获取。';
+            case 'getAttribute':
+                return '元素属性值已获取。';
+            case 'setAttribute':
+                return '属性设置成功。';
+            case 'scrollIntoView':
+                return '元素已滚动到可视区域。';
+            case 'selectOption':
+                return '选项已选择。';
+            case 'evaluate':
+                return '脚本执行完成。';
+            case 'screenshot':
+                return '截图已完成（数据已返回）。';
+            case 'waitForSelector':
+            case 'waitForPageLoad':
+            case 'waitForText':
+            case 'waitForElementVisible':
+            case 'waitForUrl':
+                return '等待条件已满足。';
+            case 'hover':
+                return '悬停操作成功。';
+            case 'pressKey':
+                return '键盘按键模拟成功。';
+            default:
+                return '操作已完成。';
+        }
     }
 }

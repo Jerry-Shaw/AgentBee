@@ -33,11 +33,11 @@ class go extends Factory
     public function start(string $worker_name, bool $headless = false): array
     {
         $result = [
-            'action'      => 'start',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'headless'    => $headless,
             'handler'     => handler::class,
-            'message'     => '启动浏览器操作已提交，稍后会自动推送结果，待就绪后即可操作。'
         ];
         unset($worker_name, $headless);
         return $result;
@@ -52,11 +52,11 @@ class go extends Factory
     public function navigate(string $worker_name, string $url): array
     {
         $result = [
-            'action'      => 'navigate',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['url' => $url],
             'handler'     => handler::class,
-            'message'     => '导航操作已提交，稍后会自动推送结果。请勿重复导航相同 URL。'
         ];
         unset($worker_name, $url);
         return $result;
@@ -71,11 +71,11 @@ class go extends Factory
     public function click(string $worker_name, string $selector): array
     {
         $result = [
-            'action'      => 'click',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector],
             'handler'     => handler::class,
-            'message'     => '点击操作已提交，稍后会自动推送结果。请勿重复点击。'
         ];
         unset($worker_name, $selector);
         return $result;
@@ -91,11 +91,11 @@ class go extends Factory
     public function type(string $worker_name, string $selector, string $text): array
     {
         $result = [
-            'action'      => 'type',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector, 'text' => $text],
             'handler'     => handler::class,
-            'message'     => '输入操作已提交，稍后会自动推送结果。请勿重复输入相同内容。'
         ];
         unset($worker_name, $selector, $text);
         return $result;
@@ -110,11 +110,11 @@ class go extends Factory
     public function submit(string $worker_name, string $selector = 'form'): array
     {
         $result = [
-            'action'      => 'submit',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector],
             'handler'     => handler::class,
-            'message'     => '提交表单操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector);
         return $result;
@@ -128,11 +128,11 @@ class go extends Factory
     public function getUrl(string $worker_name): array
     {
         $result = [
-            'action'      => 'getUrl',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => [],
             'handler'     => handler::class,
-            'message'     => '获取 URL 操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name);
         return $result;
@@ -146,11 +146,11 @@ class go extends Factory
     public function getTitle(string $worker_name): array
     {
         $result = [
-            'action'      => 'getTitle',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => [],
             'handler'     => handler::class,
-            'message'     => '获取标题操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name);
         return $result;
@@ -165,11 +165,11 @@ class go extends Factory
     public function getContent(string $worker_name, bool $html = false): array
     {
         $result = [
-            'action'      => 'getContent',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['html' => $html],
             'handler'     => handler::class,
-            'message'     => '获取内容操作已提交，稍后会自动推送结果。请勿重复获取相同内容。'
         ];
         unset($worker_name, $html);
         return $result;
@@ -184,11 +184,11 @@ class go extends Factory
     public function getValue(string $worker_name, string $selector): array
     {
         $result = [
-            'action'      => 'getValue',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector],
             'handler'     => handler::class,
-            'message'     => '获取值操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector);
         return $result;
@@ -204,11 +204,11 @@ class go extends Factory
     public function getAttribute(string $worker_name, string $selector, string $attribute): array
     {
         $result = [
-            'action'      => 'getAttribute',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector, 'attribute' => $attribute],
             'handler'     => handler::class,
-            'message'     => '获取属性操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector, $attribute);
         return $result;
@@ -225,11 +225,11 @@ class go extends Factory
     public function setAttribute(string $worker_name, string $selector, string $attribute, string $value): array
     {
         $result = [
-            'action'      => 'setAttribute',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector, 'attribute' => $attribute, 'value' => $value],
             'handler'     => handler::class,
-            'message'     => '设置属性操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector, $attribute, $value);
         return $result;
@@ -244,11 +244,11 @@ class go extends Factory
     public function scrollIntoView(string $worker_name, string $selector): array
     {
         $result = [
-            'action'      => 'scrollIntoView',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector],
             'handler'     => handler::class,
-            'message'     => '滚动操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector);
         return $result;
@@ -264,11 +264,11 @@ class go extends Factory
     public function selectOption(string $worker_name, string $selector, string $value): array
     {
         $result = [
-            'action'      => 'selectOption',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector, 'value' => $value],
             'handler'     => handler::class,
-            'message'     => '选择选项操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector, $value);
         return $result;
@@ -284,11 +284,11 @@ class go extends Factory
     public function evaluate(string $worker_name, string $script, bool $return_by_value = true): array
     {
         $result = [
-            'action'      => 'evaluate',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['script' => $script, 'return_by_value' => $return_by_value],
             'handler'     => handler::class,
-            'message'     => '执行脚本操作已提交，稍后会自动推送结果。请勿重复执行相同代码。'
         ];
         unset($worker_name, $script, $return_by_value);
         return $result;
@@ -305,18 +305,15 @@ class go extends Factory
     public function screenshot(string $worker_name, string $save_path, string $format = 'jpeg', int $quality = 80): array
     {
         if (!in_array($format, ['jpeg', 'png'], true)) {
-            return [
-                'status' => 'error',
-                'error'  => 'Invalid image format. Only jpeg and png are supported.'
-            ];
+            $format = 'jpeg';
         }
 
         $result = [
-            'action'      => 'screenshot',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['save_path' => $save_path, 'format' => $format, 'quality' => $quality],
             'handler'     => handler::class,
-            'message'     => '截屏操作已提交，稍后会自动推送结果。请勿重复截屏。'
         ];
         unset($worker_name, $save_path, $format, $quality);
         return $result;
@@ -332,11 +329,11 @@ class go extends Factory
     public function waitForSelector(string $worker_name, string $selector, int $timeout = 30): array
     {
         $result = [
-            'action'      => 'waitForSelector',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector, 'timeout' => $timeout],
             'handler'     => handler::class,
-            'message'     => '等待元素操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector, $timeout);
         return $result;
@@ -351,11 +348,11 @@ class go extends Factory
     public function waitForPageLoad(string $worker_name, int $timeout = 30): array
     {
         $result = [
-            'action'      => 'waitForPageLoad',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['timeout' => $timeout],
             'handler'     => handler::class,
-            'message'     => '等待页面加载操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $timeout);
         return $result;
@@ -371,11 +368,11 @@ class go extends Factory
     public function waitForText(string $worker_name, string $text, int $timeout = 30): array
     {
         $result = [
-            'action'      => 'waitForText',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['text' => $text, 'timeout' => $timeout],
             'handler'     => handler::class,
-            'message'     => '等待文本操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $text, $timeout);
         return $result;
@@ -391,11 +388,11 @@ class go extends Factory
     public function waitForElementVisible(string $worker_name, string $selector, int $timeout = 30): array
     {
         $result = [
-            'action'      => 'waitForElementVisible',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector, 'timeout' => $timeout],
             'handler'     => handler::class,
-            'message'     => '等待元素可见操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector, $timeout);
         return $result;
@@ -411,11 +408,11 @@ class go extends Factory
     public function waitForUrl(string $worker_name, string $url_pattern, int $timeout = 30): array
     {
         $result = [
-            'action'      => 'waitForUrl',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['url_pattern' => $url_pattern, 'timeout' => $timeout],
             'handler'     => handler::class,
-            'message'     => '等待 URL 操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $url_pattern, $timeout);
         return $result;
@@ -430,11 +427,11 @@ class go extends Factory
     public function hover(string $worker_name, string $selector): array
     {
         $result = [
-            'action'      => 'hover',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['selector' => $selector],
             'handler'     => handler::class,
-            'message'     => '悬停操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $selector);
         return $result;
@@ -450,11 +447,11 @@ class go extends Factory
     public function pressKey(string $worker_name, string $key, array $modifiers = []): array
     {
         $result = [
-            'action'      => 'pressKey',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'params'      => ['key' => $key, 'modifiers' => $modifiers],
             'handler'     => handler::class,
-            'message'     => '按键操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name, $key, $modifiers);
         return $result;
@@ -466,9 +463,9 @@ class go extends Factory
     public function list(): array
     {
         return [
-            'action'  => 'list',
+            'async'   => false,
+            'action'  => __FUNCTION__,
             'handler' => handler::class,
-            'message' => '列出实例操作已提交，稍后会自动推送结果。'
         ];
     }
 
@@ -480,10 +477,10 @@ class go extends Factory
     public function close(string $worker_name): array
     {
         $result = [
-            'action'      => 'close',
+            'async'       => false,
+            'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'handler'     => handler::class,
-            'message'     => '关闭实例操作已提交，稍后会自动推送结果。'
         ];
         unset($worker_name);
         return $result;

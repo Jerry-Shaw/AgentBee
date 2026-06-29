@@ -28,7 +28,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '启动浏览器实例。异步，等待推送结果，禁止连续调用。建议先询问用户是否无头。',
+                'description' => '启动浏览器实例。禁止连续调用。建议先询问用户是否无头。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -45,7 +45,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'navigate',
-                'description' => '导航到指定 URL。异步，等待推送结果，禁止连续调用。',
+                'description' => '导航到指定 URL。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -62,7 +62,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'click',
-                'description' => '点击 CSS 选择器匹配的元素。异步，等待推送结果，禁止连续调用。',
+                'description' => '点击 CSS 选择器匹配的元素。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -77,7 +77,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'type',
-                'description' => '在输入框中输入文本。异步，等待推送结果，禁止连续调用。',
+                'description' => '在输入框中输入文本。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -93,7 +93,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'submit',
-                'description' => '提交表单（默认 form 选择器）。异步，等待推送结果，禁止连续调用。',
+                'description' => '提交表单（默认 form 选择器）。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -110,7 +110,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getUrl',
-                'description' => '获取当前页面 URL。异步，等待推送结果，禁止连续调用。',
+                'description' => '获取当前页面 URL。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -124,7 +124,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getTitle',
-                'description' => '获取当前页面标题。异步，等待推送结果，禁止连续调用。',
+                'description' => '获取当前页面标题。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -138,7 +138,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getContent',
-                'description' => '获取页面内容（纯文本或 HTML）。异步，等待推送结果，禁止连续调用。',
+                'description' => '获取页面内容（纯文本或 HTML）。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -153,7 +153,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getValue',
-                'description' => '获取表单元素的 value。异步，等待推送结果，禁止连续调用。',
+                'description' => '获取表单元素的 value。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -168,7 +168,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getAttribute',
-                'description' => '获取元素指定属性值。异步，等待推送结果，禁止连续调用。',
+                'description' => '获取元素指定属性值。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -184,7 +184,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'setAttribute',
-                'description' => '设置元素指定属性值。异步，等待推送结果，禁止连续调用。',
+                'description' => '设置元素指定属性值。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -201,7 +201,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'scrollIntoView',
-                'description' => '滚动指定元素到可视区域。异步，等待推送结果，禁止连续调用。',
+                'description' => '滚动指定元素到可视区域。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -216,7 +216,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'selectOption',
-                'description' => '在下拉框中按 value 选择选项。异步，等待推送结果，禁止连续调用。',
+                'description' => '在下拉框中按 value 选择选项。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -234,7 +234,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'evaluate',
-                'description' => '执行自定义 JavaScript 代码。异步，等待推送结果，禁止连续调用。',
+                'description' => '执行自定义 JavaScript 代码。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -250,7 +250,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'screenshot',
-                'description' => '截屏并保存为文件。异步，等待推送结果，禁止连续调用。',
+                'description' => '截屏并保存为文件。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -269,7 +269,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForSelector',
-                'description' => '等待 CSS 选择器对应的元素出现在 DOM 中。超时报错。异步，等待推送结果，禁止连续调用。',
+                'description' => '等待 CSS 选择器对应的元素出现在 DOM 中。超时报错。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -285,7 +285,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForPageLoad',
-                'description' => '等待页面完全加载。超时报错。异步，等待推送结果，禁止连续调用。',
+                'description' => '等待页面完全加载。超时报错。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -300,7 +300,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForText',
-                'description' => '等待页面中出现指定文本。超时报错。异步，等待推送结果，禁止连续调用。',
+                'description' => '等待页面中出现指定文本。超时报错。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -316,7 +316,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForElementVisible',
-                'description' => '等待 CSS 选择器对应的元素可见。超时报错。异步，等待推送结果，禁止连续调用。',
+                'description' => '等待 CSS 选择器对应的元素可见。超时报错。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -332,7 +332,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForUrl',
-                'description' => '等待当前 URL 包含指定字符串。超时报错。异步，等待推送结果，禁止连续调用。',
+                'description' => '等待当前 URL 包含指定字符串。超时报错。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -350,7 +350,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'hover',
-                'description' => '悬停到指定元素（触发 hover 事件）。异步，等待推送结果，禁止连续调用。',
+                'description' => '悬停到指定元素（触发 hover 事件）。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -365,7 +365,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'pressKey',
-                'description' => '模拟键盘按键（含修饰键）。异步，等待推送结果，禁止连续调用。',
+                'description' => '模拟键盘按键（含修饰键）。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -383,14 +383,14 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '列出所有浏览器实例及其状态。异步，结果稍后推送。禁止高频调用，以免阻塞通信。',
+                'description' => '列出所有浏览器实例及其状态。禁止高频调用，以免阻塞通信。',
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '关闭指定浏览器实例，释放资源。异步，等待推送结果，禁止连续调用。',
+                'description' => '关闭指定浏览器实例，释放资源。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

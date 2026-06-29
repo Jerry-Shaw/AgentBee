@@ -67,7 +67,7 @@ class handler extends Factory
         $image_url = 'data:' . $mime_type . ';base64,' . $base64;
 
         $agent_core->utils->addSessionHistory(
-            WORKER_MAIN,
+            $payload_data['process_name'],
             [
                 'role'    => 'user',
                 'content' => [

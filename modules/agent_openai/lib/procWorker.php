@@ -164,6 +164,7 @@ class procWorker extends Factory
                             } else {
                                 // Async tools
                                 $result_data['socket_id']     = $socket_id;
+                                $result_data['process_name']  = $metadata['workerName'];
                                 $result_data['tool_call_id']  = $result['tool_call_id'];
                                 $result_data['function_name'] = $result['function_name'];
 

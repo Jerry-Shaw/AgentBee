@@ -149,7 +149,7 @@ class config extends Factory
     {
         return [
             'agent_server'   => [
-                'host'          => '127.0.0.1',
+                'host'          => '127.0.0.127',
                 'port'          => 8686,
                 'ping_interval' => 60,
             ],
@@ -160,7 +160,7 @@ class config extends Factory
                 'org_id'       => '',
                 'hw_hash'      => '',
                 'timeout'      => 600,
-                'keep_reasons' => true,
+                'keep_reasons' => false,
                 'params'       => [
                     'max_completion_tokens' => 65536,
                     'temperature'           => 0.8,
@@ -182,7 +182,7 @@ class config extends Factory
                         'enable_thinking' => false,
                     ],
                     'thinking'              => [
-                        'type' => 'false',
+                        'type' => 'disabled',
                     ],
                 ],
             ],

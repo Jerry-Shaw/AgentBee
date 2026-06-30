@@ -40,7 +40,7 @@ class utils extends Factory
     public int $worker_idx = 1000;
 
     public string $session_id;
-    public string $proc_pid_path;
+    public string $pid_file_path;
 
     public array $agent_config;
 
@@ -66,11 +66,11 @@ class utils extends Factory
 
         $this->agent_config  = $this->config->get();
         $this->session_id    = hash('md5', uniqid('', true));
-        $this->proc_pid_path = $this->app->log_path . DIRECTORY_SEPARATOR . 'run' . DIRECTORY_SEPARATOR;
+        $this->pid_file_path = $this->config->config_dir . DIRECTORY_SEPARATOR . 'proc' . DIRECTORY_SEPARATOR;
 
-        if (!is_dir($this->proc_pid_path)) {
+        if (!is_dir($this->pid_file_path)) {
             try {
-                mkdir($this->proc_pid_path, 777, true);
+                mkdir($this->pid_file_path, 777, true);
             } catch (\Throwable) {
             }
         }
@@ -111,7 +111,7 @@ class utils extends Factory
      */
     public function savePid(int $pid): void
     {
-        fclose(fopen($this->proc_pid_path . $pid, 'w'));
+        fclose(fopen($this->pid_file_path . $pid, 'w'));
         unset($pid);
     }
 
@@ -122,8 +122,8 @@ class utils extends Factory
      */
     public function removePid(int $pid): void
     {
-        if (is_file($this->proc_pid_path . $pid)) {
-            unlink($this->proc_pid_path . $pid);
+        if (is_file($this->pid_file_path . $pid)) {
+            unlink($this->pid_file_path . $pid);
         }
 
         unset($pid);
@@ -134,7 +134,7 @@ class utils extends Factory
      */
     public function cleanPids(): void
     {
-        $pid_files = $this->libFileIO->getDirContents($this->proc_pid_path);
+        $pid_files = $this->libFileIO->getDirContents($this->pid_file_path);
 
         foreach ($pid_files as $file) {
             $this->OSMgr->killPid($file['name']);

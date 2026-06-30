@@ -134,14 +134,20 @@ class go extends Factory
      */
     public function start(): void
     {
+        $occupied_pids = $this->core->OSMgr->findPidsByPort($this->utils->agent_config['agent_server']['port']);
+
+        if (!empty($occupied_pids)) {
+            $this->utils->debug('Port ' . $this->utils->agent_config['agent_server']['port'] . ' is occupied, cannot start WebSocket server', 'trace');
+        }
+
         $memory_limit = $this->utils->agent_config['memory_limit'] ?? '4G';
 
         ini_set('memory_limit', $memory_limit);
+
         $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
+        $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
         $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
-
-        $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
         try {
             $server_host = 'tcp://' . $this->utils->agent_config['agent_server']['host'] . ':' . $this->utils->agent_config['agent_server']['port'];

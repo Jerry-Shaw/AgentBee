@@ -127,7 +127,7 @@ class go extends Factory
                 }
 
                 if (time() - $active > $timeout) {
-                    $this->utils->OSMgr->killProc($proc_pid);
+                    $this->utils->OSMgr->killPid($proc_pid);
                     $result['error'] .= 'Process has been killed due to timeout reached.';
                 }
             }

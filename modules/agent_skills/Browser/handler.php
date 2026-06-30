@@ -99,7 +99,7 @@ class handler extends Factory
 
         if ('' === $browser_address) {
             $agent_core->utils->debug('Browser ERROR: Failed to fetch address, closing ' . $payload_data['worker_name'] . ' (PID: ' . $browser_pid . ')', 'trace');
-            $agent_core->utils->OSMgr->killProc($browser_pid);
+            $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
 
             return '无法获取浏览器 WebSocket 地址，实例已关闭。';
@@ -125,7 +125,7 @@ class handler extends Factory
         }
 
         if ('' === $ws_address) {
-            $agent_core->utils->OSMgr->killProc($browser_pid);
+            $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
 
             return '无法获取目标页面 WebSocket 地址，实例已关闭。';
@@ -465,7 +465,7 @@ class handler extends Factory
     {
         try {
             $agent_core->utils->removeChildWorker('Browser', $worker_name);
-            $agent_core->utils->OSMgr->killProc($worker_info['browser_pid']);
+            $agent_core->utils->OSMgr->killPid($worker_info['browser_pid']);
             $agent_core->utils->procMgr->close($worker_info['browser_idx']);
             $agent_core->utils->libFileIO->delDir($worker_info['data_dir']);
         } catch (\Throwable) {

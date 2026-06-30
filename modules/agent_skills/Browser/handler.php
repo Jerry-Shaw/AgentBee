@@ -674,14 +674,7 @@ class handler extends Factory
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => "
-                        (function() {
-                            const el = document.querySelector($selector);
-                            if (!el) throw new Error('Element not found: ' + $selector);
-                            el.click();
-                            return true;
-                        })()
-                    ",
+                    'expression'    => "(function() { const el = document.querySelector($selector); if (!el) throw new Error('Element not found: ' + $selector); el.click(); return true; })()",
                     'returnByValue' => true
                 ];
                 break;
@@ -691,16 +684,7 @@ class handler extends Factory
                 $text       = json_encode($params['text'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => "
-                        (function() {
-                            const el = document.querySelector($selector);
-                            if (!el) throw new Error('Element not found: ' + $selector);
-                            el.value = $text;
-                            el.dispatchEvent(new Event('input', { bubbles: true }));
-                            el.dispatchEvent(new Event('change', { bubbles: true }));
-                            return true;
-                        })()
-                    ",
+                    'expression'    => "(function() { const el = document.querySelector($selector); if (!el) throw new Error('Element not found: ' + $selector); el.value = $text; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()",
                     'returnByValue' => true
                 ];
                 break;
@@ -709,14 +693,7 @@ class handler extends Factory
                 $selector   = json_encode($params['selector'] ?? 'form', JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => "
-                        (function() {
-                            const el = document.querySelector($selector);
-                            if (!el) throw new Error('Form not found: ' + $selector);
-                            el.submit();
-                            return true;
-                        })()
-                    ",
+                    'expression'    => "(function() { const el = document.querySelector($selector); if (!el) throw new Error('Form not found: ' + $selector); el.submit(); return true; })()",
                     'returnByValue' => true
                 ];
                 break;
@@ -776,7 +753,7 @@ class handler extends Factory
             case 'waitForSelector':
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ')) resolve(true); else if(Date.now()-s>' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.querySelector(" . json_encode($params['selector'], JSON_FORMAT) . ")) resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
                     'returnByValue' => true
                 ];
                 break;
@@ -784,7 +761,7 @@ class handler extends Factory
             case 'waitForPageLoad':
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.readyState==="complete") resolve(true); else if(Date.now()-s>' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.readyState==='complete') resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
                     'returnByValue' => true
                 ];
                 break;
@@ -792,21 +769,23 @@ class handler extends Factory
             case 'waitForText':
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.body.innerText.includes(' . json_encode($params['text'], JSON_FORMAT) . ')) resolve(true); else if(Date.now()-s>' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.body.innerText.includes(" . json_encode($params['text'], JSON_FORMAT) . ")) resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
                     'returnByValue' => true
                 ];
                 break;
 
             case 'waitForElementVisible':
-                $expr       = 'new Promise(resolve => { let s=Date.now(); const c=()=>{ const el=document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . '); if(el && getComputedStyle(el).display!=="none" && getComputedStyle(el).visibility!=="hidden") resolve(true); else if(Date.now()-s>' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })';
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => $expr, 'returnByValue' => true];
+                $cdp_params = [
+                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ const el=document.querySelector(" . json_encode($params['selector'], JSON_FORMAT) . "); if(el && getComputedStyle(el).display!=='none' && getComputedStyle(el).visibility!=='hidden') resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'waitForUrl':
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(window.location.href.includes(' . json_encode($params['url_pattern'], JSON_FORMAT) . ')) resolve(true); else if(Date.now()-s>' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ if(window.location.href.includes(" . json_encode($params['url_pattern'], JSON_FORMAT) . ")) resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
                     'returnByValue' => true
                 ];
                 break;
@@ -817,14 +796,17 @@ class handler extends Factory
                 break;
 
             case 'pressKey':
-                $mod_code = '';
-
-                foreach (($params['modifiers'] ?? []) as $mod) {
-                    $mod_code .= 'event.' . $mod . 'Key = true;';
+                $mod_props = [];
+                $modifiers = $params['modifiers'] ?? [];
+                foreach ($modifiers as $mod) {
+                    $mod_props[] = strtolower($mod) . 'Key: true';
                 }
-
+                $mod_str    = implode(',', $mod_props);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key:' . json_encode($params['key'], JSON_FORMAT) . ', bubbles:true })); ' . $mod_code, 'returnByValue' => false];
+                $cdp_params = [
+                    'expression'    => "(function() { const el = document.activeElement; if (!el) return false; const event = new KeyboardEvent('keydown', { key: " . json_encode($params['key'], JSON_FORMAT) . ", bubbles: true, " . $mod_str . " }); el.dispatchEvent(event); return true; })()",
+                    'returnByValue' => true
+                ];
                 break;
 
             default:

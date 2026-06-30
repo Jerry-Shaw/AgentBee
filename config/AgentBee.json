@@ -1,6 +1,6 @@
 {
   "agent_server": {
-    "host": "127.0.0.127",
+    "host": "127.0.0.1",
     "port": 8686,
     "ping_interval": 60
   },
@@ -14,10 +14,10 @@
     "keep_reasons": false,
     "params": {
       "max_completion_tokens": 65536,
-      "temperature": 0.8,
+      "temperature": 0.6,
       "min_p": 0.05,
       "top_p": 0.95,
-      "top_k": 50,
+      "top_k": 40,
       "frequency_penalty": 0,
       "presence_penalty": 0,
       "repetition_penalty": 1,

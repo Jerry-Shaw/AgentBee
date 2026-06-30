@@ -834,13 +834,13 @@ class handler extends Factory
     {
         switch ($action) {
             case 'navigate':
-                return '导航已启动，页面加载中。';
+                return '导航已启动，请等待页面加载完成后（可通过 waitForPageLoad 确认）再继续操作，不要频繁发起请求。';
+            case 'submit':
+                return '表单已提交，若页面发生跳转请等待加载完成，避免连续操作。';
             case 'click':
-                return '点击元素操作成功。';
+                return '点击操作已执行，若页面发生跳转请等待加载完成后继续。';
             case 'type':
                 return '文本输入成功。';
-            case 'submit':
-                return '表单已提交。';
             case 'getUrl':
                 return '当前页面 URL 已获取。';
             case 'getTitle':

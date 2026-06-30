@@ -27,7 +27,8 @@ use Nervsys\Ext\libHttp;
 
 class handler extends Factory
 {
-    public int $cmd_id = 0;
+    public int $cmd_id  = 0;
+    public int $timeout = 60;
 
     private const START_ARGS = [
         '--remote-debugging-port=0',
@@ -489,7 +490,7 @@ class handler extends Factory
             $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' NOT found!', 'trace');
             return [
                 'status' => 'error',
-                'error'  => '实例 "' . $payload_data['worker_name'] . '" 不存在，请启动后操作。'
+                'error'  => '实例 "' . $payload_data['worker_name'] . '" 不存在，请先启动实例。'
             ];
         }
 
@@ -501,7 +502,8 @@ class handler extends Factory
             ];
         }
 
-        $socketMgr = SocketMgr::new($payload_data['worker_name']);
+        $socketMgr     = SocketMgr::new($payload_data['worker_name']);
+        $this->timeout = $agent_core->utils->agent_config['chrome_timeout'] ?? 60;
 
         try {
             $cmd_id = $this->cmd_id++;
@@ -525,7 +527,7 @@ class handler extends Factory
                 )
             );
 
-            if (1 === (int)stream_select($master_sock, $write, $except, 30, 0)) {
+            if (1 === (int)stream_select($master_sock, $write, $except, $this->timeout, 0)) {
                 $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'ready');
                 $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', 'idle');
 
@@ -535,7 +537,7 @@ class handler extends Factory
                 if (is_null($msg_data)) {
                     return [
                         'status'  => 'error',
-                        'error'   => '执行失败，响应格式异常。',
+                        'error'   => '执行失败，响应格式异常，请重试或重启实例。',
                         'content' => $message
                     ];
                 }
@@ -543,7 +545,7 @@ class handler extends Factory
                 if (isset($msg_data['error'])) {
                     return [
                         'status' => 'error',
-                        'error'  => 'CDP 协议错误，请检查浏览器状态: ' . ($msg_data['error']['message'] ?? '未知错误'),
+                        'error'  => 'CDP 协议错误，请重启浏览器实例。错误详情: ' . ($msg_data['error']['message'] ?? '未知错误'),
                     ];
                 }
 
@@ -571,19 +573,29 @@ class handler extends Factory
 
                 if ('screenshot' === $action) {
                     if (!isset($msg_data['result']['data'])) {
-                        return ['status' => 'error', 'error' => '截图数据缺失'];
+                        return ['status' => 'error', 'error' => '截图数据缺失，请重试截图操作。'];
                     }
 
                     $saved_path = $this->saveScreenshot($agent_core, $msg_data['result']['data'], $payload_data['params']['save_path']);
 
                     if ('' === $saved_path) {
-                        return ['status' => 'error', 'error' => '截图保存失败'];
+                        return ['status' => 'error', 'error' => '截图保存失败，请检查保存路径和磁盘空间。'];
                     }
 
                     $data = ['saved_path' => $saved_path];
                     unset($saved_path);
                 } else {
                     $data = $msg_data['result']['result']['value'] ?? $msg_data['result'] ?? [];
+                }
+
+                if (
+                    false === $data
+                    && in_array($action, ['waitForSelector', 'waitForPageLoad', 'waitForText', 'waitForElementVisible', 'waitForUrl'], true)
+                ) {
+                    return [
+                        'status' => 'error',
+                        'error'  => '等待超时，条件未满足，请检查页面是否正常加载或增加超时时间。',
+                    ];
                 }
 
                 return [
@@ -594,7 +606,7 @@ class handler extends Factory
             } else {
                 return [
                     'status' => 'error',
-                    'error'  => '执行 "' . $action . '" 操作超时（30秒），请检查网络或实例状态。',
+                    'error'  => '执行 "' . $action . '" 超时未响应（' . $this->timeout . '秒），请增加超时时间或重启实例。',
                 ];
             }
         } catch (\Throwable $throwable) {
@@ -650,7 +662,7 @@ class handler extends Factory
      */
     private function buildCommand(string $action, array $params, int $cmd_id): string
     {
-        $timeout_ms = (int)($params['timeout'] ?? 30) * 1000;
+        $timeout_ms = (int)($params['timeout'] ?? $this->timeout) * 1000;
 
         switch ($action) {
             case 'navigate':

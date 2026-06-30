@@ -151,7 +151,7 @@ For an out-of-the-box web interface, use the open-source frontend project **[Bee
 3. Configure the API and WebSocket connection settings:
    - Set your **API URL** to point to an OpenAI-compatible LLM endpoint (e.g., `http://127.0.0.1:60300/v1`)
    - Set your **API Key** for authentication
-   - Set the **WebSocket URL**: `ws://127.0.0.127:8686`
+   - Set the **WebSocket URL**: `ws://127.0.0.1:8686`
 4. Click "Save" — AgentBee will automatically fetch available models from your API. You can freely switch between them in the input box without restarting.
 5. That's it — you're ready to chat with AgentBee directly in your browser.
 

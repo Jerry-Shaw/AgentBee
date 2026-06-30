@@ -686,7 +686,7 @@ class utils extends Factory
                 continue;
             }
 
-            $namespace = '\\' . $dirname . '\\' . $json_data['name'];
+            $namespace = '\\' . strtr($dirname, DIRECTORY_SEPARATOR, '\\') . '\\' . $json_data['name'];
 
             try {
                 $metadata = ($namespace . '\\skills')::META;

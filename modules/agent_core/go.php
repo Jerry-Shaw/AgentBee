@@ -134,10 +134,13 @@ class go extends Factory
      */
     public function start(): void
     {
+        $this->utils->cleanPids();
+
         $occupied_pids = $this->core->OSMgr->findPidsByPort($this->utils->agent_config['agent_server']['port']);
 
         if (!empty($occupied_pids)) {
-            $this->utils->debug('Port ' . $this->utils->agent_config['agent_server']['port'] . ' is occupied, cannot start WebSocket server', 'trace');
+            $this->utils->debug('AgentBee failed to start. Port ' . $this->utils->agent_config['agent_server']['port'] . ' is occupied.', 'trace');
+            return;
         }
 
         $memory_limit = $this->utils->agent_config['memory_limit'] ?? '4G';

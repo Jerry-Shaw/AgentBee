@@ -40,7 +40,9 @@ class utils extends Factory
     public int $worker_idx = 1000;
 
     public string $session_id;
-    public array  $agent_config;
+    public string $proc_pid_path;
+
+    public array $agent_config;
 
     public array $session_history = [];
 
@@ -62,8 +64,16 @@ class utils extends Factory
         $this->libFileIO = libFileIO::new();
         $this->config    = config::new();
 
-        $this->session_id   = hash('md5', uniqid('', true));
-        $this->agent_config = $this->config->get();
+        $this->agent_config  = $this->config->get();
+        $this->session_id    = hash('md5', uniqid('', true));
+        $this->proc_pid_path = $this->app->log_path . DIRECTORY_SEPARATOR . 'run' . DIRECTORY_SEPARATOR;
+
+        if (!is_dir($this->proc_pid_path)) {
+            try {
+                mkdir($this->proc_pid_path, 777, true);
+            } catch (\Throwable) {
+            }
+        }
     }
 
     /**
@@ -92,6 +102,46 @@ class utils extends Factory
     public function getWorkerIDX(): int
     {
         return $this->worker_idx++;
+    }
+
+    /**
+     * @param int $pid
+     *
+     * @return void
+     */
+    public function savePid(int $pid): void
+    {
+        fclose(fopen($this->proc_pid_path . $pid, 'w'));
+        unset($pid);
+    }
+
+    /**
+     * @param int $pid
+     *
+     * @return void
+     */
+    public function removePid(int $pid): void
+    {
+        if (is_file($this->proc_pid_path . $pid)) {
+            unlink($this->proc_pid_path . $pid);
+        }
+
+        unset($pid);
+    }
+
+    /**
+     * @return void
+     */
+    public function cleanPids(): void
+    {
+        $pid_files = $this->libFileIO->getDirContents($this->proc_pid_path);
+
+        foreach ($pid_files as $file) {
+            $this->OSMgr->killPid($file['name']);
+            unlink($file['absolute_path']);
+        }
+
+        unset($pid_files, $file);
     }
 
     /**

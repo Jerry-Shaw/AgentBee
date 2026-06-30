@@ -81,52 +81,55 @@ class handler extends Factory
                 ]
             )->run($agent_core->utils->getProcIDX());
 
-        $browser_pid     = $agent_core->utils->procMgr->getPid($browser_idx);
-        $browser_address = '';
+        $browser_addr = '';
+        $browser_pid  = $agent_core->utils->procMgr->getPid($browser_idx);
 
+        $agent_core->utils->savePid($browser_pid);
         $agent_core->utils->debug('Browser started: ' . $payload_data['worker_name'] . ' (PID: ' . $browser_pid . ')', 'trace');
 
         for ($i = 0; $i < 10; ++$i) {
             $err_msg = trim($agent_core->utils->procMgr->readProc($browser_idx, 'stderr'));
 
             if ('' !== $err_msg && str_starts_with($err_msg, 'DevTools listening on')) {
-                $browser_address = substr($err_msg, strpos($err_msg, 'ws'));
+                $browser_addr = substr($err_msg, strpos($err_msg, 'ws'));
                 break;
             }
 
             usleep(50000);
         }
 
-        if ('' === $browser_address) {
+        if ('' === $browser_addr) {
             $agent_core->utils->debug('Browser ERROR: Failed to fetch address, closing ' . $payload_data['worker_name'] . ' (PID: ' . $browser_pid . ')', 'trace');
             $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
+            $agent_core->utils->removePid($browser_pid);
 
             return '无法获取浏览器 WebSocket 地址，实例已关闭。';
         }
 
-        $ws_address = '';
-        $local_port = parse_url($browser_address, PHP_URL_PORT);
+        $local_port = parse_url($browser_addr, PHP_URL_PORT);
         $json_addr  = 'http://127.0.0.1:' . $local_port . '/json';
         $dev_json   = libHttp::new()->fetch($json_addr);
         $dev_data   = json_decode($dev_json, true);
+        $ws_addr    = '';
 
         if (is_array($dev_data) && !empty($dev_data)) {
             foreach ($dev_data as $target) {
                 if (isset($target['type']) && 'page' === $target['type'] && isset($target['webSocketDebuggerUrl'])) {
-                    $ws_address = $target['webSocketDebuggerUrl'];
+                    $ws_addr = $target['webSocketDebuggerUrl'];
                     break;
                 }
             }
 
-            if ('' === $ws_address && isset($dev_data[0]['webSocketDebuggerUrl'])) {
-                $ws_address = $dev_data[0]['webSocketDebuggerUrl'];
+            if ('' === $ws_addr && isset($dev_data[0]['webSocketDebuggerUrl'])) {
+                $ws_addr = $dev_data[0]['webSocketDebuggerUrl'];
             }
         }
 
-        if ('' === $ws_address) {
+        if ('' === $ws_addr) {
             $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
+            $agent_core->utils->removePid($browser_pid);
 
             return '无法获取目标页面 WebSocket 地址，实例已关闭。';
         }
@@ -139,7 +142,7 @@ class handler extends Factory
                 'browser_pid' => $browser_pid,
                 'worker_name' => $payload_data['worker_name'],
                 'socket_id'   => $payload_data['socket_id'],
-                'socket_addr' => $ws_address,
+                'socket_addr' => $ws_addr,
                 'status'      => 'ready',
                 'action'      => 'idle',
                 'open_at'     => date('Y-m-d H:i:s'),
@@ -147,12 +150,12 @@ class handler extends Factory
             ]
         );
 
-        $agent_core->utils->debug('Browser: WebSocket Debugger Url is ' . $ws_address . ', ready for connections.', 'trace');
+        $agent_core->utils->debug('Browser: WebSocket Debugger Url is ' . $ws_addr . ', ready for connections.', 'trace');
         $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is ready!', 'trace');
 
         $message = '实例 "' . $payload_data['worker_name'] . '" 已就绪。';
 
-        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_address, $i, $err_msg, $ws_address, $local_port, $json_addr, $dev_json, $dev_data, $target);
+        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target);
         return $message;
     }
 
@@ -468,6 +471,7 @@ class handler extends Factory
             $agent_core->utils->OSMgr->killPid($worker_info['browser_pid']);
             $agent_core->utils->procMgr->close($worker_info['browser_idx']);
             $agent_core->utils->libFileIO->delDir($worker_info['data_dir']);
+            $agent_core->utils->removePid($worker_info['browser_pid']);
         } catch (\Throwable) {
         }
 

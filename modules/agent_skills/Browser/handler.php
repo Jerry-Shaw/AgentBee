@@ -552,15 +552,10 @@ class handler extends Factory
                 $runtime_error = '';
 
                 if (isset($msg_data['result']['exceptionDetails'])) {
-                    $runtime_error = $msg_data['result']['exceptionDetails']['text'] ?? '脚本异常';
-                } elseif (isset($msg_data['result']['result']['subtype'])
-                    && 'error' === $msg_data['result']['result']['subtype']
-                ) {
+                    $runtime_error = $msg_data['result']['exceptionDetails']['exception']['description'] ?? $msg_data['result']['exceptionDetails']['text'] ?? '脚本异常';
+                } elseif (isset($msg_data['result']['result']['subtype']) && 'error' === $msg_data['result']['result']['subtype']) {
                     $runtime_error = $msg_data['result']['result']['description'] ?? '脚本执行错误';
-                } elseif (isset($msg_data['result']['result']['value'])
-                    && is_string($msg_data['result']['result']['value'])
-                    && str_starts_with($msg_data['result']['result']['value'], 'Error:')
-                ) {
+                } elseif (isset($msg_data['result']['result']['value']) && is_string($msg_data['result']['result']['value']) && str_starts_with($msg_data['result']['result']['value'], 'Error:')) {
                     $runtime_error = $msg_data['result']['result']['value'];
                 }
 

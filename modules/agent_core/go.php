@@ -134,7 +134,11 @@ class go extends Factory
      */
     public function start(): void
     {
-        $this->utils->cleanPids();
+        $boot_now  = $this->utils->OSMgr->getBootInfo();
+        $boot_file = $this->utils->config->config_dir . DIRECTORY_SEPARATOR . '.Boot';
+        $kill_pid  = !is_file($boot_file) || file_get_contents($boot_file) === $boot_now;
+
+        $this->utils->cleanPids($kill_pid);
 
         $occupied_pids = $this->core->OSMgr->findPidsByPort($this->utils->agent_config['agent_server']['port']);
 
@@ -146,6 +150,8 @@ class go extends Factory
         $memory_limit = $this->utils->agent_config['memory_limit'] ?? '4G';
 
         ini_set('memory_limit', $memory_limit);
+
+        file_put_contents($boot_file, $boot_now);
 
         $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
         $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');

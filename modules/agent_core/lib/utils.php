@@ -130,18 +130,26 @@ class utils extends Factory
     }
 
     /**
+     * @param bool $kill_pid
+     *
      * @return void
      */
-    public function cleanPids(): void
+    public function cleanPids(bool $kill_pid): void
     {
         $pid_files = $this->libFileIO->getDirContents($this->pid_file_path);
 
-        foreach ($pid_files as $file) {
-            $this->OSMgr->killPid($file['name']);
-            unlink($file['absolute_path']);
+        if ($kill_pid) {
+            foreach ($pid_files as $file) {
+                $this->OSMgr->killPid($file['name']);
+                unlink($file['absolute_path']);
+            }
+        } else {
+            foreach ($pid_files as $file) {
+                unlink($file['absolute_path']);
+            }
         }
 
-        unset($pid_files, $file);
+        unset($kill_pid, $pid_files, $file);
     }
 
     /**

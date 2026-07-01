@@ -192,11 +192,11 @@ class go extends Factory
         $this->libSQLite->table('agent_memory')
             ->where(['create_id', '=', $create_id])
             ->update([
+                'expire_at' => $expire_at,
                 'level'     => $level,
                 'role'      => $role,
                 'content'   => $content,
-                'tokens'    => $this->buildTokens($content),
-                'expire_at' => $expire_at
+                'tokens'    => $this->buildTokens($content)
             ])
             ->execute();
 

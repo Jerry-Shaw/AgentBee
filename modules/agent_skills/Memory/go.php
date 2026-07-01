@@ -131,10 +131,6 @@ class go extends Factory
             return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
         }
 
-        if ('system' === $level) {
-            $role = 'system';
-        }
-
         if (!in_array($role, self::ROLES)) {
             return ['status' => 'error', 'error' => 'Invalid role: ' . $role];
         }
@@ -162,16 +158,22 @@ class go extends Factory
 
     /**
      * @param int    $create_id
+     * @param string $level
      * @param string $role
      * @param string $content
+     * @param int    $expire_at
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
-    public function update(int $create_id, string $role, string $content): array
+    public function update(int $create_id, string $level, string $role, string $content, int $expire_at = 0): array
     {
         if ('' === trim($content)) {
             return ['status' => 'error', 'error' => 'Empty content'];
+        }
+
+        if (!in_array($level, self::LEVELS)) {
+            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
         }
 
         if (!in_array($role, self::ROLES)) {
@@ -179,7 +181,7 @@ class go extends Factory
         }
 
         $record = $this->libSQLite->table('agent_memory')
-            ->select('level')
+            ->select('create_id')
             ->where(['create_id', '=', $create_id])
             ->fetch();
 
@@ -187,22 +189,18 @@ class go extends Factory
             return ['status' => 'error', 'error' => 'Record not found: ' . $create_id];
         }
 
-        $level = $record['level'];
-
-        if ('system' === $level) {
-            $role = 'system';
-        }
-
         $this->libSQLite->table('agent_memory')
             ->where(['create_id', '=', $create_id])
             ->update([
-                'role'    => $role,
-                'content' => $content,
-                'tokens'  => $this->buildTokens($content)
+                'level'     => $level,
+                'role'      => $role,
+                'content'   => $content,
+                'tokens'    => $this->buildTokens($content),
+                'expire_at' => $expire_at
             ])
             ->execute();
 
-        unset($create_id, $role, $content, $record, $level);
+        unset($create_id, $level, $role, $content, $expire_at, $record);
         return ['status' => 'success', 'affected_rows' => $this->libSQLite->getAffectedRows()];
     }
 

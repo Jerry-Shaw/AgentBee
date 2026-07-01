@@ -75,7 +75,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'save',
-                'description' => '新增记忆。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时，3天TTL)。role按来源：system/user/assistant/tool；level=system时强制system。内容需压缩提炼。返回:{status,create_id}。',
+                'description' => '新增记忆。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时，3天TTL)。role按来源：system/user/assistant/tool。内容需压缩提炼。返回:{status,create_id}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -91,14 +91,15 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'update',
-                'description' => '更新已有记忆（按create_id）。可改层级、角色、内容。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时)。role按来源：system/user/assistant/tool；level=system时强制system。仅内容有实质变化时调用，新内容需压缩提炼。返回:{status,affected_rows}。',
+                'description' => '更新已有记忆（按create_id）。可改层级、角色、内容、过期时间（可选）。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时)。role按来源：system/user/assistant/tool。expire_at为时间戳(秒)，0表示永不过期，默认0。仅内容有实质变化时调用，新内容需压缩提炼。返回:{status,affected_rows}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'create_id' => ['type' => 'integer', 'description' => '记忆ID(微秒)'],
                         'level'     => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc'], 'description' => '新层级'],
                         'role'      => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool'], 'description' => '新角色'],
-                        'content'   => ['type' => 'string', 'description' => '新内容']
+                        'content'   => ['type' => 'string', 'description' => '新内容'],
+                        'expire_at' => ['type' => 'integer', 'default' => 0, 'description' => '过期时间戳(秒)，0表示永不过期']
                     ],
                     'required'   => ['create_id', 'level', 'role', 'content']
                 ],

@@ -499,7 +499,7 @@ class go extends Factory
             }
         }
 
-        if (feof($stdout_stream)) {
+        if (is_resource($stdout_stream) && feof($stdout_stream)) {
             unset($this->utils->stream_buffers[$external_stream_id]);
         }
 

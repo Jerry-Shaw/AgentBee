@@ -140,7 +140,7 @@ class go extends Factory
 
         $this->utils->cleanPids($kill_pid);
 
-        $occupied_pids = $this->core->OSMgr->findPidsByPort($this->utils->agent_config['agent_server']['port']);
+        $occupied_pids = $this->core->OSMgr->findPidsByPortState($this->utils->agent_config['agent_server']['port'], 'LISTEN');
 
         if (!empty($occupied_pids)) {
             $this->utils->debug('AgentBee failed to start. Port ' . $this->utils->agent_config['agent_server']['port'] . ' is occupied.', 'trace');

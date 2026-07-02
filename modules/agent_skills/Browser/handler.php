@@ -37,14 +37,21 @@ class handler extends Factory
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
         '--disable-blink-features=AutomationControlled',
+        '--disable-component-update',
+        '--disable-client-side-phishing-detection',
+        '--disable-default-apps',
         '--disable-dev-shm-usage',
+        '--disable-domain-reliability',
+        '--disable-features=ChromeWhatsNewUI,TranslateUI,AutofillServerCommunication,PrivacySandboxSettings4,PrivacySandboxPromptTrigger',
+        '--disable-ipc-flooding-protection',
         '--disable-prompt-on-repost',
         '--disable-renderer-backgrounding',
+        '--disable-suggestions-ui',
         '--disable-sync',
         '--no-sandbox',
         '--no-first-run',
         '--no-default-browser-check',
-        '--remote-debugging-port=0'
+        '--remote-debugging-port=0',
     ];
 
     /**
@@ -70,7 +77,7 @@ class handler extends Factory
             $start_args[] = '--headless=new';
         }
 
-        $data_dir     = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . 'browser-' . $payload_data['worker_name'];
+        $data_dir     = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . 'BrowserData';
         $start_args[] = '--user-data-dir=' . $data_dir;
 
         $browser_idx = $agent_core->utils
@@ -134,6 +141,27 @@ class handler extends Factory
             return '无法获取目标页面 WebSocket 地址，实例已关闭。';
         }
 
+        $socketMgr = SocketMgr::new($payload_data['worker_name']);
+        $socketMgr->createWSClient($ws_addr);
+
+        $write       = $except = [];
+        $master_id   = $socketMgr->master_id;
+        $master_sock = $socketMgr->master_sock;
+
+        $inject_cmd = json_encode([
+            'id'     => $this->cmd_id++,
+            'method' => 'Page.addScriptToEvaluateOnNewDocument',
+            'params' => ['source' => '(function() { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] }); Object.defineProperty(navigator, "languages", { get: () => ["zh-CN", "zh", "en"] }); window.chrome = { runtime: {} }; })();']
+        ], JSON_FORMAT);
+
+        $socketMgr->sendMessage($master_id, $socketMgr->wsEncode($inject_cmd, false, true));
+
+        if (1 === (int)stream_select($master_sock, $write, $except, 10, 0)) {
+            $socketMgr->readMessage($master_id, true);
+        }
+
+        Factory::destroy($socketMgr);
+
         $agent_core->utils->addChildWorker(
             'Browser',
             $payload_data['worker_name'],
@@ -155,7 +183,7 @@ class handler extends Factory
 
         $message = '实例 "' . $payload_data['worker_name'] . '" 已就绪。';
 
-        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target);
+        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target, $socketMgr, $write, $except, $master_id, $master_sock, $inject_cmd);
         return $message;
     }
 
@@ -470,7 +498,6 @@ class handler extends Factory
             $agent_core->utils->removeChildWorker('Browser', $worker_name);
             $agent_core->utils->OSMgr->killPid($worker_info['browser_pid']);
             $agent_core->utils->procMgr->close($worker_info['browser_idx']);
-            $agent_core->utils->libFileIO->delDir($worker_info['data_dir']);
             $agent_core->utils->removePid($worker_info['browser_pid']);
         } catch (\Throwable) {
         }
@@ -510,8 +537,6 @@ class handler extends Factory
         $this->timeout = $agent_core->utils->agent_config['chrome_timeout'] ?? 60;
 
         try {
-            $cmd_id = $this->cmd_id++;
-
             $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is working on ' . $action . '.', 'trace');
             $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'busy');
             $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', $action);
@@ -519,6 +544,7 @@ class handler extends Factory
             $socketMgr->createWSClient($worker_info['socket_addr']);
 
             $write       = $except = [];
+            $cmd_id      = $this->cmd_id++;
             $master_id   = $socketMgr->master_id;
             $master_sock = $socketMgr->master_sock;
 

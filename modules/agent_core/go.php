@@ -373,6 +373,19 @@ class go extends Factory
 
                             unset($result, $result_text, $metadata, $msg_data, $stream_msg);
                             break;
+
+                        case 'ToolErrors':
+                            $this->utils->addSessionHistory(
+                                $payload['workerName'],
+                                [
+                                    'role'    => 'user',
+                                    'content' => [[
+                                        'type' => 'text',
+                                        'text' => '停止重复调用 ' . $payload['data']['function_name'] . '，立即审视历史中的错误与上下文，调整策略；无法解决则上报用户。'
+                                    ]]
+                                ]
+                            );
+                            break;
                     }
                     break;
 
@@ -623,8 +636,9 @@ class go extends Factory
             }
 
             if ('stop' === $data['type']) {
-                $this->utils->debug('User: Send abort to LLM', 'debug');
+                $this->in_process = false;
                 $this->openai->abort($socket_id);
+                $this->utils->debug('User: Abort signal sent. Cancelling task.', 'trace');
                 continue;
             }
 

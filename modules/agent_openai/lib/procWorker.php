@@ -29,6 +29,9 @@ class procWorker extends Factory
 {
     public core $core;
 
+    public int    $tool_error_count = 0;
+    public string $tool_error_last  = '';
+
     private string $message_type = 'content';
 
     /**
@@ -161,6 +164,28 @@ class procWorker extends Factory
 
                                 $this->sendMsg($socket_id, 'stream', 'tool_result', $metadata, $result);
                                 $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_history);
+
+                                // Handle tool call errors
+                                if (isset($result_data['status']) && 'error' === $result_data['status']) {
+                                    $error_message = $result['function_name'] . '->' . ($result_data['message'] ?? 'UncaughtErrors');
+
+                                    if ($error_message === $this->tool_error_last) {
+                                        if (2 <= ++$this->tool_error_count) {
+                                            $this->sendMsg(
+                                                $socket_id,
+                                                'context',
+                                                'ToolErrors',
+                                                $metadata,
+                                                ['function_name' => $result['function_name']]
+                                            );
+                                        }
+                                    } else {
+                                        $this->tool_error_count = 0;
+                                        $this->tool_error_last  = $error_message;
+                                    }
+
+                                    unset($error_message);
+                                }
                             } else {
                                 // Async tools
                                 $result_data['socket_id']     = $socket_id;

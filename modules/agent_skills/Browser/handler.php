@@ -31,21 +31,20 @@ class handler extends Factory
     public int $timeout = 60;
 
     private const START_ARGS = [
-        '--remote-debugging-port=0',
-        '--new-window',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-extensions',
-        '--disable-sync',
-        '--disable-prompt-on-repost',
-        '--enable-automation',
-        '--window-size=1280,720',
-        '--no-sandbox',
+        '--lang=zh-CN',
+        '--window-size=1366,768',
+        '--excludeSwitches=enable-automation',
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--disable-prompt-on-repost',
         '--disable-renderer-backgrounding',
+        '--disable-sync',
+        '--no-sandbox',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--remote-debugging-port=0'
     ];
 
     /**
@@ -67,6 +66,7 @@ class handler extends Factory
         $start_args = self::START_ARGS;
 
         if ($payload_data['headless']) {
+            $start_args[] = '--disable-gpu';
             $start_args[] = '--headless=new';
         }
 

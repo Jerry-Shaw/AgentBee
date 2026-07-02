@@ -66,11 +66,13 @@ class go extends Factory
         $this->utils->debug($reload ? 'Reloading...' : 'Initializing...', 'trace');
         $this->core->initCore($reload);
 
-        $this->utils->debug('Model ID: ' . ($this->utils->agent_config['agent_llm']['model'] ?? 'NONE'), 'trace');
+        $this->utils->debug('API-URL: ' . ($this->utils->agent_config['agent_llm']['api_url'] ?? 'NONE'), 'trace');
+        $this->utils->debug('Model-ID: ' . ($this->utils->agent_config['agent_llm']['model'] ?? 'NONE'), 'trace');
         $this->utils->debug('SandBox mode: ' . ($this->utils->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
 
         $workspace_path = $this->utils->agent_config['workspace_path'] ?? '';
-        $this->utils->debug('Checking workspace: ' . $workspace_path, 'trace');
+        $this->utils->debug('Workspace path: ' . $workspace_path, 'trace');
+
         if ('' !== $workspace_path && !is_dir($workspace_path)) {
             try {
                 $this->utils->debug('Creating workspace: ' . $workspace_path, 'trace');

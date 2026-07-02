@@ -27,7 +27,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程。异步，必须收到回复就绪后（状态为ready），才能调用talk发任务。',
+                'description' => '创建Worker子进程，异步。必须收到回复就绪后（状态为ready），才能调用talk发任务。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -43,7 +43,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker异步发送消息（仅ready状态有效）。回复会自动推送。禁止轮询等待，禁止连续多发，否则会阻塞通信。无响应可重启。',
+                'description' => '向Worker进程发消息，异步，需等回复。Worker卡住/未响应时允许非ready状态打断，但禁连续多发（阻塞）。任务拆短防超时。回复自动推送。长时间无响应可重启。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -58,7 +58,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '终止Worker进程。建议任务完成或上下文过长时，保存记忆后调用。若需继续，可重启同名Worker并发送摘要恢复上下文。',
+                'description' => '终止Worker进程。任务完成后正常关闭；长时间无响应先打断，等待无效再关；上下文过长，保存后再关。若需继续，重启Worker，可发送摘要恢复上下文。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -72,7 +72,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '列出所有Worker及其状态（ready/processing/calling_tools等）。仅用于偶尔查看，禁止高频调用，以免阻塞通信。'
+                'description' => '列出所有Worker进程及其状态（ready/processing/calling_tools等）。仅限偶尔查看，禁止高频调用，以免阻塞通信。'
             ],
         ]
     ];

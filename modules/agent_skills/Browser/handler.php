@@ -479,6 +479,7 @@ class handler extends Factory
             $this->closeProcess($agent_core, $worker_info, $payload_data['worker_name']);
         }
 
+        $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is closed.', 'trace');
         $message = '实例 "' . $payload_data['worker_name'] . '" 已关闭。';
 
         unset($payload_data, $agent_core, $worker_info);

@@ -393,7 +393,7 @@ class go extends Factory
 
                 case 'end':
                     $this->in_process = false;
-                    $new_messages     = $this->utils->refreshSessionHistory(WORKER_MAIN);
+                    $new_messages     = $this->utils->refreshSessionHistory($payload['workerName']);
 
                     switch ($payload_type) {
                         case 'tools':
@@ -467,7 +467,7 @@ class go extends Factory
 
                                         $this->utils->debug($payload['sender'] . ': History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                         $this->utils->addMessageQueue(
-                                            'System',
+                                            WORKER_MAIN,
                                             [
                                                 'type' => 'text',
                                                 'text' => '[系统提醒] 上下文已达临界值，即将强制清理。必须闭环：①保存进度快照 → ②执行上下文清理 → ③同步任务目标与最新状态 → ④衔接原任务指令 → ⑤通知用户。禁止中断，自动继续原任务。'
@@ -481,10 +481,10 @@ class go extends Factory
 
                                 if ('' !== $payload['data']) {
                                     $this->utils->addMessageQueue(
-                                        'WorkerBee',
+                                        WORKER_MAIN,
                                         [
                                             'type' => 'text',
-                                            'text' => '[WorkerBee] 来自 ["' . $payload['workerName'] . '" | ' . $payload['workerRole'] . ']:' . "\n" . $payload['data']
+                                            'text' => '**[WorkerBee] 来自 `' . $payload['workerName'] . '`（' . $payload['workerRole'] . '）**' . "\n" . '> ' . $payload['data']
                                         ]
                                     );
                                 }
@@ -496,7 +496,7 @@ class go extends Factory
                                 if ($payload['talk_count'] > $limit_count) {
                                     $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                     $this->utils->addMessageQueue(
-                                        'WorkerBee',
+                                        WORKER_MAIN,
                                         [
                                             'type' => 'text',
                                             'text' => '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限。必须闭环：①保存状态 → ②关闭进程 → ③重启加载 → ④注入关键历史（从记忆提取摘要）→ ⑤继续原任务指令 → ⑥通知用户。禁止中断，自动接续。'
@@ -689,7 +689,7 @@ class go extends Factory
                 $this->utils->debug('User: LLM in progress, new message queued.', 'trace');
 
                 foreach ($result['content'] as $msg_line) {
-                    $this->utils->addMessageQueue('User', $msg_line);
+                    $this->utils->addMessageQueue(WORKER_MAIN, $msg_line);
                 }
 
                 unset($msg_line);

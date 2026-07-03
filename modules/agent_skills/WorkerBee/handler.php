@@ -22,13 +22,15 @@ class handler extends Factory
         if (!empty($worker_info)) {
             // WorkerBee already exists, change name or talk
             $agent_core->utils->debug('WorkerBee already exists: ' . $payload_data['worker_name'] . ' | ' . $worker_info['worker_role'] . ' already exists!', 'trace');
+
             $agent_core->utils->addMessageQueue(
-                'WorkerBee',
+                WORKER_MAIN,
                 [
                     'type' => 'text',
                     'text' => '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')'
                 ]
             );
+
             return '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
         }
 
@@ -96,46 +98,41 @@ class handler extends Factory
     {
         $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
-        if (empty($worker_info) || 0 === $agent_core->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
+        if (empty($worker_info) || 0 === $agent_core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             // WorkerBee died, notice main worker
             $agent_core->utils->addMessageQueue(
-                'WorkerBee',
+                WORKER_MAIN,
                 [
                     'type' => 'text',
                     'text' => '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败'
                 ]
             );
+
             return '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败';
         }
 
         if ('ready' !== $worker_info['status']) {
-            $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is busy', 'trace');
+            $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is busy, new message queued.', 'trace');
+
+            $this->sendMessage($agent_core, $worker_info, $payload_data);
+
             $agent_core->utils->addMessageQueue(
-                'WorkerBee',
+                $worker_info['worker_name'],
                 [
                     'type' => 'text',
-                    'text' => '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。'
+                    'text' => $payload_data['content']
                 ]
             );
-            return '[WorkerBee] "' . $worker_info['worker_name'] . '" 之前任务未完成，请等回复后再继续。';
+
+            return '[WorkerBee] `' . $worker_info['worker_name'] . '` 正忙（' . $worker_info['status'] . '）。消息已入队，请先处理其他事务，回复会主动推送。';
         }
 
         $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');
+
         $agent_core->utils->setChildWorker('WorkerBee', $worker_info['worker_name'], 'status', 'processing');
+        $agent_core->utils->refreshSessionHistory($worker_info['worker_name']);
 
-        $worker_message = json_encode(
-            $agent_core->utils->getMessageMarker(
-                WORKER_MAIN,
-                WORKER_MAIN,
-                'Assistant',
-                $worker_info['worker_name'],
-                1
-            ) + [
-                'type' => 'content',
-                'data' => AGENT_NAME . ': ' . $payload_data['content']
-            ], JSON_FORMAT);
-
-        $agent_core->core->sendMessage($worker_info['socket_id'], $worker_message);
+        $this->sendMessage($agent_core, $worker_info, $payload_data);
 
         $agent_core->utils->addSessionHistory(
             $worker_info['worker_name'],
@@ -158,7 +155,7 @@ class handler extends Factory
         );
 
         unset($payload_data, $agent_core, $worker_info, $worker_message, $metadata);
-        return '消息已发送，请等待回复。请勿重复发送消息。';
+        return '消息已发送，无需等待，回复会主动推送。请勿重复发送消息。';
     }
 
     /**
@@ -172,7 +169,7 @@ class handler extends Factory
     {
         $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
-        if (!empty($worker_info) && 0 < $agent_core->core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
+        if (!empty($worker_info) && 0 < $agent_core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             $agent_core->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
 
             $metadata = $agent_core->utils->getMessageMarker(
@@ -190,8 +187,9 @@ class handler extends Factory
                 $metadata + ['socket_id' => $payload_data['socket_id']]
             );
 
-            $agent_core->core->utils->procMgr->close($worker_info['proc_idx']);
-            $agent_core->core->utils->removeSessionHistory($worker_info['worker_name']);
+            $agent_core->utils->procMgr->close($worker_info['proc_idx']);
+            $agent_core->utils->removeSessionHistory($worker_info['worker_name']);
+            $agent_core->utils->removeMessageQueue($worker_info['worker_name']);
             $agent_core->utils->removeChildWorker('WorkerBee', $payload_data['worker_name']);
         } else {
             $agent_core->utils->debug('WorkerBee not found: ' . $payload_data['worker_name'], 'trace');
@@ -226,5 +224,32 @@ class handler extends Factory
 
         unset($payload_data, $agent_core, $workers, $worker);
         return $list;
+    }
+
+    /**
+     * @param agent_core $agent_core
+     * @param array      $worker_info
+     * @param array      $payload_data
+     *
+     * @return void
+     * @throws RandomException
+     * @throws \ReflectionException
+     */
+    private function sendMessage(agent_core $agent_core, array $worker_info, array $payload_data): void
+    {
+        $worker_message = json_encode(
+            $agent_core->utils->getMessageMarker(
+                WORKER_MAIN,
+                WORKER_MAIN,
+                'Assistant',
+                $worker_info['worker_name'],
+                1
+            ) + [
+                'type' => 'content',
+                'data' => AGENT_NAME . ': ' . $payload_data['content']
+            ], JSON_FORMAT);
+
+        $agent_core->core->sendMessage($worker_info['socket_id'], $worker_message);
+        unset($agent_core, $worker_info, $payload_data, $worker_message);
     }
 }

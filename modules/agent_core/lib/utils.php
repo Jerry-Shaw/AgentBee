@@ -218,20 +218,20 @@ class utils extends Factory
      */
     public function refreshSessionHistory(string $worker_name): int
     {
-        if (empty($this->message_queue)) {
+        if (!isset($this->message_queue[$worker_name]) || empty($this->message_queue[$worker_name])) {
             return 0;
         }
 
         $messages = [];
 
-        while (!is_null($message = array_shift($this->message_queue))) {
-            $messages[] = $message['message'];
+        while (!is_null($message = array_shift($this->message_queue[$worker_name]))) {
+            $messages[] = $message;
         }
 
         $count_messages = count($messages);
 
         if (0 < $count_messages) {
-            $this->debug('System: Adding ' . $count_messages . ' message(s) to history', 'trace');
+            $this->debug($worker_name . ': Adding ' . $count_messages . ' message(s) to history', 'trace');
             $this->addSessionHistory($worker_name, ['role' => 'user', 'content' => $messages]);
         }
 
@@ -509,51 +509,45 @@ class utils extends Factory
     }
 
     /**
-     * @param string $id
+     * @param string $worker_name
      * @param array  $message
      *
      * @return void
      */
-    public function addMessageQueue(string $id, array $message): void
+    public function addMessageQueue(string $worker_name, array $message): void
     {
-        $this->message_queue[] = ['id' => $id, 'message' => $message];
-        unset($id, $message);
+        $this->message_queue[$worker_name]   ??= [];
+        $this->message_queue[$worker_name][] = $message;
+
+        unset($worker_name, $message);
     }
 
     /**
-     * @param string $id
+     * @param string $worker_name
      * @param bool   $popout
      *
      * @return array
      */
-    public function getMessageQueue(string $id = '', bool $popout = false): array
+    public function getMessageQueue(string $worker_name, bool $popout = false): array
     {
-        $messages = [];
+        $messages = $this->message_queue[$worker_name] ?? [];
 
-        if ('' === $id) {
-            $messages = $this->message_queue;
-
-            if ($popout) {
-                $this->message_queue = [];
-            }
-        } else {
-            foreach ($this->message_queue as $key => $item) {
-                if ($item['id'] !== $id) {
-                    continue;
-                }
-
-                $messages[] = $item;
-
-                if ($popout) {
-                    unset($this->message_queue[$key]);
-                }
-            }
-
-            unset($key, $item);
+        if ($popout) {
+            unset($this->message_queue[$worker_name]);
         }
 
-        unset($id, $popout);
+        unset($worker_name, $popout);
         return $messages;
+    }
+
+    /**
+     * @param string $worker_name
+     *
+     * @return void
+     */
+    public function removeMessageQueue(string $worker_name): void
+    {
+        unset($this->message_queue[$worker_name], $worker_name);
     }
 
     /**

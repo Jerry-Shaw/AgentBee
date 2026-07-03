@@ -248,38 +248,40 @@ class go extends Factory
 
             switch ($message['type']) {
                 case 'stream':
-                    if ('length' === $payload_type) {
-                        $metadata = $this->utils->getMessageMarker(
-                            $payload['sender'],
-                            $payload['workerName'],
-                            $payload['workerRole'],
-                            $payload['workerName'],
-                            $payload['isSubTalk'],
-                            $payload['messageId']
-                        );
-
-                        $proc_idx = WORKER_MAIN === $payload['sender']
-                            ? $this->utils->getMainIDX()
-                            : ($this->utils->getChildWorker('WorkerBee', $payload['workerName'])['proc_idx'] ?? -1);
-
-                        if (-1 !== $proc_idx) {
-                            $this->openai->talk(
-                                $proc_idx,
-                                'talk',
-                                $this->utils->getSessionHistory($payload['workerName']),
-                                $metadata + ['socket_id' => $payload['socket_id']]
+                    switch ($payload_type) {
+                        case 'length':
+                            $metadata = $this->utils->getMessageMarker(
+                                $payload['sender'],
+                                $payload['workerName'],
+                                $payload['workerRole'],
+                                $payload['workerName'],
+                                $payload['isSubTalk'],
+                                $payload['messageId']
                             );
-                        }
 
-                        break;
-                    }
+                            $proc_idx = WORKER_MAIN === $payload['sender']
+                                ? $this->utils->getMainIDX()
+                                : ($this->utils->getChildWorker('WorkerBee', $payload['workerName'])['proc_idx'] ?? -1);
 
-                    $stream_msg = json_encode($payload, JSON_FORMAT);
+                            if (-1 !== $proc_idx) {
+                                $this->openai->talk(
+                                    $proc_idx,
+                                    'talk',
+                                    $this->utils->getSessionHistory($payload['workerName']),
+                                    $metadata + ['socket_id' => $payload['socket_id']]
+                                );
+                            }
+                            break;
 
-                    $this->core->sendMessage($message['socket_id'], $stream_msg);
+                        case 'error':
+                            $this->in_process = false;
+                            unset($this->utils->stream_buffers[$external_stream_id]);
+                            $this->core->sendMessage($message['socket_id'], json_encode(['type' => 'error'] + $payload['data'], JSON_FORMAT));
+                            break;
 
-                    if ('error' === $payload_type) {
-                        unset($this->utils->stream_buffers[$external_stream_id]);
+                        default:
+                            $this->core->sendMessage($message['socket_id'], json_encode($payload, JSON_FORMAT));
+                            break;
                     }
                     break;
 
@@ -518,7 +520,7 @@ class go extends Factory
             unset($this->utils->stream_buffers[$external_stream_id]);
         }
 
-        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type);
+        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $metadata);
     }
 
     /**

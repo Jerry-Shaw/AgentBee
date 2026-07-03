@@ -90,6 +90,13 @@ class procWorker extends Factory
                         $finish_reason
                     );
                 } else {
+                    // OpenAI API error
+                    if (isset($data['error'])) {
+                        $this->sendMsg($socket_id, 'stream', 'error', $metadata, $data);
+                        $finish_reason = 'error';
+                        return;
+                    }
+
                     // User abort
                     if (isset($data['status']) && 'aborted' === $data['status']) {
                         $finish_reason     = 'abort';

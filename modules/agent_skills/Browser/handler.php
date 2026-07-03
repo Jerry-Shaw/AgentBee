@@ -48,7 +48,6 @@ class handler extends Factory
         '--disable-renderer-backgrounding',
         '--disable-suggestions-ui',
         '--disable-sync',
-        '--no-sandbox',
         '--no-first-run',
         '--no-default-browser-check',
         '--remote-debugging-port=0',

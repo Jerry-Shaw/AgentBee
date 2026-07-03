@@ -834,6 +834,7 @@ class utils extends Factory
 
         $prompts[] = '## 可用工具';
         $prompts[] = '- **强制优先**：有专用工具时禁止`exec`，优先使用工具。';
+        $prompts[] = '- **网页任务**：交互/动态内容→Browser技能，纯数据/API→WebCrawler技能，不确定默认Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
         $prompts[] = '- **安全**：`exec`前验证输入参数，防命令注入。';
         $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
@@ -893,6 +894,7 @@ class utils extends Factory
 
         $prompts[] = '## 可用工具';
         $prompts[] = '- **强制优先**：有专用工具时优先调用工具。';
+        $prompts[] = '- **网页任务**：交互/动态内容→Browser技能，纯数据/API→WebCrawler技能，不确定默认Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则输出错误信息。';
         $prompts[] = '- 任务完成即止，勿重复调用工具。';
 

@@ -148,13 +148,13 @@ class handler extends Factory
         $master_id   = $socketMgr->master_id;
         $master_sock = $socketMgr->master_sock;
 
-        $inject_cmd = json_encode([
+        $browser_script = json_encode([
             'id'     => $this->cmd_id++,
             'method' => 'Page.addScriptToEvaluateOnNewDocument',
-            'params' => ['source' => '(function() { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] }); Object.defineProperty(navigator, "languages", { get: () => ["zh-CN", "zh", "en"] }); window.chrome = { runtime: {} }; })();']
+            'params' => ['source' => '(function() { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); })();']
         ], JSON_FORMAT);
 
-        $socketMgr->sendMessage($master_id, $socketMgr->wsEncode($inject_cmd, false, true));
+        $socketMgr->sendMessage($master_id, $socketMgr->wsEncode($browser_script, false, true));
 
         if (1 === (int)stream_select($master_sock, $write, $except, 10, 0)) {
             $socketMgr->readMessage($master_id, true);
@@ -183,7 +183,7 @@ class handler extends Factory
 
         $message = '实例 "' . $payload_data['worker_name'] . '" 已就绪。';
 
-        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target, $socketMgr, $write, $except, $master_id, $master_sock, $inject_cmd);
+        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
         return $message;
     }
 

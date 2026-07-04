@@ -149,9 +149,10 @@ class procWorker extends Factory
                         $this->sendMsg($socket_id, 'stream', 'tool_calls', $metadata, $assistant_message['tool_calls']);
                     }
 
-                    $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
-
-                    $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
+                    if ('' !== $assistant_content || '' !== $reasons_content || !empty($tool_calls_buffer)) {
+                        $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
+                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
+                    }
 
                     if (!empty($tool_calls_buffer)) {
                         $tool_results = $this->core->execTools($tool_calls_buffer);

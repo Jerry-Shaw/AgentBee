@@ -121,9 +121,12 @@ class procWorker extends Factory
                         // Max token reached, content truncated, auto-continue
                         $user_message = [
                             'role'    => 'user',
-                            'content' => '' !== $assistant_content
-                                ? '[续写] 紧接末尾，直接续写，不重复。'
-                                : '[续写] 直接输出最终内容。'
+                            'content' => [[
+                                'type' => 'text',
+                                'text' => '' !== $assistant_content
+                                    ? '[续写] 紧接末尾，直接续写，不重复。'
+                                    : '[续写] 直接输出最终内容。'
+                            ]]
                         ];
 
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);

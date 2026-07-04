@@ -349,7 +349,7 @@ class go extends Factory
      *
      * @return array
      */
-    public function searchFiles(string $dir_path, string $pattern, bool $recursive = false): array
+    public function searchFiles(string $dir_path, string $pattern, bool $recursive): array
     {
         $full_path = $this->utils->securePath($dir_path);
 

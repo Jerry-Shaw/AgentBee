@@ -149,15 +149,15 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'searchFiles',
-                'description' => 'glob模式搜索文件，recursive默认false。',
+                'description' => '使用glob模式搜索文件。请明确指定是否递归搜索子目录。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'dir_path'  => ['type' => 'string', 'description' => '搜索起始目录'],
                         'pattern'   => ['type' => 'string', 'description' => 'glob模式(如*.php)'],
-                        'recursive' => ['type' => 'boolean', 'default' => false, 'description' => '是否递归子目录']
+                        'recursive' => ['type' => 'boolean', 'description' => '是否递归子目录。如需搜索子目录中的文件，请设为true。']
                     ],
-                    'required'   => ['dir_path', 'pattern']
+                    'required'   => ['dir_path', 'pattern', 'recursive']
                 ],
             ],
         ],

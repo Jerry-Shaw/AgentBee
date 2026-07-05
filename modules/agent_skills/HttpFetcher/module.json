@@ -1,0 +1,13 @@
+{
+  "name": "HttpFetcher",
+  "version": "3.0.0",
+  "description": "Http fetcher tool based on libHttp - extract HTML, text, content, links, assets, JSON, and download files.",
+  "author": "agent self-developed",
+  "email": "",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  }
+}

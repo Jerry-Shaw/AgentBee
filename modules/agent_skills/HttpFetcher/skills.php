@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Agent Claw - Web Crawler Module
+ * AgentBee - Http Fetcher Module
  *
  * This module provides high-efficiency web data acquisition tools for Agents,
  * focusing on noise reduction and structural extraction to optimize LLM token usage.
@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_skills\WebCrawler;
+namespace modules\agent_skills\HttpFetcher;
 
 class skills
 {
@@ -30,13 +30,18 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchHtml',
-                'description' => '获取原始HTML。返回{"html":"","status":int,"url":""}或{"error":"..."}',
+                'description' => '获取静态HTML源码（不执行JS）。成功:{status,http_url,http_code,http_html}；失败:{status,error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'url'     => ['type' => 'string', 'description' => '目标URL'],
                         'timeout' => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
-                        'headers' => ['type' => 'array', 'items' => ['type' => 'string'], 'default' => [], 'description' => '自定义HTTP头，如["Authorization: Bearer xxx"]']
+                        'headers' => [
+                            'type'                 => 'object',
+                            'additionalProperties' => ['type' => 'string'],
+                            'default'              => [],
+                            'description'          => '自定义请求头'
+                        ]
                     ],
                     'required'   => ['url']
                 ],
@@ -46,7 +51,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchText',
-                'description' => '提取纯文本（去除HTML标签、script/style，压缩空白）。返回{"text":"","status":int,"url":""}或{"error":"..."}',
+                'description' => '从静态HTML提取纯文本（去标签/脚本/样式，压缩空白）。成功:{status,http_url,http_code,http_text}；失败:{status,error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -61,7 +66,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchContent',
-                'description' => '智能提取正文（剔除导航、脚注等）。返回{"title":"","content":"","status":int,"url":""}或{"error":"..."}',
+                'description' => '从静态HTML智能提取正文（剔除导航/脚注）。成功:{status,http_url,http_code,http_title,http_content}；失败:{status,error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -76,7 +81,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'extractLinks',
-                'description' => '提取页面中所有超链接，转为绝对路径并去重。返回链接数组或{"error":"..."}',
+                'description' => '从静态HTML提取所有链接（转绝对路径，去重，不执行JS）。成功返回链接数组（索引）；失败:{status,error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -91,7 +96,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'extractAssets',
-                'description' => '提取图片链接及常见文件链接(pdf,zip,docx,jpg等)。返回{"images":[],"files":[],"url":""}或{"error":"..."}',
+                'description' => '从静态HTML提取图片及常见文件链接（pdf,zip,docx,jpg等，不执行JS）。成功:{http_url,images,files}；失败:{status,error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -106,12 +111,12 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchJson',
-                'description' => '请求API接口，自动根据params是否为空决定GET/POST。params为空时GET，非空时POST(JSON)。返回解析后的JSON或{"error":"...","raw_body":"..."}',
+                'description' => 'API请求（无参数GET，有参数POST JSON）。成功返回解析后的JSON（对象/数组）；失败:{status,error,response?}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'url'     => ['type' => 'string', 'description' => 'API URL'],
-                        'params'  => ['type' => 'array', 'default' => [], 'description' => '请求参数数组（空数组时GET，非空时POST）'],
+                        'params'  => ['type' => 'object', 'default' => [], 'description' => '请求参数'],
                         'timeout' => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数']
                     ],
                     'required'   => ['url']
@@ -122,12 +127,12 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'downloadFile',
-                'description' => '下载文件到本地（流式写入，自动建目录）。沙箱路径会映射，最终保存路径以返回的path为准。返回{"status":"success","path":"...","size":N}或{"status":"error","error":"..."}',
+                'description' => '下载文件到本地（流式写入，自动建目录）。成功:{status,file_path,file_size}；失败:{status,error,http_code?}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'url'     => ['type' => 'string', 'description' => '文件URL'],
-                        'save_to' => ['type' => 'string', 'description' => '期望保存路径（绝对或相对）'],
+                        'save_to' => ['type' => 'string', 'description' => '保存路径（绝对或相对）'],
                         'timeout' => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数']
                     ],
                     'required'   => ['url', 'save_to']

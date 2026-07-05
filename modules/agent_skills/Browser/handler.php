@@ -36,7 +36,6 @@ class handler extends Factory
         '--excludeSwitches=enable-automation',
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
-        '--disable-blink-features=AutomationControlled',
         '--disable-component-update',
         '--disable-client-side-phishing-detection',
         '--disable-default-apps',

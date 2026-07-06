@@ -42,12 +42,12 @@ AgentBee/
 │   │   ├── go.php            # 核心业务逻辑、WebSocket处理器与状态管理
 │   │   ├── module.json       # 模块元数据（name必须严格等于当前文件夹名）
 │   │   └── lib/              # 内部库文件 (config, message, utils)
-│   ├── agent_skills/         # 内置技能模块（启动时自动加载）
+│   ├── agent_toolsets/         # 内置技能模块（启动时自动加载）
 │   │   ├── Browser/          # 无头浏览器自动化
 │   │   ├── Memory/           # 记忆与定时任务管理
 │   │   ├── OfficeSuite/      # Office文档处理 (.docx/.xlsx/.pptx)
 │   │   ├── System/           # Shell命令、文件I/O、上下文管理等底层操作
-│   │   ├── WebCrawler/       # 网页抓取、内容提取与资源下载
+│   │   ├── HttpFetcher/       # 网页抓取、内容提取与资源下载
 │   │   └── WorkerBee/        # 子进程Worker管理（异步任务）
 │   └── agent_openai/         # OpenAI兼容LLM适配器
 ├── skills/                   # 第三方技能包存放路径（热插拔发现）
@@ -99,7 +99,7 @@ Office文档处理套件。支持DOCX标题/段落/图片插入与格式控制�
 ### System
 底层系统操作工具集。涵盖文件I/O（读取/写入/复制/删除）、目录管理（创建/列出/递归复制/删除）、图片读取、时间获取、进程执行(exec)带超时控制、上下文清理优化，以及批量操作的安全限制与沙箱路径保护（禁止危险命令如`rm -rf /`）。
 
-### WebCrawler
+### HttpFetcher
 网页内容提取引擎。支持HTML抓取(自定义Header)、纯文本提取(去除script/style标签)、智能正文提取(标题+正文)用于文章解析、页面超链接提取去重、资源文件提取(图片/PDF/ZIP等)、JSON API请求(自动GET/POST和流式文件下载)。
 
 ### WorkerBee

@@ -1,6 +1,6 @@
 <?php
 
-namespace modules\agent_skills\WorkerBee;
+namespace modules\agent_toolsets\WorkerBee;
 
 use modules\agent_core\go as agent_core;
 use Nervsys\Core\Factory;

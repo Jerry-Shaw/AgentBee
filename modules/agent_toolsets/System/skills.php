@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_skills\System;
+namespace modules\agent_toolsets\System;
 
 class skills
 {

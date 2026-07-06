@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_skills\HttpFetcher;
+namespace modules\agent_toolsets\HttpFetcher;
 
 use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;

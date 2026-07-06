@@ -42,12 +42,12 @@ AgentBee/
 │   │   ├── go.php            # Business logic, WebSocket handlers & state management
 │   │   ├── module.json       # Module metadata
 │   │   └── lib/              # Internal libraries (config, message, utils)
-│   ├── agent_skills/         # Built-in skill modules (auto-loaded on startup)
+│   ├── agent_toolsets/         # Built-in skill modules (auto-loaded on startup)
 │   │   ├── Browser/          # Headless browser automation
 │   │   ├── Memory/           # Memory & task management
 │   │   ├── OfficeSuite/      # Office document processing (.docx/.xlsx/.pptx)
 │   │   ├── System/           # Shell commands, file I/O, context management
-│   │   ├── WebCrawler/       # Web crawling, content extraction & asset download
+│   │   ├── HttpFetcher/       # Web crawling, content extraction & asset download
 │   │   └── WorkerBee/        # Sub-process worker management (async tasks)
 │   └── agent_openai/         # OpenAI-compatible LLM adapter
 ├── skills/                   # Third-party skill packages (hot-plug discovery)
@@ -99,7 +99,7 @@ Document processing suite for creating and editing Office files. Supports DOCX (
 ### System
 Low-level system operations including file I/O (read/write/copy/delete/search/list directories), directory management, image reading, time retrieval, process execution (`exec`) with timeout and working directory support, context cleanup for memory optimization, and batch file operations with safety checks (no dangerous commands like `rm -rf /`).
 
-### WebCrawler
+### HttpFetcher
 Web content extraction engine. Provides HTML fetching with custom headers, plain text extraction (removes script/style tags), intelligent content extraction (headers, body, title) for article parsing, link discovery with deduplication, asset extraction (images/files like PDF/ZIP/etc.), JSON API calls (auto GET/POST based on params), and file downloading with streaming write to local storage.
 
 ### WorkerBee

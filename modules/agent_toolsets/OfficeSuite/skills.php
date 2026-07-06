@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_skills\OfficeSuite;
+namespace modules\agent_toolsets\OfficeSuite;
 
 class skills
 {

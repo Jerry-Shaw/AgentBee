@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_skills\WorkerBee;
+namespace modules\agent_toolsets\WorkerBee;
 
 use Nervsys\Core\Factory;
 

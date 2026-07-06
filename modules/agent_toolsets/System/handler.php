@@ -1,6 +1,6 @@
 <?php
 
-namespace modules\agent_skills\System;
+namespace modules\agent_toolsets\System;
 
 use modules\agent_core\go as agent_core;
 use Nervsys\Core\Factory;

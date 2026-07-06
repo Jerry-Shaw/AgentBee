@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_skills\Browser;
+namespace modules\agent_toolsets\Browser;
 
 class skills
 {

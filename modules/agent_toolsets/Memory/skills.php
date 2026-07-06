@@ -21,7 +21,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_skills\Memory;
+namespace modules\agent_toolsets\Memory;
 
 class skills
 {

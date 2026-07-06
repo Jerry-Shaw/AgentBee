@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_skills\Browser;
+namespace modules\agent_toolsets\Browser;
 
 use modules\agent_core\go as agent_core;
 use Nervsys\Core\Factory;

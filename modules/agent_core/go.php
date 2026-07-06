@@ -23,7 +23,7 @@ namespace modules\agent_core;
 use modules\agent_core\lib\message;
 use modules\agent_core\lib\utils;
 use modules\agent_openai\go as openai;
-use modules\agent_skills\Memory\go as memory;
+use modules\agent_toolsets\Memory\go as memory;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\SocketMgr;
 

@@ -58,14 +58,14 @@ class go extends Factory
     {
         $this->init($reload);
 
-        $agent_skills = $this->utils->fetchSkills('modules/agent_skills');
-        $this->core->addSkills($agent_skills);
+        $agent_toolsets = $this->utils->fetchSkills('modules/agent_toolsets');
+        $this->core->addSkills($agent_toolsets);
         $custom_skills = $this->utils->fetchSkills('skills');
         $this->core->addSkills($custom_skills);
 
         $this->libOpenAI->setModelParams($this->core->getLLMParams());
 
-        unset($reload, $agent_skills, $custom_skills);
+        unset($reload, $agent_toolsets, $custom_skills);
     }
 
     /**
@@ -78,8 +78,8 @@ class go extends Factory
     {
         $this->init($reload);
 
-        $agent_skills = $this->utils->fetchSkills(
-            'modules/agent_skills',
+        $agent_toolsets = $this->utils->fetchSkills(
+            'modules/agent_toolsets',
             'System',
             [
                 'getTime', 'readImage', 'readFile', 'writeFile',
@@ -88,11 +88,11 @@ class go extends Factory
             ]
         );
 
-        $this->core->addSkills($agent_skills);
+        $this->core->addSkills($agent_toolsets);
 
         foreach (['Browser', 'HttpFetcher', 'OfficeSuite'] as $core_skill) {
-            $agent_skills = $this->utils->fetchSkills('modules/agent_skills', $core_skill);
-            $this->core->addSkills($agent_skills);
+            $agent_toolsets = $this->utils->fetchSkills('modules/agent_toolsets', $core_skill);
+            $this->core->addSkills($agent_toolsets);
         }
 
         $custom_skills = $this->utils->fetchSkills('skills');
@@ -100,7 +100,7 @@ class go extends Factory
 
         $this->libOpenAI->setModelParams($this->core->getLLMParams());
 
-        unset($reload, $agent_skills, $core_skill, $custom_skills);
+        unset($reload, $agent_toolsets, $core_skill, $custom_skills);
     }
 
     /**

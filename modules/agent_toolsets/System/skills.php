@@ -41,6 +41,23 @@ class skills
         [
             'type'     => 'function',
             'function' => [
+                'name'        => 'loadSkill',
+                'description' => '加载专项技能的完整指令。当用户请求匹配某个技能的触发词时，必须调用此工具获取完整执行步骤。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'skill_name' => [
+                            'type'        => 'string',
+                            'description' => '技能名称（即技能目录名，如 "code-reviewer"）'
+                        ],
+                    ],
+                    'required'   => ['skill_name'],
+                ],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
                 'name'        => 'exec',
                 'description' => '执行系统命令，仅当无专用工具时才可调用。program为可执行文件(如powershell,git,php)，禁止cmd内置命令。argv数组(默认[])。timeout秒(默认30)，work_path可选。返回{"output":"","error":""}',
                 'parameters'  => [

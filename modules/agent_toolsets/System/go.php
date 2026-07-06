@@ -59,6 +59,50 @@ class go extends Factory
     }
 
     /**
+     * @param string $skill_name
+     *
+     * @return array|string[]
+     */
+    public function loadSkill(string $skill_name): array
+    {
+        $skill_path = $this->utils->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . $skill_name . DIRECTORY_SEPARATOR;
+        $md_file    = $skill_path . 'SKILL.md';
+
+        if (!is_file($md_file)) {
+            return [
+                'status' => 'error',
+                'error'  => '技能 "' . $skill_name . '" 不存在或缺少 SKILL.md 文件，无法加载，请忽略。'
+            ];
+        }
+
+        $content = file_get_contents($md_file);
+
+        if (false === $content) {
+            return [
+                'status' => 'error',
+                'error'  => '无法读取技能 "' . $skill_name . '" 的指令文件，请忽略。'
+            ];
+        }
+
+        $parts = explode('---', $content);
+
+        if (count($parts) >= 3) {
+            $body = trim($parts[2]);
+        } elseif (count($parts) === 2) {
+            $body = trim($parts[1]);
+        } else {
+            $body = trim($content);
+        }
+
+        $result = '' !== $body
+            ? ['status' => 'success', 'skill_path' => $skill_path, 'skill_data' => $body]
+            : ['status' => 'success', 'skill_path' => $skill_path, 'message' => '警告：技能 "' . $skill_name . '" 的指令内容为空'];
+
+        unset($skill_name, $skill_path, $md_file, $content, $parts);
+        return $result;
+    }
+
+    /**
      * @param string       $program
      * @param array|string $argv
      * @param int          $timeout

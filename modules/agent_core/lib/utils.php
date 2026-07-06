@@ -733,7 +733,6 @@ class utils extends Factory
                 || !isset($json_data['entry'])
                 || !isset($json_data['name'])
                 || $json_data['name'] !== $path['name']
-                || isset($this->agent_tools[$json_data['name']])
             ) {
                 continue;
             }
@@ -770,6 +769,155 @@ class utils extends Factory
 
         unset($dirname, $module, $tool_names, $dir_list, $item, $path, $json_file, $meta_file, $json_data, $namespace, $metadata, $index);
         return $skills;
+    }
+
+    /**
+     * @param string $dirname
+     *
+     * @return string
+     */
+    public function fetchSkills(string $dirname): string
+    {
+        $skills   = [];
+        $dir_list = $this->libFileIO->getDirContents($this->app->root_path . DIRECTORY_SEPARATOR . $dirname);
+
+        foreach ($dir_list as $item) {
+            if ($item['is_file']) {
+                continue;
+            }
+
+            $md_file = $item['absolute_path'] . DIRECTORY_SEPARATOR . 'SKILL.md';
+
+            if (!is_file($md_file)) {
+                continue;
+            }
+
+            $md_meta = $this->getSkillMeta($md_file);
+
+            if (empty($md_meta['skill_name']) || $md_meta['skill_name'] !== $item['name']) {
+                continue;
+            }
+
+            $md_meta['resource'] = [];
+
+            foreach (['scripts/', 'references/', 'examples/', 'assets/'] as $dir) {
+                $dir_path = $item['absolute_path'] . DIRECTORY_SEPARATOR . $dir;
+
+                if (is_dir($dir_path)) {
+                    $md_meta['resource'][] = $dir;
+                }
+            }
+
+            $skills[] = $md_meta;
+        }
+
+        $prompt = $this->getSkillPrompt($skills);
+
+        unset($dirname, $skills, $dir_list, $item, $md_file, $md_meta, $dir);
+        return $prompt;
+    }
+
+    /**
+     * @param string $md_path
+     *
+     * @return array
+     */
+    public function getSkillMeta(string $md_path): array
+    {
+        $content = file_get_contents($md_path);
+        if (false === $content) {
+            return [];
+        }
+
+        $parts = explode('---', $content);
+        if (3 > count($parts)) {
+            return [];
+        }
+
+        $md_data  = [];
+        $curr_key = '';
+
+        $lines = explode("\n", $parts[1]);
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ('' === $trimmed || str_starts_with($trimmed, '#')) {
+                continue;
+            }
+
+            if (' ' !== $line[0]) {
+                [$curr_key, $value] = explode(':', $line, 2);
+
+                $value = trim($value);
+
+                if ('' !== $value && '|' !== $value) {
+                    $md_data[$curr_key][] = $value;
+                }
+            } elseif ('triggers' === $curr_key) {
+                $md_data[$curr_key][] = trim($line, " \n\r\t\v\0-");
+            } else {
+                $md_data[$curr_key][] = $trimmed;
+            }
+        }
+
+        $skill_name  = trim($md_data['name'][0] ?? '');
+        $description = trim(implode("\n", $md_data['description'] ?? []));
+        $triggers    = $md_data['triggers'] ?? [];
+
+        if ('' === $skill_name || '' === $description) {
+            return [];
+        }
+
+        $metadata = [
+            'skill_name'  => $skill_name,
+            'description' => $description,
+            'triggers'    => $triggers,
+        ];
+
+        unset($md_path, $content, $parts, $md_data, $curr_key, $value, $skill_name, $description, $triggers);
+        return $metadata;
+    }
+
+    /**
+     * @param array $skills
+     *
+     * @return string
+     */
+    public function getSkillPrompt(array $skills): string
+    {
+        if (empty($skills)) {
+            return '';
+        }
+
+        $list = '';
+
+        foreach ($skills as $key => $meta) {
+            $num      = $key + 1;
+            $name     = $meta['skill_name'];
+            $desc     = $meta['description'];
+            $triggers = !empty($meta['triggers']) ? implode('/', $meta['triggers']) : '';
+
+            $list .= $num . '. [' . $name . '] ' . $desc;
+
+            if (!empty($triggers)) {
+                $list .= '。触发：' . $triggers;
+            }
+
+            if (!empty($meta['resource'])) {
+                $list .= '，[资源: ' . implode(', ', $meta['resource']) . ']';
+            }
+
+            $list .= PHP_EOL;
+        }
+
+        unset($skills, $key, $meta, $num, $name, $desc, $triggers);
+        return '> 可按需加载专项技能。匹配触发词时，必须调用 System-loadSkill("技能名") 加载指令并严格执行，严禁猜测。'
+            . PHP_EOL . PHP_EOL
+            . '**可用技能：**' . PHP_EOL
+            . $list
+            . PHP_EOL
+            . '**资源说明：**' . PHP_EOL
+            . '加载技能后，references/examples 按需读取，scripts 按需执行，assets 为静态模板。';
     }
 
     /**
@@ -834,11 +982,17 @@ class utils extends Factory
 
         $prompts[] = '## 可用工具';
         $prompts[] = '- **强制优先**：有专用工具时禁止`exec`，优先使用工具。';
-        $prompts[] = '- **网页任务**：交互/动态内容→Browser技能，纯数据/API→HttpFetcher技能，不确定默认Browser。两者不交替。';
+        $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
         $prompts[] = '- **安全**：`exec`前验证输入参数，防命令注入。';
         $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
         $prompts[] = '- 任务完成即止，勿重复调用工具。';
+
+        $skills = $this->fetchSkills('skills');
+        if ('' !== $skills) {
+            $prompts[] = '## 专项技能';
+            $prompts[] = $skills;
+        }
 
         $prompts[] = '## 安全';
         if ($this->agent_config['sandbox_mode']) {
@@ -894,9 +1048,15 @@ class utils extends Factory
 
         $prompts[] = '## 可用工具';
         $prompts[] = '- **强制优先**：有专用工具时优先调用工具。';
-        $prompts[] = '- **网页任务**：交互/动态内容→Browser技能，纯数据/API→HttpFetcher技能，不确定默认Browser。两者不交替。';
+        $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则输出错误信息。';
         $prompts[] = '- 任务完成即止，勿重复调用工具。';
+
+        $skills = $this->fetchSkills('skills');
+        if ('' !== $skills) {
+            $prompts[] = '## 专项技能';
+            $prompts[] = $skills;
+        }
 
         $prompts[] = '## 安全';
         if ($this->agent_config['sandbox_mode']) {

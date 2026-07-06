@@ -690,7 +690,7 @@ class utils extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    public function fetchSkills(string $dirname, string $module = '', array $tool_names = []): array
+    public function fetchToolset(string $dirname, string $module = '', array $tool_names = []): array
     {
         $skills   = [];
         $dir_list = [];

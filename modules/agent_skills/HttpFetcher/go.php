@@ -76,9 +76,10 @@ class go extends Factory
         $res = $this->http->fetch($url);
 
         $result = [
-            'http_code'  => $this->http->getHttpCode(),
-            'http_body'  => $res,
-            'http_error' => $this->http->getHttpError()
+            'http_code'    => $this->http->getHttpCode(),
+            'http_body'    => $res,
+            'http_error'   => $this->http->getHttpError(),
+            'http_headers' => $this->http->getHttpHeader()
         ];
 
         unset($url, $method, $params, $timeout, $headers, $content_type, $res);
@@ -101,6 +102,61 @@ class go extends Factory
             'Connection'                => 'keep-alive',
             'Upgrade-Insecure-Requests' => '1',
         ]);
+    }
+
+    /**
+     * @param string $html
+     * @param array  $headers
+     *
+     * @return string
+     */
+    private function detectCharset(string $html, array $headers): string
+    {
+        if (isset($headers['content-type'])) {
+            $content_type = $headers['content-type'];
+            $charset_pos  = strpos($content_type, 'charset=');
+
+            if (false !== $charset_pos) {
+                $charset = substr($content_type, $charset_pos + 8);
+                $charset = strtok($charset, '; "');
+                $charset = trim($charset);
+
+                if ('' !== $charset) {
+                    return strtoupper($charset);
+                }
+            }
+
+            unset($content_type);
+        }
+
+        $search_pos = 0;
+
+        while (false !== ($meta_start = strpos($html, '<meta', $search_pos))) {
+            $meta_end = strpos($html, '>', $meta_start);
+
+            if (false === $meta_end) {
+                break;
+            }
+
+            $meta_tag    = substr($html, $meta_start, $meta_end - $meta_start + 1);
+            $search_pos  = $meta_end + 1;
+            $charset_pos = strpos($meta_tag, 'charset=');
+
+            if (false !== $charset_pos) {
+                $charset = substr($meta_tag, $charset_pos + 8);
+                $charset = strtok($charset, '"\' >');
+                $charset = trim($charset);
+
+                if ('' !== $charset) {
+                    return strtoupper($charset);
+                }
+            }
+        }
+
+        $detected = mb_detect_encoding($html, ['UTF-8', 'GBK', 'GB2312', 'BIG5', 'ISO-8859-1'], true);
+
+        unset($html, $headers, $charset_pos, $charset, $search_pos, $meta_start, $meta_end, $meta_tag);
+        return is_string($detected) ? strtoupper($detected) : 'UTF-8';
     }
 
     /**
@@ -151,7 +207,13 @@ class go extends Factory
             ];
         }
 
-        $body       = mb_convert_encoding($res['http_body'], 'UTF-8', 'auto');
+        $body    = $res['http_body'];
+        $charset = $this->detectCharset($body, $res['http_headers']);
+
+        if ('UTF-8' !== $charset) {
+            $body = mb_convert_encoding($body, 'UTF-8', $charset);
+        }
+
         $clean_body = preg_replace('/<(script|style|head).*?<\/(\1)>/is', '', $body);
         $clean_body = preg_replace('/<!--.*?-->/s', '', $clean_body);
         $text       = trim(preg_replace('/\s+/', ' ', strip_tags($clean_body)));
@@ -185,7 +247,12 @@ class go extends Factory
             ];
         }
 
-        $body = mb_convert_encoding($res['http_body'], 'UTF-8', 'auto');
+        $body    = $res['http_body'];
+        $charset = $this->detectCharset($body, $res['http_headers']);
+
+        if ('UTF-8' !== $charset) {
+            $body = mb_convert_encoding($body, 'UTF-8', $charset);
+        }
 
         preg_match('/<title>(.*?)<\/title>/is', $body, $title_match);
 
@@ -224,7 +291,12 @@ class go extends Factory
             ];
         }
 
-        $body = mb_convert_encoding($res['http_body'], 'UTF-8', 'auto');
+        $body    = $res['http_body'];
+        $charset = $this->detectCharset($body, $res['http_headers']);
+
+        if ('UTF-8' !== $charset) {
+            $body = mb_convert_encoding($body, 'UTF-8', $charset);
+        }
 
         preg_match_all('/<a\s+[^>]*href=["\']([^"\']+)["\']/i', $body, $matches);
 
@@ -285,7 +357,7 @@ class go extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    public function extractAssets(string $url, int $timeout = 30): array
+    public function extractAttachments(string $url, int $timeout = 30): array
     {
         $res = $this->request($url, 'GET', [], $timeout);
 
@@ -296,7 +368,12 @@ class go extends Factory
             ];
         }
 
-        $body = mb_convert_encoding($res['http_body'], 'UTF-8', 'auto');
+        $body    = $res['http_body'];
+        $charset = $this->detectCharset($body, $res['http_headers']);
+
+        if ('UTF-8' !== $charset) {
+            $body = mb_convert_encoding($body, 'UTF-8', $charset);
+        }
 
         preg_match_all('/<img\s+[^>]*src=["\']([^"\']+)["\']/i', $body, $img_matches);
         preg_match_all('/<a\s+[^>]*href=["\']([^"\']+\.(?:pdf|zip|rar|docx|xlsx|pptx|exe|jpg|png|webp))["\']/i', $body, $file_matches);

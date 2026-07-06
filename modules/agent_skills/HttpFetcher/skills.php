@@ -95,8 +95,8 @@ class skills
         [
             'type'     => 'function',
             'function' => [
-                'name'        => 'extractAssets',
-                'description' => '从静态HTML提取图片及常见文件链接（pdf,zip,docx,jpg等，不执行JS）。成功:{http_url,images,files}；失败:{status,error}。',
+                'name'        => 'extractAttachments',
+                'description' => '提取静态HTML中的图片及可下载文件链接(pdf,zip,docx,jpg等)。成功:{http_url,images,files}；失败:{status,error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -111,7 +111,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchJson',
-                'description' => 'API请求（无参数GET，有参数POST JSON）。成功返回解析后的JSON（对象/数组）；失败:{status,error,response?}。',
+                'description' => '获取 JSON 数据（支持 API 或静态 JSON 文件），params空则GET，非空则POST JSON。成功返回解析后的数据；失败:{status,error,response?}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

@@ -234,13 +234,14 @@ class go extends Factory
             $query->where(['date_key', '=', $date_int]);
         }
 
-        $query->order(['create_id' => 'ASC']);
+        $query->order(['create_id' => 'DESC']);
 
         if (0 < $length) {
             $query->limit($offset, $length);
         }
 
         $data = $query->fetchAll();
+        $data = array_reverse($data);
 
         foreach ($data as &$item) {
             $item['create_time'] = $this->formatMicroTime($item['create_id']);

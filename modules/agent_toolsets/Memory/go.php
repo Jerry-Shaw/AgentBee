@@ -43,7 +43,7 @@ class go extends Factory
     private const LEVELS       = ['system', 'important', 'daily', 'misc'];
     private const ROLES        = ['user', 'assistant', 'system', 'tool'];
     private const ALL_LEVELS   = ['system', 'important', 'daily', 'misc', 'all'];
-    private const MISC_TTL_SEC = 259200; // 3 days
+    private const MISC_TTL_SEC = 2592000; // 30 days
 
     private const DDL_MEMORY = '
         CREATE TABLE IF NOT EXISTS agent_memory (
@@ -107,6 +107,7 @@ class go extends Factory
         }
 
         $this->initDatabase();
+        $this->purgeExpired();
     }
 
     // =========================================================================
@@ -221,8 +222,6 @@ class go extends Factory
 
         $date_int = ('' === $date) ? (int)date('Ymd') : (int)$date;
 
-        $this->purgeExpired();
-
         $query = $this->libSQLite
             ->table('agent_memory')
             ->select('role', 'content', 'create_id');
@@ -282,8 +281,6 @@ class go extends Factory
         if (empty($keywords)) {
             return ['status' => 'success', 'data' => [], 'total' => 0];
         }
-
-        $this->purgeExpired();
 
         $use_fts = true;
 
@@ -608,7 +605,7 @@ class go extends Factory
     private function purgeExpired(): void
     {
         $this->libSQLite->table('agent_memory')
-            ->where(['expire_at', '>', 0], ['expire_at', '<', time()])
+            ->where(['level', 'misc'], ['expire_at', '>', 0], ['expire_at', '<', time()])
             ->delete()
             ->execute();
     }

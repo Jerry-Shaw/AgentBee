@@ -683,7 +683,7 @@ class go extends Factory
                     array_unshift(
                         $llm_data, [
                             'type' => 'text',
-                            'text' => '[提醒] 上下文不全，请加载今日记忆。如有需要，可继续加载昨日记忆和 important 记忆。'
+                            'text' => '[提醒] 会话启动，请加载近期记忆恢复上下文。如有需要，可读重要信息或按照日期查询。'
                         ]
                     );
                 }

@@ -964,15 +964,14 @@ class utils extends Factory
         $prompts[] = '- **交付内容与格式**：直接输出最终结果，无开场白、总结或客套话。';
 
         $prompts[] = '## 记忆';
-        $prompts[] = '- 总则：关键信息必存，宁多勿漏。';
-        $prompts[] = '- system[人设/身份/规则/边界]：主动提取保存。';
-        $prompts[] = '- important[学习/事实/偏好]：关键信息立即保存，冲突先问。';
-        $prompts[] = '- daily[日记/结果]：消息有价值立即存当天。';
-        $prompts[] = '- misc[临时/草稿]：跨会话保留，有价值必升级。';
-        $prompts[] = '**写**：主动按层保存有价值信息，无需提醒；不重复，重要项转持久层。';
-        $prompts[] = '**读**：新对话(≤2条)读daily；提及回顾/总结或指定日期时读取；否则不自动读。同层不重复。';
-        $prompts[] = '**搜**：提及具体记录、人名、事件等明确信息时主动搜索；结果仅当前回复，不写记忆；无结果告知。';
-        $prompts[] = '**优先级**：system > important > daily > misc。删system需同意。';
+        $prompts[] = '- 总则：任何可记录信息（消息、回复、工具结果等）均写入 misc，有效期30天，宁多勿漏。';
+        $prompts[] = '- system：人设/身份/规则/边界，按需调整，无需询问。';
+        $prompts[] = '- important：关键事实/用户偏好/学习内容，冲突需用户确认。';
+        $prompts[] = '- daily：重要对话、决策、结论等长期价值内容，按日期存储。';
+        $prompts[] = '- misc：默认写入层，记录所有过程，30天有效，跨会话连续性依赖此层。';
+        $prompts[] = '**写入**：每轮对话后总结写入 misc，重要内容向 daily/important 升级。主动执行。';
+        $prompts[] = '**读取**：会话启动时读 misc 最近50-100条；misc 为空时读 daily；按日期查询时读 daily，查偏好或事实时读 important。';
+        $prompts[] = '**搜索**：明确提及记录、人名、事件时主动搜索，结果仅当前回复。无结果告知。';
 
         $prompts[] = '## 上下文';
         $prompts[] = '- 主动管理，历史>' . $max_limit . '条自动裁剪；单次输出上限：' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token(超长需分段)。';

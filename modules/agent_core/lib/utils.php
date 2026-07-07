@@ -895,23 +895,24 @@ class utils extends Factory
             $num      = $key + 1;
             $name     = $meta['skill_name'];
             $desc     = $meta['description'];
-            $triggers = !empty($meta['triggers']) ? implode('/', $meta['triggers']) : '';
+            $triggers = !empty($meta['triggers']) ? implode('、', $meta['triggers']) : '';
 
-            $list .= $num . '. [' . $name . '] ' . $desc;
+            $list .= $num . '. **' . $name . '**：' . $desc;
 
             if (!empty($triggers)) {
-                $list .= '。触发：' . $triggers;
+                $list .= ' [场景：' . $triggers . ']';
             }
 
             if (!empty($meta['resource'])) {
-                $list .= '，[资源: ' . implode(', ', $meta['resource']) . ']';
+                $list .= ' [资源：' . implode('、', $meta['resource']) . ']';
             }
 
             $list .= PHP_EOL;
         }
 
         unset($skills, $key, $meta, $num, $name, $desc, $triggers);
-        return '> 可按需加载专项技能。匹配触发词时，必须调用 System-loadSkill("技能名") 加载指令并严格执行，严禁猜测。'
+
+        return '用户请求匹配某技能时，调用 System-loadSkill("技能名") 加载完整指令并严格执行，严禁猜测。'
             . PHP_EOL . PHP_EOL
             . '**可用技能：**' . PHP_EOL
             . $list

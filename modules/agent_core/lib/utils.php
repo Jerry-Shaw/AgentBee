@@ -829,7 +829,7 @@ class utils extends Factory
             return [];
         }
 
-        $parts = explode('---', $content);
+        $parts = explode('---', $content, 3);
         if (3 > count($parts)) {
             return [];
         }

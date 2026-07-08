@@ -84,7 +84,7 @@ class go extends Factory
             ];
         }
 
-        $parts = explode('---', $content);
+        $parts = explode('---', $content, 3);
 
         if (count($parts) >= 3) {
             $body = trim($parts[2]);

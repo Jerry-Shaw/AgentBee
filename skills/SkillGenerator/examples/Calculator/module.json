@@ -1,0 +1,11 @@
+{
+  "name": "Calculator",
+  "version": "1.0.0",
+  "description": "简单的加减乘除工具模块，演示基础结构。",
+  "author": "AgentBee",
+  "entry": "go.php",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  }
+}

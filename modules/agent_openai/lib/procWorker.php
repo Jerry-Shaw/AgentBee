@@ -54,7 +54,7 @@ class procWorker extends Factory
      */
     public function talk(array $metadata, array $history, libOpenAI $libOpenAI): void
     {
-        $finish_reason     = null;
+        $finish_reason     = 'undefined';
         $reasons_content   = '';
         $assistant_content = '';
         $tool_calls_buffer = [];
@@ -78,77 +78,60 @@ class procWorker extends Factory
             &$finish_reason
         ): void
         {
-            try {
-                if (!$finished) {
-                    $this->sendStream(
+            if (!$finished) {
+                $this->sendStream(
+                    $socket_id,
+                    $data,
+                    $metadata,
+                    $tool_calls_buffer,
+                    $assistant_content,
+                    $reasons_content,
+                    $finish_reason
+                );
+            } else {
+                // OpenAI API error
+                if (isset($data['error'])) {
+                    $finish_reason = 'error';
+                    $this->sendMsg($socket_id, 'stream', 'error', $metadata, $data);
+                    return;
+                }
+
+                // User abort
+                if (isset($data['status']) && 'aborted' === $data['status']) {
+                    $finish_reason     = 'abort';
+                    $tool_calls_buffer = [];
+
+                    $this->sendMsg(
                         $socket_id,
-                        $data,
+                        'stream',
+                        'error',
                         $metadata,
-                        $tool_calls_buffer,
-                        $assistant_content,
-                        $reasons_content,
-                        $finish_reason
+                        ['error' => '已停止生成']
                     );
-                } else {
-                    // OpenAI API error
-                    if (isset($data['error'])) {
-                        $finish_reason = 'error';
-                        $this->sendMsg($socket_id, 'stream', 'error', $metadata, $data);
-                        return;
-                    }
+                    return;
+                }
 
-                    // User abort
-                    if (isset($data['status']) && 'aborted' === $data['status']) {
-                        $finish_reason     = 'abort';
-                        $tool_calls_buffer = [];
-                        $assistant_message = [
-                            'role'              => 'assistant',
-                            'content'           => '[系统提醒] 用户中断，忽略未完成内容。',
-                            'reasoning_content' => ''
-                        ];
+                $assistant_message = [
+                    'role'              => 'assistant',
+                    'content'           => $assistant_content,
+                    'reasoning_content' => $reasons_content
+                ];
 
-                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
-                        return;
-                    }
-
-                    // Incorrect finish_reason
-                    if (is_null($finish_reason)) {
-                        $user_message = '[系统提示] 生成异常中断。';
-
-                        if (!empty($tool_calls_buffer)) {
-                            // Alert LLM: tool calls blocked due to missing finish_reason.
-                            $user_message = '[系统提示] 生成异常中断，已自动拦截无效工具调用。';
-
-                            $this->sendMsg(
-                                $socket_id,
-                                'history',
-                                'add',
-                                $metadata,
-                                [
-                                    'role'    => 'user',
-                                    'content' => [[
-                                        'type' => 'text',
-                                        'text' => '[系统提示] 生成中断，未收到结束信号，工具调用已丢弃。请重新调用并确保参数完整。'
-                                    ]]
-                                ]
-                            );
+                switch ($finish_reason) {
+                    // Normal completion (hit stop token or finished naturally)
+                    case 'stop':
+                        if ('' !== $assistant_content || '' !== $reasons_content) {
+                            $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
+                            $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
                         }
 
-                        $this->sendMsg($socket_id, 'stream', 'error', $metadata, $user_message);
+                        $this->sendMsg($socket_id, 'stream', 'end', $metadata);
+                        $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
 
-                        $finish_reason     = 'error';
-                        $tool_calls_buffer = [];
-                        return;
-                    }
+                        break;
 
-                    $assistant_message = [
-                        'role'              => 'assistant',
-                        'content'           => $assistant_content,
-                        'reasoning_content' => $reasons_content
-                    ];
-
-                    if ('length' === $finish_reason) {
-                        // Max token reached, content truncated, auto-continue
+                    // Reached max_tokens limit, response truncated
+                    case 'length':
                         $user_message = [
                             'role'    => 'user',
                             'content' => [[
@@ -159,15 +142,27 @@ class procWorker extends Factory
                             ]]
                         ];
 
+                        // Max token reached, content truncated, auto-continue
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $user_message);
                         $this->sendMsg($socket_id, 'stream', 'length', $metadata, '[系统提示] 内容过长被截断。');
 
-                        $tool_calls_buffer = [];
-                        return;
-                    }
+                        unset($user_message);
+                        break;
 
-                    if (!empty($tool_calls_buffer)) {
+                    // Model requested tool calls (common in non-streaming)
+                    case 'tool_calls':
+                        if (empty($tool_calls_buffer)) {
+                            if ('' !== $assistant_content || '' !== $reasons_content) {
+                                $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
+                                $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
+                            }
+
+                            $this->sendMsg($socket_id, 'stream', 'end', $metadata);
+                            $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
+                            break;
+                        }
+
                         $assistant_message['tool_calls'] = array_map(
                             fn($tool) => [
                                 'id'       => $tool['id'],
@@ -179,15 +174,10 @@ class procWorker extends Factory
                             ], $tool_calls_buffer
                         );
 
-                        $this->sendMsg($socket_id, 'stream', 'tool_calls', $metadata, $assistant_message['tool_calls']);
-                    }
-
-                    if ('' !== $assistant_content || '' !== $reasons_content || !empty($tool_calls_buffer)) {
                         $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
+                        $this->sendMsg($socket_id, 'stream', 'tool_calls', $metadata, $assistant_message['tool_calls']);
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
-                    }
 
-                    if (!empty($tool_calls_buffer)) {
                         $tool_results = $this->core->execTools($tool_calls_buffer);
 
                         foreach ($tool_results as $result) {
@@ -237,15 +227,77 @@ class procWorker extends Factory
                                 $this->sendMsg($socket_id, 'context', 'callHandler', $metadata, $result_data);
                             }
                         }
-                    }
 
-                    unset($assistant_message, $tool_results, $result, $result_data, $tool_history);
+                        $this->sendMsg($socket_id, 'stream', 'end', $metadata);
+                        $this->sendMsg($socket_id, 'end', 'tools', $metadata, $tool_calls_buffer);
+
+                        unset($tool_results, $result, $result_data, $tool_history);
+                        break;
+
+                    // Content filtered by safety policy (optional, e.g., Azure)
+                    case 'content_filter':
+                        $this->sendMsg(
+                            $socket_id,
+                            'stream',
+                            'error',
+                            $metadata,
+                            ['error' => '[系统提示] 内容被安全策略过滤，已终止生成。']
+                        );
+
+                        $finish_reason = 'error';
+                        break;
+
+                    // No finish_reason received (stream ended prematurely)
+                    case 'undefined':
+                        $user_message = '[系统提示] 生成异常中断。';
+
+                        if (!empty($tool_calls_buffer)) {
+                            // Alert LLM: tool calls blocked due to missing finish_reason.
+                            $user_message = '[系统提示] 生成异常中断，已自动拦截无效工具调用。';
+
+                            $this->sendMsg(
+                                $socket_id,
+                                'history',
+                                'add',
+                                $metadata,
+                                [
+                                    'role'    => 'user',
+                                    'content' => [[
+                                        'type' => 'text',
+                                        'text' => '[系统提示] 生成中断，未收到结束信号，工具调用已丢弃。请重新调用并确保参数完整。'
+                                    ]]
+                                ]
+                            );
+                        }
+
+                        $this->sendMsg(
+                            $socket_id,
+                            'stream',
+                            'error',
+                            $metadata,
+                            ['error' => $user_message]
+                        );
+
+                        unset($user_message);
+                        $finish_reason = 'error';
+                        break;
+
+                    // Unexpected value
+                    default:
+                        $this->sendMsg(
+                            $socket_id,
+                            'stream',
+                            'error',
+                            $metadata,
+                            ['error' => '[系统提示] 未知的结束原因（' . $finish_reason . '），已终止生成。']
+                        );
+
+                        $finish_reason = 'error';
+                        break;
                 }
-            } catch (\Throwable $throwable) {
-                $this->sendMsg($socket_id, 'stream', 'error', $metadata, $throwable->getMessage());
-                Error::new()->exceptionHandler($throwable, false, false);
-                $finish_reason = 'error';
-                unset($throwable);
+
+                unset($assistant_message);
+                $tool_calls_buffer = [];
             }
 
             unset($key, $data, $finished);
@@ -254,22 +306,18 @@ class procWorker extends Factory
         try {
             $libOpenAI->completions($history, $this->core->utils->agent_config['agent_llm']['model'], [], $stream_callback);
         } catch (\Throwable $throwable) {
-            $this->sendMsg($socket_id, 'stream', 'error', $metadata, $throwable->getMessage());
+            $this->sendMsg(
+                $socket_id,
+                'stream',
+                'error',
+                $metadata,
+                ['error' => $throwable->getMessage()]
+            );
             Error::new()->exceptionHandler($throwable, false, false);
             unset($throwable);
         }
 
-        if (!in_array($finish_reason, ['length', 'abort', 'error'], true)) {
-            $this->sendMsg($socket_id, 'stream', 'end', $metadata);
-
-            if (empty($tool_calls_buffer)) {
-                $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
-            } else {
-                $this->sendMsg($socket_id, 'end', 'tools', $metadata, $tool_calls_buffer);
-            }
-        }
-
-        unset($socket_id, $metadata, $history, $libOpenAI);
+        unset($metadata, $history, $libOpenAI, $finish_reason, $reasons_content, $assistant_content, $tool_calls_buffer, $socket_id, $stream_callback);
     }
 
     /**

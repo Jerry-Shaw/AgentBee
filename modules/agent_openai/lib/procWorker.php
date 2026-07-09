@@ -54,9 +54,9 @@ class procWorker extends Factory
      */
     public function talk(array $metadata, array $history, libOpenAI $libOpenAI): void
     {
-        $assistant_content = '';
+        $finish_reason     = null;
         $reasons_content   = '';
-        $finish_reason     = '';
+        $assistant_content = '';
         $tool_calls_buffer = [];
 
         $socket_id = $metadata['socket_id'];
@@ -92,8 +92,8 @@ class procWorker extends Factory
                 } else {
                     // OpenAI API error
                     if (isset($data['error'])) {
-                        $this->sendMsg($socket_id, 'stream', 'error', $metadata, $data);
                         $finish_reason = 'error';
+                        $this->sendMsg($socket_id, 'stream', 'error', $metadata, $data);
                         return;
                     }
 
@@ -108,6 +108,36 @@ class procWorker extends Factory
                         ];
 
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
+                        return;
+                    }
+
+                    // Incorrect finish_reason
+                    if (is_null($finish_reason)) {
+                        $user_message = '[系统提示] 生成异常中断。';
+
+                        if (!empty($tool_calls_buffer)) {
+                            // Alert LLM: tool calls blocked due to missing finish_reason.
+                            $user_message = '[系统提示] 生成异常中断，已自动拦截无效工具调用。';
+
+                            $this->sendMsg(
+                                $socket_id,
+                                'history',
+                                'add',
+                                $metadata,
+                                [
+                                    'role'    => 'user',
+                                    'content' => [[
+                                        'type' => 'text',
+                                        'text' => '[系统提示] 生成中断，未收到结束信号，工具调用已丢弃。请重新调用并确保参数完整。'
+                                    ]]
+                                ]
+                            );
+                        }
+
+                        $this->sendMsg($socket_id, 'stream', 'error', $metadata, $user_message);
+
+                        $finish_reason     = 'error';
+                        $tool_calls_buffer = [];
                         return;
                     }
 

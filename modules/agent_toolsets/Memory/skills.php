@@ -109,7 +109,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'read',
-                'description' => '读取记忆。按层级分页，可指定日期（仅important/daily/misc有效，格式YYYYMMDD）。返回:{status,data:[{role,content,create_id,create_time}],total}。',
+                'description' => '读取记忆。按层级分页，可指定日期（仅important/daily/misc有效，格式YYYYMMDD）。返回:{status,data:[{level,role,content,create_id,create_time}],total}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -126,7 +126,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '全文搜索记忆。支持关键词数组、匹配模式(or/and)、日期范围、分页。返回:{status,data:[...],total}。单字匹配不准，建议关键词≥2字符。',
+                'description' => '全文搜索记忆。支持关键词数组、匹配模式(or/and)、日期范围、分页。返回:{status,data:[{level,role,content,create_id,create_time}],total}。单字匹配不准，建议关键词≥2字符。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

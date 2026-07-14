@@ -164,6 +164,8 @@ class message extends Factory
     public function process_chat(string $socket_id, array $data_content): array
     {
         $content = [];
+        $saves   = [];
+        $reset   = false;
 
         foreach ($data_content as $data) {
             if (!isset($data['type'])) {
@@ -172,7 +174,20 @@ class message extends Factory
 
             // 1. Handle plain text
             if ('text' === $data['type']) {
-                $content[] = ['type' => 'text', 'text' => trim($data['text'] ?? '')];
+                $text = trim($data['text'] ?? '');
+
+                if ('' === $text) {
+                    continue;
+                }
+
+                if ('/reset' !== $text) {
+                    $saves[]   = $text;
+                    $content[] = ['type' => 'text', 'text' => $text];
+                } else {
+                    $reset = true;
+                }
+
+                unset($text);
             }
 
             // 2. Handle images
@@ -201,20 +216,21 @@ class message extends Factory
             }
         }
 
-        // Ensure there is at least one content item
-        if (empty($content)) {
-            $content[] = [
-                'type' => 'text',
-                'text' => '(User did not provide any valid message)'
+        $result = !empty($content)
+            ? [
+                'need_llm' => true,
+                'content'  => $content,
+                'saves'    => $saves
+            ]
+            : [
+                'need_llm' => false,
+                'content'  => $reset
+                    ? ['status' => 'success', 'act' => 'reset', 'data' => '会话记忆已清空，重新开始吧。']
+                    : ['status' => 'success', 'act' => 'idle', 'data' => '说说你的需求，我来帮你处理。']
             ];
-        }
 
-        unset($socket_id, $data);
-
-        return [
-            'need_llm' => true,
-            'content'  => $content
-        ];
+        unset($socket_id, $data_content, $content, $saves, $reset, $data);
+        return $result;
     }
 
     /**

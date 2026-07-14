@@ -3,8 +3,8 @@
 /**
  * Memory module for AgentBee - Tools Meta Definition
  *
- * This module provides high-efficiency web data acquisition tools for Agents,
- * focusing on noise reduction and structural extraction to optimize LLM token usage.
+ * This module provides memory management tools (save/read/search/update/delete)
+ * and task scheduling (add/remove/list/run tasks) for Agents.
  *
  * Copyright 2026 AgentBee self developed
  *
@@ -61,7 +61,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'listTasks',
-                'description' => '列出所有任务详情。返回:{tasks:[{create_id,run_at,repeat,interval,prompt,run_time,create_time}]}。',
+                'description' => '列出所有任务详情。返回:{status, tasks:[{create_id,run_at,repeat,interval,prompt,run_time,create_time}]}。'
             ],
         ],
         [
@@ -75,7 +75,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'save',
-                'description' => '新增记忆。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时，3天TTL)。role按来源：system/user/assistant/tool。内容需压缩提炼。返回:{status,create_id}。',
+                'description' => '新增记忆。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(由系统记录)。role按来源：system/user/assistant/tool。内容需压缩提炼。返回:{status,create_id}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

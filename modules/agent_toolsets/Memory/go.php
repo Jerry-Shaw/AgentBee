@@ -40,10 +40,9 @@ class go extends Factory
     private string $db_path;
     private bool   $fts_enabled = true;
 
-    private const LEVELS       = ['system', 'important', 'daily', 'misc'];
-    private const ROLES        = ['user', 'assistant', 'system', 'tool'];
-    private const ALL_LEVELS   = ['system', 'important', 'daily', 'misc', 'all'];
-    private const MISC_TTL_SEC = 2592000; // 30 days
+    private const LEVELS     = ['system', 'important', 'daily', 'misc'];
+    private const ROLES      = ['user', 'assistant', 'system', 'tool'];
+    private const ALL_LEVELS = ['system', 'important', 'daily', 'misc', 'all'];
 
     private const DDL_MEMORY = '
         CREATE TABLE IF NOT EXISTS agent_memory (
@@ -66,10 +65,10 @@ class go extends Factory
         )';
 
     private const DDL_INDEXES = [
-        'CREATE INDEX IF NOT EXISTS idx_mem_level ON agent_memory(level)',
         'CREATE INDEX IF NOT EXISTS idx_mem_date ON agent_memory(date_key)',
-        'CREATE INDEX IF NOT EXISTS idx_mem_lvl_date ON agent_memory(level, date_key)',
         'CREATE INDEX IF NOT EXISTS idx_mem_expire ON agent_memory(expire_at)',
+        'CREATE INDEX IF NOT EXISTS idx_mem_level_create ON agent_memory(level, create_id DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_mem_lvl_date_create ON agent_memory(level, date_key, create_id DESC)',
         'CREATE INDEX IF NOT EXISTS idx_task_runat ON agent_task(run_at)',
     ];
 
@@ -136,10 +135,14 @@ class go extends Factory
             return ['status' => 'error', 'error' => 'Invalid role: ' . $role];
         }
 
-        $create_id = $this->generateMicroTimestamp('agent_memory');
-        $now_sec   = time();
-        $expire_at = ('misc' === $level) ? ($now_sec + self::MISC_TTL_SEC) : 0;
         $date_key  = (int)date('Ymd');
+        $create_id = $this->generateMicroTimestamp('agent_memory');
+
+        $expire_at = 'misc' === $level
+        && isset($this->utils->agent_config['misc_keep_days'])
+        && 0 < $this->utils->agent_config['misc_keep_days']
+            ? (time() + $this->utils->agent_config['misc_keep_days'] * 86400)
+            : 0;
 
         $this->libSQLite->table('agent_memory')->insert([
             'create_id' => $create_id,
@@ -153,7 +156,7 @@ class go extends Factory
 
         $result = ['status' => 'success', 'create_id' => $create_id];
 
-        unset($level, $role, $content, $create_id, $now_sec, $expire_at, $date_key);
+        unset($level, $role, $content, $create_id, $expire_at, $date_key);
         return $result;
     }
 
@@ -605,10 +608,24 @@ class go extends Factory
      */
     private function purgeExpired(): void
     {
-        $this->libSQLite->table('agent_memory')
-            ->where(['level', 'misc'], ['expire_at', '>', 0], ['expire_at', '<', time()])
-            ->delete()
-            ->execute();
+        $keep_ids = $this->libSQLite->table('agent_memory')
+            ->select('create_id')
+            ->where(['level', 'misc'])
+            ->limit($this->utils->agent_config['misc_save_len'] ?? 200)
+            ->order(['create_id' => 'DESC'])
+            ->fetchAll(\PDO::FETCH_COLUMN);
+
+        $this->libSQLite->table('agent_memory');
+        $this->libSQLite->where(['level', 'misc']);
+
+        if (!empty($keep_ids)) {
+            $this->libSQLite->and(['create_id', '<', min($keep_ids)], ['or', 'expire_at', '<', time()]);
+        } else {
+            $this->libSQLite->and(['expire_at', '<', time()]);
+        }
+
+        unset($keep_ids);
+        $this->libSQLite->delete()->execute();
     }
 
     /**

@@ -189,17 +189,17 @@ class go extends Factory
         $system_default = $this->utils->getMainPrompt();
         $system_memory  = $this->memory->read('system', 0, 0);
 
-        if (!empty($system_memory['messages'])) {
-            $memory = ['', '=== 重要个性设定 ==='];
+        if (!empty($system_memory['data'])) {
+            $memory = ['## 角色与行为设定'];
 
-            foreach ($system_memory['messages'] as $message) {
-                $memory[] = $message['content'];
+            foreach ($system_memory['data'] as $content) {
+                $memory[] = '- ' . $content['content'];
             }
 
-            $system_default['content'] .= implode("\n", $memory);
+            $system_default['content'] .= "\n" . implode("\n", $memory);
         }
 
-        unset($system_memory, $memory, $message);
+        unset($system_memory, $memory, $content);
         return $system_default;
     }
 
@@ -294,6 +294,23 @@ class go extends Factory
 
                             case 'sync':
                                 $this->utils->setSessionHistory($payload['workerName'], $payload['data']);
+                                break;
+                        }
+                    }
+                    break;
+
+                case 'memory':
+                    if (isset($payload['data'])) {
+                        switch ($payload_type) {
+                            case 'add':
+                                $this->utils->memory_buffer .= $payload['data'];
+                                break;
+
+                            case 'save':
+                                $this->utils->memory_buffer .= $payload['data'];
+                                $this->memory->save('misc', 'assistant', $this->utils->memory_buffer);
+
+                                $this->utils->memory_buffer = '';
                                 break;
                         }
                     }
@@ -662,15 +679,26 @@ class go extends Factory
                 $response = ['type' => $data['type']] + $result['data'];
                 $this->core->sendMessage($socket_id, json_encode($response, JSON_FORMAT));
 
-                // Reload config
-                if ('saveConfig' === $result['data']['act']) {
-                    $this->init(true);
-                    $this->openai->reload();
-                    $this->utils->debug('User: ' . $data['type'] . '->reloaded', 'trace');
+                switch ($result['data']['act']) {
+                    // Reset session memory
+                    case 'reset':
+                        $this->utils->removeSessionHistory(WORKER_MAIN);
+                        break;
+
+                    // Reload config
+                    case 'saveConfig':
+                        $this->init(true);
+                        $this->openai->reload();
+                        $this->utils->debug('User: ' . $data['type'] . '->reloaded', 'trace');
+                        break;
                 }
 
                 unset($socket_id, $message, $is_binary, $messages, $line, $data, $type_method, $result, $response);
                 return;
+            }
+
+            if (isset($result['saves']) && !empty($result['saves'])) {
+                $this->memory->save('misc', 'user', implode(' ', $result['saves']));
             }
 
             if (!$this->in_process) {

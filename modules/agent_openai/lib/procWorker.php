@@ -125,6 +125,10 @@ class procWorker extends Factory
                             $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
                         }
 
+                        if ('' !== $assistant_content) {
+                            $this->sendMsg($socket_id, 'memory', 'save', $metadata, trim($assistant_content));
+                        }
+
                         $this->sendMsg($socket_id, 'stream', 'end', $metadata);
                         $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
 
@@ -145,6 +149,11 @@ class procWorker extends Factory
                         // Max token reached, content truncated, auto-continue
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $user_message);
+
+                        if ('' !== $assistant_content) {
+                            $this->sendMsg($socket_id, 'memory', 'add', $metadata, trim($assistant_content));
+                        }
+
                         $this->sendMsg($socket_id, 'stream', 'length', $metadata, '[系统提示] 内容过长被截断。');
 
                         unset($user_message);

@@ -187,6 +187,8 @@ class config extends Factory
                 ],
             ],
             'max_ctx_len'    => 50,
+            'misc_save_len'  => 200,
+            'misc_keep_days' => 30,
             'memory_limit'   => '4G',
             'sandbox_mode'   => false,
             'chrome_path'    => 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',

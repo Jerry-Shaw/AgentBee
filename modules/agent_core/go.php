@@ -670,7 +670,7 @@ class go extends Factory
                 continue;
             }
 
-            if ('getHistory' === $data['type']) {
+            if ('memory' === $data['type']) {
                 $data['content']['memory'] = $this->memory;
             }
 

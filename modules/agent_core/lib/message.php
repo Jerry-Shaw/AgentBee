@@ -113,12 +113,49 @@ class message extends Factory
                 $content['act'] = $act;
                 break;
 
-            case 'getHistory':
+            default:
+                $content = [
+                    'status' => 'error',
+                    'error'  => 'Unsupported act: ' . $data_content['act']
+                ];
+                break;
+        }
+
+        $result = [
+            'need_llm' => false,
+            'content'  => $content,
+            'type'     => 'system'
+        ];
+
+        unset($socket_id, $data_content, $act, $content);
+        return $result;
+    }
+
+    /**
+     * @param string $socket_id
+     * @param array  $data_content
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function process_memory(string $socket_id, array $data_content): array
+    {
+        $act = $data_content['act'] ?? 'unknown';
+
+        switch ($act) {
+            case 'read':
                 $content        = $data_content['memory']->read(
-                    'misc',
+                    $data_content['level'] ?? 'all',
                     $data_content['offset'] ?? 0,
                     $data_content['length'] ?? 20,
                     $data_content['date'] ?? 0
+                );
+                $content['act'] = $act;
+                break;
+            case 'delete':
+                $content        = $data_content['memory']->delete(
+                    $data_content['level'] ?? 'none',
+                    $data_content['create_ids'] ?? []
                 );
                 $content['act'] = $act;
                 break;
@@ -134,7 +171,7 @@ class message extends Factory
         $result = [
             'need_llm' => false,
             'content'  => $content,
-            'type'     => 'system'
+            'type'     => 'memory'
         ];
 
         unset($socket_id, $data_content, $act, $content);

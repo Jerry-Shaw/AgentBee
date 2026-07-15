@@ -109,14 +109,14 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'read',
-                'description' => '读取记忆。按层级分页，可指定日期（仅important/daily/misc有效，格式YYYYMMDD）。返回:{status,data:[{level,role,content,create_id,create_time}],total}。',
+                'description' => '读取记忆。按层级分页，可指定日期（格式:YYYYMMDD）。返回:{status,data:[{level,role,content,create_id,create_time}],total}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'level'  => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级(含all)'],
                         'offset' => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length' => ['type' => 'integer', 'default' => 100, 'description' => '条数(0=全部)'],
-                        'date'   => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '日期YYYYMMDD']
+                        'length' => ['type' => 'integer', 'default' => 20, 'description' => '条数 (0=全部)'],
+                        'date'   => ['type' => 'integer', 'default' => 0, 'description' => 'YYYYMMDD (0=不限)']
                     ],
                     'required'   => ['level']
                 ],

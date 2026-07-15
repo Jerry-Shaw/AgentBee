@@ -212,18 +212,16 @@ class go extends Factory
      * @param string $level
      * @param int    $offset
      * @param int    $length
-     * @param string $date
+     * @param int    $date
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function read(string $level, int $offset = 0, int $length = 100, string $date = ''): array
+    public function read(string $level, int $offset = 0, int $length = 100, int $date = 0): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
             return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
         }
-
-        $date_int = ('' === $date) ? (int)date('Ymd') : (int)$date;
 
         $query = $this->libSQLite
             ->table('agent_memory')
@@ -233,8 +231,8 @@ class go extends Factory
             $query->where(['level', '=', $level]);
         }
 
-        if (in_array($level, ['important', 'daily', 'misc'], true)) {
-            $query->where(['date_key', '=', $date_int]);
+        if (0 < $date) {
+            $query->where(['date_key', '=', $date]);
         }
 
         $query->order(['create_id' => 'DESC']);

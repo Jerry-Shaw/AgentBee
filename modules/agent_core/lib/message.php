@@ -113,6 +113,16 @@ class message extends Factory
                 $content['act'] = $act;
                 break;
 
+            case 'getHistory':
+                $content        = $data_content['memory']->read(
+                    'misc',
+                    $data_content['offset'] ?? 0,
+                    $data_content['length'] ?? 20,
+                    $data_content['date'] ?? 0
+                );
+                $content['act'] = $act;
+                break;
+
             default:
                 $content = [
                     'status' => 'error',

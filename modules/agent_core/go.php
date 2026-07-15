@@ -670,6 +670,10 @@ class go extends Factory
                 continue;
             }
 
+            if ('getHistory' === $data['type']) {
+                $data['content']['memory'] = $this->memory;
+            }
+
             $result = $this->message->$type_method($socket_id, $data['content']);
 
             if (!$result['need_llm']) {

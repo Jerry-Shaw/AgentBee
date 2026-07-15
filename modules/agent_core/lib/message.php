@@ -41,9 +41,9 @@ class message extends Factory
             case 'getConfig':
                 $current = config::new()->get(false);
                 $content = [
-                    'status' => 'success',
-                    'act'    => $act,
-                    'data'   => $current
+                    'status'  => 'success',
+                    'act'     => $act,
+                    'content' => $current
                 ];
 
                 unset($current);
@@ -52,9 +52,9 @@ class message extends Factory
             case 'saveConfig':
                 $config_hash = config::new()->save($data_content['data']);
                 $content     = [
-                    'status' => 'success',
-                    'act'    => $act,
-                    'data'   => $config_hash,
+                    'status'  => 'success',
+                    'act'     => $act,
+                    'content' => $config_hash,
                 ];
 
                 unset($config_hash);
@@ -63,9 +63,9 @@ class message extends Factory
             case 'getDefaultConfig':
                 $defaults = config::new()->getDefault();
                 $content  = [
-                    'status' => 'success',
-                    'act'    => $act,
-                    'data'   => $defaults
+                    'status'  => 'success',
+                    'act'     => $act,
+                    'content' => $defaults
                 ];
 
                 unset($defaults);
@@ -81,7 +81,8 @@ class message extends Factory
 
         $result = [
             'need_llm' => false,
-            'data'     => $content
+            'content'  => $content,
+            'type'     => 'setting'
         ];
 
         unset($socket_id, $data_content, $act, $content);
@@ -122,7 +123,8 @@ class message extends Factory
 
         $result = [
             'need_llm' => false,
-            'data'     => $content
+            'content'  => $content,
+            'type'     => 'system'
         ];
 
         unset($socket_id, $data_content, $act, $content);
@@ -139,10 +141,33 @@ class message extends Factory
      */
     public function process_text(string $socket_id, array $data_content): array
     {
-        return [
-            'need_llm' => true,
-            'content'  => ['type' => 'text', 'text' => trim($data_content['text'] ?? '')]
-        ];
+        $text = trim($data_content['text'] ?? '');
+
+        if ('' !== $text) {
+            if ('/reset' !== $text) {
+                $result = [
+                    'need_llm' => true,
+                    'content'  => [['type' => 'text', 'text' => $text]],
+                    'saves'    => [$text],
+                    'type'     => 'chat'
+                ];
+            } else {
+                $result = [
+                    'need_llm' => false,
+                    'content'  => ['status' => 'success', 'act' => 'reset', 'content' => '好了，上下文已重置，我们继续吧。'],
+                    'type'     => 'message'
+                ];
+            }
+        } else {
+            $result = [
+                'need_llm' => false,
+                'content'  => ['status' => 'success', 'act' => 'idle', 'content' => '我在呢。有需要就告诉我，没事也可以聊两句。'],
+                'type'     => 'message'
+            ];
+        }
+
+        unset($socket_id, $data_content, $text);
+        return $result;
     }
 
     /**
@@ -216,18 +241,22 @@ class message extends Factory
             }
         }
 
-        $result = !empty($content)
-            ? [
+        if (!empty($content)) {
+            $result = [
                 'need_llm' => true,
                 'content'  => $content,
-                'saves'    => $saves
-            ]
-            : [
+                'saves'    => $saves,
+                'type'     => 'chat'
+            ];
+        } else {
+            $result = [
                 'need_llm' => false,
                 'content'  => $reset
-                    ? ['status' => 'success', 'act' => 'reset', 'data' => '会话记忆已清空，重新开始吧。']
-                    : ['status' => 'success', 'act' => 'idle', 'data' => '说说你的需求，我来帮你处理。']
+                    ? ['status' => 'success', 'act' => 'reset', 'content' => '好了，上下文已重置，我们继续吧。']
+                    : ['status' => 'success', 'act' => 'idle', 'content' => '我在呢。有需要就告诉我，没事也可以聊两句。'],
+                'type'     => 'message'
             ];
+        }
 
         unset($socket_id, $data_content, $content, $saves, $reset, $data);
         return $result;

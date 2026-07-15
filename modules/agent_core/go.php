@@ -674,14 +674,15 @@ class go extends Factory
 
             if (!$result['need_llm']) {
                 // Other actions
-                $this->utils->debug('User: ' . $data['type'] . '->' . ($result['data']['act'] ?? 'Unsupported'), 'debug');
+                $this->utils->debug('User: ' . $data['type'] . '->' . ($result['content']['act'] ?? 'Unsupported'), 'debug');
 
-                $response = ['type' => $data['type']] + $result['data'];
+                $response = ['type' => $result['type'] ?? $data['type']] + $result['content'];
                 $this->core->sendMessage($socket_id, json_encode($response, JSON_FORMAT));
 
-                switch ($result['data']['act']) {
+                switch ($result['content']['act']) {
                     // Reset session memory
                     case 'reset':
+                        $this->in_process = false;
                         $this->utils->removeSessionHistory(WORKER_MAIN);
                         break;
 

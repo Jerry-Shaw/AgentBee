@@ -1,6 +1,6 @@
 {
   "name": "System",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "System-level tools: execute commands, file operations (read/write/copy/delete/directory), get time, and clean context.",
   "author": "秋水之冰",
   "email": "27206617@qq.com",

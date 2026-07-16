@@ -30,7 +30,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'addTask',
-                'description' => '添加定时任务。设置任务提示词、执行时间戳；可设重复及间隔。返回:{status,create_id}或{status,error}。',
+                'description' => '添加定时任务，设置任务提示词、执行时间戳，可设重复及间隔。返回：{status, create_id}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -47,7 +47,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'removeTask',
-                'description' => '按 create_id 删除定时任务。返回:{status,message}或{status,error}。',
+                'description' => '按create_id删除定时任务。返回：{status, message}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -61,21 +61,21 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'listTasks',
-                'description' => '列出所有任务详情。返回:{status, tasks:[{create_id,run_at,repeat,interval,prompt,run_time,create_time}]}。'
+                'description' => '列出所有任务详情。返回：{status, tasks: [{create_id, run_at, repeat, interval, prompt, run_time, create_time}]}。'
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'runTask',
-                'description' => '执行所有到期任务，返回提示词数组。返回:["p1","p2"]。',
+                'description' => '执行所有到期任务，返回提示词索引数组。返回：提示词数组。',
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'save',
-                'description' => '新增记忆。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(由系统记录)。role按来源：system/user/assistant/tool。内容需压缩提炼。返回:{status,create_id}。',
+                'description' => '新增记忆。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(由系统记录)；role按来源：system/user/assistant/tool。内容需压缩提炼。返回：{status, create_id}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -91,7 +91,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'update',
-                'description' => '更新已有记忆（按create_id）。可改层级、角色、内容、过期时间（可选）。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时)。role按来源：system/user/assistant/tool。expire_at为时间戳(秒)，0表示永不过期，默认0。仅内容有实质变化时调用，新内容需压缩提炼。返回:{status,affected_rows}。',
+                'description' => '更新已有记忆（按create_id），可改层级、角色、内容、过期时间（可选）。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时)；role按来源：system/user/assistant/tool。expire_at为时间戳(秒)，0表示永不过期，默认0。仅内容有实质变化时调用，新内容需压缩提炼。返回：{status, affected_rows}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -109,14 +109,14 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'read',
-                'description' => '读取记忆。按层级分页，可指定日期（格式:YYYYMMDD）。返回:{status,data:[{level,role,content,create_id,create_time}],total}。',
+                'description' => '读取记忆，按层级分页，可指定日期（格式YYYYMMDD）。返回：{status, data: [{level, role, content, create_id, create_time}], total}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'level'  => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级(含all)'],
                         'offset' => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length' => ['type' => 'integer', 'default' => 20, 'description' => '条数 (0=全部)'],
-                        'date'   => ['type' => 'integer', 'default' => 0, 'description' => 'YYYYMMDD (0=不限)']
+                        'length' => ['type' => 'integer', 'default' => 20, 'description' => '条数(0=全部)'],
+                        'date'   => ['type' => 'integer', 'default' => 0, 'description' => 'YYYYMMDD(0=不限)']
                     ],
                     'required'   => ['level']
                 ],
@@ -126,7 +126,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '全文搜索记忆。支持关键词数组、匹配模式(or/and)、日期范围、分页。返回:{status,data:[{level,role,content,create_id,create_time}],total}。单字匹配不准，建议关键词≥2字符。',
+                'description' => '全文搜索记忆，支持关键词数组、匹配模式(or/and)、日期范围、分页。单字匹配不准，建议关键词≥2字符。返回：{status, data: [{level, role, content, create_id, create_time}], total}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -146,7 +146,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'delete',
-                'description' => '删除记忆。提供create_ids则按ID+层级精确删除（忽略其他）。否则按层级+时间范围(秒)+关键词组合删除（匹配模式由mode控制）。返回:{status,deleted}或{status,error}。',
+                'description' => '删除记忆。提供create_ids则按ID+层级精确删除（忽略其他参数）；否则按层级+时间范围(秒)+关键词组合删除（匹配模式由mode控制）。返回：{status, deleted}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

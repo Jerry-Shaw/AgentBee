@@ -22,6 +22,7 @@ namespace modules\agent_toolsets\System;
 
 use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
+use Nervsys\Core\Mgr\ProcMgr;
 
 class go extends Factory
 {
@@ -106,13 +107,14 @@ class go extends Factory
      * @param string       $program
      * @param array|string $argv
      * @param int          $timeout
+     * @param string       $descriptor
      * @param string       $work_path
      *
      * @return array|string[]
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function exec(string $program, array|string $argv = [], int $timeout = 30, string $work_path = ''): array
+    public function exec(string $program, array|string $argv = [], int $timeout = 30, string $descriptor = 'pipe', string $work_path = ''): array
     {
         $result = [
             'output' => '',
@@ -141,7 +143,7 @@ class go extends Factory
         }
 
         $active  = time();
-        $procMgr = $this->utils->procMgr;
+        $procMgr = ProcMgr::new(in_array($descriptor, ['pipe', 'socket'], true) ? $descriptor : 'pipe');
 
         $proc_idx = $procMgr
             ->command([$program, ...$argv])
@@ -179,7 +181,7 @@ class go extends Factory
 
         $procMgr->exit();
 
-        unset($program, $argv, $timeout, $work_path, $active, $procMgr, $proc_pid);
+        unset($program, $argv, $timeout, $descriptor, $work_path, $active, $procMgr, $proc_pid);
         return $result;
     }
 

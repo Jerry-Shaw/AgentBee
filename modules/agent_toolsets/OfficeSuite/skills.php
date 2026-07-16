@@ -31,7 +31,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'readDocx',
-                'description' => '读取 DOCX 文件。返回 {"content":"文本","images":[{"path":"...","width":N,"height":N}],"images_temp_dir":"..."}',
+                'description' => '读取DOCX文件，提取文本和图片。返回：{status, file, content, images, images_temp_dir}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -46,7 +46,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'initDocx',
-                'description' => '初始化 DOCX 缓冲区。之后调用 addDocxHeading/addDocxParagraph/addDocxImage 添加内容，最后调用 saveDocx。'
+                'description' => '初始化DOCX缓冲区。之后调用addDocxHeading/addDocxParagraph/addDocxImage添加内容，最后调用saveDocx。返回：{status, message}。',
             ],
         ],
         // 添加标题
@@ -54,7 +54,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'addDocxHeading',
-                'description' => '添加标题。示例：{"level":1,"text":"第一章"}。标题自动加粗，1级最大，6级最小。',
+                'description' => '添加标题，标题自动加粗，1级最大，6级最小。示例：{"level":1,"text":"第一章"}。返回：{status, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -74,31 +74,31 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'addDocxParagraph',
-                'description' => '添加段落。示例：{"text":"正文","bold":true,"fontSize":14,"align":"center"}。支持样式：bold,italic,fontSize(8-72),align,firstLineIndent(twip,720≈0.5英寸),lineSpacing(倍数,可<1),beforeSpacing,afterSpacing,fontFamily,fontFamilyEastAsia,color(十六进制),underline(single/double/dash/dot/wave)。',
+                'description' => '添加段落，支持样式：bold, italic, font_size(8-72), align, first_line_indent(twip,720≈0.5英寸), line_spacing(倍数,可<1), before_spacing, after_spacing, font_family, font_family_east_asia, color(十六进制), underline(single/double/dash/dot/wave)。示例：{"text":"正文","bold":true,"font_size":14,"align":"center"}。返回：{status, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'text'               => ['type' => 'string'],
-                        'bold'               => ['type' => 'boolean', 'default' => false],
-                        'italic'             => ['type' => 'boolean', 'default' => false],
-                        'fontSize'           => [
+                        'text'                  => ['type' => 'string'],
+                        'bold'                  => ['type' => 'boolean', 'default' => false],
+                        'italic'                => ['type' => 'boolean', 'default' => false],
+                        'font_size'             => [
                             'type'    => 'integer',
                             'minimum' => 8,
                             'maximum' => 72,
                         ],
-                        'align'              => [
+                        'align'                 => [
                             'type'    => 'string',
                             'enum'    => ['left', 'center', 'right', 'justify'],
                             'default' => 'left',
                         ],
-                        'firstLineIndent'    => ['type' => 'integer'],
-                        'lineSpacing'        => ['type' => 'number', 'description' => '行距倍数，如1.5或0.9'],
-                        'beforeSpacing'      => ['type' => 'integer'],
-                        'afterSpacing'       => ['type' => 'integer'],
-                        'fontFamily'         => ['type' => 'string', 'description' => '英文字体如Arial'],
-                        'fontFamilyEastAsia' => ['type' => 'string', 'description' => '中文字体如宋体'],
-                        'color'              => ['type' => 'string', 'description' => '十六进制颜色，如FF0000'],
-                        'underline'          => [
+                        'first_line_indent'     => ['type' => 'integer'],
+                        'line_spacing'          => ['type' => 'number', 'description' => '行距倍数，如1.5或0.9'],
+                        'before_spacing'        => ['type' => 'integer'],
+                        'after_spacing'         => ['type' => 'integer'],
+                        'font_family'           => ['type' => 'string', 'description' => '英文字体如Arial'],
+                        'font_family_east_asia' => ['type' => 'string', 'description' => '中文字体如宋体'],
+                        'color'                 => ['type' => 'string', 'description' => '十六进制颜色，如FF0000'],
+                        'underline'             => [
                             'type' => 'string',
                             'enum' => ['single', 'double', 'dash', 'dot', 'wave'],
                         ],
@@ -112,7 +112,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'addDocxImage',
-                'description' => '添加图片。示例：{"path":"/a.png","width":200,"align":"center"}。height可选，不指定则自动等比缩放。',
+                'description' => '添加图片，height可选，不指定则自动等比缩放。示例：{"path":"/a.png","width":200,"align":"center"}。返回：{status, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -134,7 +134,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'appendDocx',
-                'description' => '向现有 DOCX 文件追加内容（保留原有内容）。items 数组每个元素必须是：{"type":"heading","level":N,"text":"..."} 或 {"type":"paragraph","text":"...","bold":true,...} 或 {"type":"image","path":"...","width":N,"height":N,"align":"..."}。示例：{"path":"/out.docx","items":[{"type":"heading","level":1,"text":"新章节"},{"type":"image","path":"/a.png"}]}',
+                'description' => '向现有DOCX文件追加内容（保留原有内容）。items数组每个元素必须是：{"type":"heading","level":N,"text":"..."}或{"type":"paragraph","text":"...","bold":true,...}或{"type":"image","path":"...","width":N,"height":N,"align":"..."}。示例：{"path":"/out.docx","items":[{"type":"heading","level":1,"text":"新章节"},{"type":"image","path":"/a.png"}]}。返回：{status, path, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -153,7 +153,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'saveDocx',
-                'description' => '将当前缓冲区保存为 DOCX 文件（覆盖）。示例：{"path":"/out.docx"}',
+                'description' => '将当前缓冲区保存为DOCX文件（覆盖）。示例：{"path":"/out.docx"}。返回：{status, path, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -169,7 +169,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'readXlsx',
-                'description' => '读取 XLSX 文件所有工作表。返回 {"sheets":{"Sheet1":[[...]]}}',
+                'description' => '读取XLSX文件所有工作表。返回：{status, file, sheets}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -184,7 +184,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeXlsx',
-                'description' => '写入 XLSX 文件（覆盖）。单表示例：{"path":"/a.xlsx","data":[["A","B"],[1,2]]}。多表格式：[{"name":"Sheet1","rows":[[...]]}]。指定 sheet_name 仅当 data 是二维数组时生效（多表时忽略）。',
+                'description' => '写入XLSX文件（覆盖）。单表示例：{"path":"/a.xlsx","data":[["A","B"],[1,2]]}；多表格式：[{"name":"Sheet1","rows":[[...]]}]。指定sheet_name仅当data是二维数组时生效（多表时忽略）。返回：{status, path, sheets_count, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -204,7 +204,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'appendXlsxRows',
-                'description' => '向现有工作表追加行（自动创建表）。示例：{"path":"/a.xlsx","sheet_name":"Sheet1","rows":[["新行"]]}',
+                'description' => '向现有工作表追加行（若表不存在则创建）。示例：{"path":"/a.xlsx","sheet_name":"Sheet1","rows":[["新行"]]}。返回：{status, path, sheets_count, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -225,7 +225,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'readPptx',
-                'description' => '读取 PPTX 所有幻灯片。返回 {"slides":[{"title":"...","content":"...","images":[...]}],"images_temp_dir":"..."}',
+                'description' => '读取PPTX所有幻灯片，提取文本和图片。返回：{status, file, slides_count, slides, images_temp_dir}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -240,7 +240,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'initPptx',
-                'description' => '初始化 PPTX 缓冲区。之后调用 addPptxSlide / savePptx。'
+                'description' => '初始化PPTX缓冲区。之后调用 addPptxSlide / savePptx。返回：{status, message}。',
             ],
         ],
         // PPTX 添加幻灯片
@@ -248,7 +248,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'addPptxSlide',
-                'description' => '添加幻灯片。示例：{"title":"标题","paragraphs":["段落1","段落2"],"image_path":"/a.png"}。图片尺寸单位 EMU（1英寸=914400 EMU），默认值适合普通大小。',
+                'description' => '添加幻灯片。示例：{"title":"标题","paragraphs":["段落1","段落2"],"image_path":"/a.png"}。图片尺寸单位EMU（1英寸=914400EMU），默认值适合普通大小。返回：{status, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -271,7 +271,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'appendPptx',
-                'description' => '向现有 PPTX 文件追加幻灯片（保留原内容）。示例：{"path":"/a.pptx","slides":[{"title":"新页","paragraphs":["内容"]}]}',
+                'description' => '向现有PPTX文件追加幻灯片（保留原内容）。示例：{"path":"/a.pptx","slides":[{"title":"新页","paragraphs":["内容"]}]}。返回：{status, path, appended, total_slides, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -304,7 +304,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'savePptx',
-                'description' => '将当前缓冲区保存为 PPTX 文件（覆盖）。示例：{"path":"/out.pptx"}',
+                'description' => '将当前缓冲区保存为PPTX文件（覆盖）。示例：{"path":"/out.pptx"}。返回：{status, path, slides_count, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

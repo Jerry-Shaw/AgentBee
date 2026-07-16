@@ -30,7 +30,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchHtml',
-                'description' => '获取静态HTML源码（不执行JS）。成功:{status,http_url,http_code,http_html}；失败:{status,error}。',
+                'description' => '获取静态HTML源码（不执行JS）。返回：{status, http_url, http_code, http_html}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -51,7 +51,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchText',
-                'description' => '从静态HTML提取纯文本（去标签/脚本/样式，压缩空白）。成功:{status,http_url,http_code,http_text}；失败:{status,error}。',
+                'description' => '从静态HTML提取纯文本（去标签/脚本/样式，压缩空白）。返回：{status, http_url, http_code, http_text}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -66,7 +66,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchContent',
-                'description' => '从静态HTML智能提取正文（剔除导航/脚注）。成功:{status,http_url,http_code,http_title,http_content}；失败:{status,error}。',
+                'description' => '从静态HTML智能提取正文（剔除导航/脚注）。返回：{status, http_url, http_code, http_title, http_content}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -81,7 +81,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'extractLinks',
-                'description' => '从静态HTML提取所有链接（转绝对路径，去重，不执行JS）。成功返回链接数组（索引）；失败:{status,error}。',
+                'description' => '从静态HTML提取所有链接（转绝对路径，去重，不执行JS）。返回：链接数组或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -96,7 +96,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'extractAttachments',
-                'description' => '提取静态HTML中的图片及可下载文件链接(pdf,zip,docx,jpg等)。成功:{http_url,images,files}；失败:{status,error}。',
+                'description' => '提取静态HTML中的图片及可下载文件链接（pdf, zip, docx, jpg等）。返回：{http_url, images, files}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -111,7 +111,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'fetchJson',
-                'description' => '获取 JSON 数据（支持 API 或静态 JSON 文件），params空则GET，非空则POST JSON。成功返回解析后的数据；失败:{status,error,response?}。',
+                'description' => '获取JSON数据（支持API或静态JSON文件），params为空则GET，非空则POST JSON。返回：解析后的JSON数据或{status, error, response?}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -127,7 +127,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'downloadFile',
-                'description' => '下载文件到本地（流式写入，自动建目录）。成功:{status,file_path,file_size}；失败:{status,error,http_code?}。',
+                'description' => '下载文件到本地（流式写入，自动建目录）。返回：{status, file_path, file_size}或{status, error, http_code}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

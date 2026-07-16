@@ -28,12 +28,12 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '启动浏览器实例。禁止连续调用。默认有头模式，除非用户明确要求无头。',
+                'description' => '启动浏览器实例，禁止连续调用。默认有头模式，除非用户明确要求无头。返回：{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'worker_name' => ['type' => 'string', 'description' => '实例唯一名称'],
-                        'headless'    => ['type' => 'boolean', 'description' => '无头模式（默认 false）'],
+                        'headless'    => ['type' => 'boolean', 'description' => '无头模式（默认false）'],
                     ],
                     'required'   => ['worker_name'],
                 ],
@@ -45,7 +45,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'navigate',
-                'description' => '导航到指定 URL。',
+                'description' => '导航到指定URL。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -62,7 +62,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'click',
-                'description' => '点击 CSS 选择器匹配的元素。',
+                'description' => '点击CSS选择器匹配的元素。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -77,7 +77,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'type',
-                'description' => '在输入框中输入文本。',
+                'description' => '在输入框中输入文本。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -93,12 +93,12 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'submit',
-                'description' => '提交表单（默认 form 选择器）。',
+                'description' => '提交表单（默认form选择器）。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => '表单选择器（默认 form）'],
+                        'selector'    => ['type' => 'string', 'description' => '表单选择器（默认form）'],
                     ],
                     'required'   => ['worker_name'],
                 ],
@@ -110,7 +110,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getUrl',
-                'description' => '获取当前页面 URL。',
+                'description' => '获取当前页面URL。返回：{status, data: url, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -124,7 +124,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getTitle',
-                'description' => '获取当前页面标题。',
+                'description' => '获取当前页面标题。返回：{status, data: title, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -138,7 +138,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getContent',
-                'description' => '获取页面内容（纯文本或 HTML）。',
+                'description' => '获取页面内容（纯文本或HTML）。返回：{status, data: content, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -153,7 +153,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getValue',
-                'description' => '获取表单元素的 value。',
+                'description' => '获取表单元素的value。返回：{status, data: value, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -168,7 +168,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getAttribute',
-                'description' => '获取元素指定属性值。',
+                'description' => '获取元素指定属性值。返回：{status, data: attribute_value, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -184,7 +184,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'setAttribute',
-                'description' => '设置元素指定属性值。',
+                'description' => '设置元素指定属性值。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -201,7 +201,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'scrollIntoView',
-                'description' => '滚动指定元素到可视区域。',
+                'description' => '滚动指定元素到可视区域。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -216,7 +216,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'selectOption',
-                'description' => '在下拉框中按 value 选择选项。',
+                'description' => '在下拉框中按value选择选项。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -234,7 +234,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'evaluate',
-                'description' => '执行自定义 JavaScript 代码。',
+                'description' => '执行自定义JavaScript代码。返回：{status, data: result, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -250,7 +250,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'screenshot',
-                'description' => '截屏并保存为文件。',
+                'description' => '截屏并保存为文件。返回：{status, data: {saved_path}, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -269,7 +269,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForSelector',
-                'description' => '等待 CSS 选择器对应的元素出现在 DOM 中。超时报错。',
+                'description' => '等待CSS选择器对应的元素出现在DOM中，超时报错。返回：{status, data: boolean, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -285,7 +285,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForPageLoad',
-                'description' => '等待页面完全加载。超时报错。',
+                'description' => '等待页面完全加载，超时报错。返回：{status, data: boolean, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -300,7 +300,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForText',
-                'description' => '等待页面中出现指定文本。超时报错。',
+                'description' => '等待页面中出现指定文本，超时报错。返回：{status, data: boolean, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -316,7 +316,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForElementVisible',
-                'description' => '等待 CSS 选择器对应的元素可见。超时报错。',
+                'description' => '等待CSS选择器对应的元素可见，超时报错。返回：{status, data: boolean, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -332,7 +332,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForUrl',
-                'description' => '等待当前 URL 包含指定字符串。超时报错。',
+                'description' => '等待当前URL包含指定字符串，超时报错。返回：{status, data: boolean, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -350,7 +350,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'hover',
-                'description' => '悬停到指定元素（触发 hover 事件）。',
+                'description' => '悬停到指定元素（触发hover事件）。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -365,7 +365,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'pressKey',
-                'description' => '模拟键盘按键（含修饰键）。',
+                'description' => '模拟键盘按键（含修饰键）。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -383,14 +383,14 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '列出所有浏览器实例及其状态。禁止高频调用，以免阻塞通信。',
+                'description' => '列出所有浏览器实例及其状态，禁止高频调用以免阻塞通信。返回：{instances: [...]}。',
             ],
         ],
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '关闭指定浏览器实例，释放资源。',
+                'description' => '关闭指定浏览器实例，释放资源。返回：{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

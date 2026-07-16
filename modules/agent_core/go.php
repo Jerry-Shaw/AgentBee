@@ -25,10 +25,13 @@ use modules\agent_core\lib\utils;
 use modules\agent_openai\go as openai;
 use modules\agent_toolsets\Memory\go as memory;
 use Nervsys\Core\Factory;
-use Nervsys\Core\Mgr\SocketMgr;
 
 class go extends Factory
 {
+    const STATUS_IDLE = 4;
+    const STATUS_WAIT = 2;
+    const STATUS_BUSY = 1;
+
     public core    $core;
     public utils   $utils;
     public message $message;
@@ -36,7 +39,9 @@ class go extends Factory
     public memory $memory;
     public openai $openai;
 
-    public bool $in_process    = false;
+    public int $wait_until  = 0;
+    public int $wait_status = self::STATUS_IDLE;
+
     public bool $clean_warning = false;
 
     /**
@@ -206,24 +211,24 @@ class go extends Factory
     /**
      * Callback for external stream (stdout from worker).
      *
-     * @param string $external_stream_id
+     * @param string $ext_id
      * @param array  $context
      *
      * @return void
      * @throws \ReflectionException
      * @throws \Throwable
      */
-    public function streamWorkerHandler(string $external_stream_id, array $context): void
+    public function streamWorkerHandler(string $ext_id, array $context): void
     {
         $stdout_stream = $context['stdout'];
         $data_chunk    = fread($stdout_stream, 8192);
 
         if (false === $data_chunk || '' === $data_chunk) {
-            unset($this->utils->stream_buffers[$external_stream_id]);
+            unset($this->utils->stream_buffers[$ext_id]);
             return;
         }
 
-        $buffer = &$this->utils->stream_buffers[$external_stream_id];
+        $buffer = &$this->utils->stream_buffers[$ext_id];
         $buffer .= $data_chunk;
 
         while (false !== ($line_pos = strpos($buffer, "\n"))) {
@@ -248,6 +253,8 @@ class go extends Factory
 
             switch ($message['type']) {
                 case 'stream':
+                    $this->setStatus(self::STATUS_WAIT);
+
                     switch ($payload_type) {
                         case 'length':
                             $metadata = $this->utils->getMessageMarker(
@@ -274,8 +281,8 @@ class go extends Factory
                             break;
 
                         case 'error':
-                            $this->in_process = false;
-                            unset($this->utils->stream_buffers[$external_stream_id]);
+                            $this->setStatus(self::STATUS_IDLE);
+                            unset($this->utils->stream_buffers[$ext_id]);
                             $this->core->sendMessage($message['socket_id'], json_encode(['type' => 'error'] + $payload['data'], JSON_FORMAT));
                             break;
 
@@ -318,7 +325,7 @@ class go extends Factory
 
                 case 'context':
                     // Reset main worker status
-                    $this->in_process = false;
+                    $this->setStatus(self::STATUS_IDLE);
 
                     switch ($payload_type) {
                         case 'callHandler':
@@ -411,14 +418,14 @@ class go extends Factory
                     break;
 
                 case 'end':
-                    $this->in_process = false;
-                    $new_messages     = $this->utils->refreshSessionHistory($payload['workerName']);
+                    $this->setStatus(self::STATUS_IDLE);
+                    $new_messages = $this->utils->refreshSessionHistory($payload['workerName']);
 
                     switch ($payload_type) {
                         case 'tools':
                             if (WORKER_MAIN === $payload['sender']) {
-                                $this->in_process = true;
-                                $worker_idx       = $this->utils->getMainIDX();
+                                $this->setStatus(self::STATUS_BUSY);
+                                $worker_idx = $this->utils->getMainIDX();
                             } else {
                                 $worker_info = $this->utils->getChildWorker('WorkerBee', $payload['workerName']);
 
@@ -452,15 +459,13 @@ class go extends Factory
                             break;
 
                         case 'end':
-                            $this->utils->debug($payload['workerName'] . ': LLM Stream end', 'trace');
-
                             $max_ctx_len   = $this->utils->agent_config['max_ctx_len'];
                             $warning_count = $max_ctx_len * 2;
                             $limit_count   = $max_ctx_len * 3;
 
                             if (WORKER_MAIN === $payload['sender']) {
                                 if (0 < $new_messages) {
-                                    $this->in_process = true;
+                                    $this->setStatus(self::STATUS_BUSY);
 
                                     $metadata = $this->utils->getMessageMarker(
                                         $payload['sender'],
@@ -534,10 +539,10 @@ class go extends Factory
         }
 
         if (is_resource($stdout_stream) && feof($stdout_stream)) {
-            unset($this->utils->stream_buffers[$external_stream_id]);
+            unset($this->utils->stream_buffers[$ext_id]);
         }
 
-        unset($external_stream_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $metadata);
+        unset($ext_id, $context, $stdout_stream, $data_chunk, $buffer, $line_pos, $line, $message, $payload, $payload_type, $metadata);
     }
 
     /**
@@ -566,8 +571,12 @@ class go extends Factory
      */
     public function onHeartbeat(string $socket_id): string
     {
-        if ($this->in_process) {
-            return '';
+        if (self::STATUS_BUSY === ($this->wait_status & self::STATUS_BUSY)) {
+            if (self::STATUS_WAIT === ($this->wait_status & self::STATUS_WAIT) || $this->wait_until > time()) {
+                return '';
+            }
+
+            $this->setStatus(self::STATUS_IDLE, true);
         }
 
         $task_list    = $this->memory->runTask();
@@ -657,7 +666,7 @@ class go extends Factory
             }
 
             if ('stop' === $data['type']) {
-                $this->in_process = false;
+                $this->setStatus(self::STATUS_IDLE);
                 $this->openai->abort($socket_id);
                 $this->utils->debug('User: Abort signal sent. Cancelling task.', 'trace');
                 continue;
@@ -686,7 +695,7 @@ class go extends Factory
                 switch ($result['content']['act']) {
                     // Reset session memory
                     case 'reset':
-                        $this->in_process = false;
+                        $this->setStatus(self::STATUS_IDLE);
                         $this->utils->removeSessionHistory(WORKER_MAIN);
                         break;
 
@@ -706,7 +715,7 @@ class go extends Factory
                 $this->memory->save('misc', 'user', implode(' ', $result['saves']));
             }
 
-            if (!$this->in_process) {
+            if (self::STATUS_IDLE === $this->wait_status) {
                 $llm_data = $result['content'];
 
                 if (empty($this->utils->getSessionHistory(WORKER_MAIN))) {
@@ -741,8 +750,7 @@ class go extends Factory
         $count_llm_data = count($llm_data);
         if (0 < $count_llm_data) {
             $this->utils->debug('User: Sending ' . $count_llm_data . ' message(s) to ' . WORKER_MAIN, 'trace');
-
-            $this->in_process = true;
+            $this->setStatus(self::STATUS_BUSY);
             $this->utils->refreshSessionHistory(WORKER_MAIN);
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
@@ -776,8 +784,12 @@ class go extends Factory
      */
     public function onSendString(string $socket_id): array
     {
-        if ($this->in_process) {
-            return [];
+        if (self::STATUS_BUSY === ($this->wait_status & self::STATUS_BUSY)) {
+            if (self::STATUS_WAIT === ($this->wait_status & self::STATUS_WAIT) || $this->wait_until > time()) {
+                return [];
+            }
+
+            $this->setStatus(self::STATUS_IDLE, true);
         }
 
         if (!empty($this->utils->message_buffers)) {
@@ -798,8 +810,7 @@ class go extends Factory
 
         if (0 < $new_messages) {
             $this->utils->debug('System: Sending ' . $new_messages . ' message(s) to ' . WORKER_MAIN, 'trace');
-
-            $this->in_process = true;
+            $this->setStatus(self::STATUS_BUSY);
 
             $metadata = $this->utils->getMessageMarker(
                 WORKER_MAIN,
@@ -834,5 +845,38 @@ class go extends Factory
     {
         $this->utils->debug('Socket: Client closed: ' . $socket_id, 'trace');
         unset($this->utils->socket_session[$socket_id], $socket_id);
+    }
+
+    /**
+     * @param int  $status
+     * @param bool $timeout
+     *
+     * @return void
+     */
+    private function setStatus(int $status, bool $timeout = false): void
+    {
+        if (self::STATUS_IDLE === $status) {
+            $this->utils->debug('AgentBee: IDLE (' . (!$timeout ? 'stream ended' : 'timeout') . ')', 'trace');
+            $this->wait_status = $status;
+
+            unset($status, $timeout);
+            return;
+        }
+
+        if (($this->wait_status & $status) !== $status) {
+            switch ($status) {
+                case self::STATUS_BUSY:
+                    $this->wait_until = time() + ($this->utils->agent_config['agent_timeout'] ?? 60);
+                    $this->utils->debug('AgentBee: BUSY (timeout at ' . date('H:i:s', $this->wait_until) . ')', 'trace');
+                    break;
+                case self::STATUS_WAIT:
+                    $this->utils->debug('AgentBee: WAIT (receiving stream data)', 'trace');
+                    break;
+            }
+
+            $this->wait_status |= $status;
+        }
+
+        unset($status, $timeout);
     }
 }

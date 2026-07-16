@@ -7,7 +7,7 @@
   "agent_llm": {
     "api_url": "http://127.0.0.1:1234/v1",
     "api_key": "sk-lm-ru6XiZDE:WImxJO82hxm5L76fNcaK",
-    "model": "gemma-4-26b-a4b-it-qat",
+    "model": "agents-a1",
     "org_id": "",
     "hw_hash": "",
     "timeout": 600,
@@ -40,11 +40,12 @@
   "max_ctx_len": 50,
   "misc_save_len": 200,
   "misc_keep_days": 30,
-  "memory_limit": "4G",
   "sandbox_mode": false,
-  "chrome_path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-  "chrome_timeout": 60,
   "workspace_path": "",
+  "chrome_timeout": 60,
+  "chrome_path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  "memory_limit": "4G",
+  "agent_timeout": 120,
   "agent_debug": "trace",
   "socket_debug": false
 }

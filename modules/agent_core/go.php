@@ -730,7 +730,7 @@ class go extends Factory
                     );
                 }
             } else {
-                $this->utils->debug('User: LLM in progress, new message queued.', 'trace');
+                $this->utils->debug('AgentBee: LLM is busy, new message queued.', 'trace');
 
                 foreach ($result['content'] as $msg_line) {
                     $this->utils->addMessageQueue(WORKER_MAIN, $msg_line);
@@ -866,7 +866,7 @@ class go extends Factory
         if (($this->wait_status & $status) !== $status) {
             switch ($status) {
                 case self::STATUS_BUSY:
-                    $this->wait_until = time() + ($this->utils->agent_config['agent_timeout'] ?? 60);
+                    $this->wait_until = time() + ($this->utils->agent_config['agent_llm']['timeout'] ?? 60);
                     $this->utils->debug('AgentBee: BUSY (timeout at ' . date('H:i:s', $this->wait_until) . ')', 'trace');
                     break;
                 case self::STATUS_WAIT:

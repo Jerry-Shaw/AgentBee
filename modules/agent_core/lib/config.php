@@ -159,7 +159,7 @@ class config extends Factory
                 'model'        => 'agents-a1',
                 'org_id'       => '',
                 'hw_hash'      => '',
-                'timeout'      => 600,
+                'timeout'      => 120,
                 'keep_reasons' => false,
                 'params'       => [
                     'max_completion_tokens' => 65536,
@@ -189,12 +189,11 @@ class config extends Factory
             'max_ctx_len'    => 50,
             'misc_save_len'  => 200,
             'misc_keep_days' => 30,
-            'sandbox_mode'   => false,
-            'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
             'chrome_timeout' => 60,
             'chrome_path'    => 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+            'sandbox_mode'   => false,
+            'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
             'memory_limit'   => '4G',
-            'agent_timeout'  => 120,
             'agent_debug'    => 'trace',
             'socket_debug'   => false,
         ];

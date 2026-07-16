@@ -159,7 +159,7 @@ class config extends Factory
                 'model'        => 'agents-a1',
                 'org_id'       => '',
                 'hw_hash'      => '',
-                'timeout'      => 120,
+                'timeout'      => 300,
                 'keep_reasons' => false,
                 'params'       => [
                     'max_completion_tokens' => 65536,

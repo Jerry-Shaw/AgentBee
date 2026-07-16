@@ -867,7 +867,7 @@ class go extends Factory
         if (($this->wait_status & $status) !== $status) {
             switch ($status) {
                 case self::STATUS_BUSY:
-                    $this->wait_until = time() + ($this->utils->agent_config['agent_llm']['timeout'] ?? 60);
+                    $this->wait_until = time() + ($this->utils->agent_config['agent_llm']['timeout']);
                     $this->utils->debug('AgentBee: BUSY (timeout at ' . date('H:i:s', $this->wait_until) . ')', 'trace');
                     break;
                 case self::STATUS_WAIT:

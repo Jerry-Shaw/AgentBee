@@ -423,6 +423,8 @@ class go extends Factory
 
                     switch ($payload_type) {
                         case 'tools':
+                            $this->utils->debug($payload['workerName'] . ': Tool results collected, proceeding.', 'trace');
+
                             if (WORKER_MAIN === $payload['sender']) {
                                 $this->setStatus(self::STATUS_BUSY);
                                 $worker_idx = $this->utils->getMainIDX();
@@ -430,6 +432,7 @@ class go extends Factory
                                 $worker_info = $this->utils->getChildWorker('WorkerBee', $payload['workerName']);
 
                                 if (empty($worker_info)) {
+                                    $this->utils->debug($payload['workerName'] . ': Worker already closed.', 'trace');
                                     break;
                                 }
 
@@ -438,8 +441,6 @@ class go extends Factory
 
                                 unset($worker_info);
                             }
-
-                            $this->utils->debug($payload['workerName'] . ': Tool results collected, proceeding.', 'trace');
 
                             $metadata = $this->utils->getMessageMarker(
                                 $payload['sender'],

@@ -114,7 +114,7 @@ class go extends Factory
      * @throws \ReflectionException
      * @throws \Exception
      */
-    public function exec(string $program, array|string $argv = [], int $timeout = 30, string $descriptor = 'pipe', string $work_path = ''): array
+    public function exec(string $program, array|string $argv = [], int $timeout = 30, string $descriptor = 'socket', string $work_path = ''): array
     {
         $result = [
             'output' => '',
@@ -143,7 +143,7 @@ class go extends Factory
         }
 
         $active  = time();
-        $procMgr = ProcMgr::new(in_array($descriptor, ['pipe', 'socket'], true) ? $descriptor : 'pipe');
+        $procMgr = ProcMgr::new(in_array($descriptor, ['socket', 'pipe'], true) ? $descriptor : 'socket');
 
         $proc_idx = $procMgr
             ->command([$program, ...$argv])
@@ -166,7 +166,7 @@ class go extends Factory
                 $result['error'] .= $output;
                 unset($output);
             },
-            function () use ($active, $timeout, $proc_pid, $procMgr, &$result): void
+            function () use ($active, $timeout, $proc_pid, &$result): void
             {
                 if (0 === $timeout) {
                     return;

@@ -59,7 +59,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'exec',
-                'description' => '执行系统命令（仅当无专用工具时可用）。program必须为可执行文件或脚本，不支持cmd内部命令（如dir、echo）。argv为参数数组，timeout为超时时长（默认30秒，0禁用超时），descriptor为I/O类型（默认"socket"），work_path可选（默认为工作区）。返回：{output, error}。',
+                'description' => '执行系统命令（仅当无专用工具时可用）。program必须为可执行文件或脚本，不支持cmd内部命令（如dir、echo）。argv为参数数组，timeout为超时时长（默认30秒，0禁用超时），descriptor为I/O类型（默认"socket"），work_path为程序运行时的当前工作目录（需根据程序需求设置，留空则使用默认工作区）。返回：{output, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -67,7 +67,7 @@ class skills
                         'argv'       => ['type' => 'array', 'items' => ['type' => 'string'], 'default' => [], 'description' => '命令行参数数组'],
                         'timeout'    => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数（超时终止；0为无限制）'],
                         'descriptor' => ['type' => 'string', 'enum' => ['socket', 'pipe'], 'default' => 'socket', 'description' => 'I/O类型："socket"（默认，常规程序，双向非阻塞），"pipe"（依赖管道环境的程序，可能阻塞）'],
-                        'work_path'  => ['type' => 'string', 'default' => '', 'description' => '程序工作目录（指定程序运行时的CWD目录；留空则使用默认工作区）']
+                        'work_path'  => ['type' => 'string', 'default' => '', 'description' => '程序运行时的当前工作目录（CWD），影响相对路径解析。留空则使用默认工作区。需按照程序要求进行设置']
                     ],
                     'required'   => ['program']
                 ],

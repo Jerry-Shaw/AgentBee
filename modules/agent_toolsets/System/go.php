@@ -156,14 +156,32 @@ class go extends Factory
             $proc_idx,
             function (string $output) use (&$active, &$result): void
             {
-                $active           = time();
-                $result['output'] .= $output;
+                $active = time();
+                $output = trim($output);
+
+                if ('' !== $output) {
+                    if ('' !== $result['output']) {
+                        $result['output'] .= "\n";
+                    }
+
+                    $result['output'] .= $output;
+                }
+
                 unset($output);
             },
             function (string $output) use (&$active, &$result): void
             {
-                $active          = time();
-                $result['error'] .= $output;
+                $active = time();
+                $output = trim($output);
+
+                if ('' !== $output) {
+                    if ('' !== $result['error']) {
+                        $result['error'] .= "\n";
+                    }
+
+                    $result['error'] .= $output;
+                }
+
                 unset($output);
             },
             function () use ($active, $timeout, $proc_pid, &$result): void
@@ -174,7 +192,12 @@ class go extends Factory
 
                 if (time() - $active > $timeout) {
                     $this->utils->OSMgr->killPid($proc_pid);
-                    $result['error'] .= "\n" . 'Process has been killed due to timeout reached.';
+
+                    if ('' !== $result['error']) {
+                        $result['error'] .= "\n";
+                    }
+
+                    $result['error'] .= 'Process has been killed due to timeout reached.';
                 }
             }
         );

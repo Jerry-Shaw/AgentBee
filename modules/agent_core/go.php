@@ -733,7 +733,7 @@ class go extends Factory
                     array_unshift(
                         $llm_data, [
                             'type' => 'text',
-                            'text' => '[强制] 新会话，必须加载记忆后回复，勿汇报。'
+                            'text' => '新会话：先加载misc记忆再回复，加载过程不汇报。'
                         ]
                     );
                 }

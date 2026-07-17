@@ -266,13 +266,18 @@ class go extends Factory
                                 $payload['messageId']
                             );
 
-                            $proc_idx = WORKER_MAIN === $payload['sender']
-                                ? $this->utils->getMainIDX()
-                                : ($this->utils->getChildWorker('WorkerBee', $payload['workerName'])['proc_idx'] ?? -1);
+                            if (WORKER_MAIN === $payload['sender']) {
+                                $this->setStatus(self::STATUS_BUSY);
 
-                            if (-1 !== $proc_idx) {
                                 $this->openai->talk(
-                                    $proc_idx,
+                                    $this->utils->getMainIDX(),
+                                    'talk',
+                                    $this->utils->getSessionHistory(WORKER_MAIN),
+                                    $metadata + ['socket_id' => $payload['socket_id']]
+                                );
+                            } elseif (isset($this->utils->getChildWorker('WorkerBee', $payload['workerName'])['proc_idx'])) {
+                                $this->openai->talk(
+                                    $this->utils->getChildWorker('WorkerBee', $payload['workerName'])['proc_idx'],
                                     'talk',
                                     $this->utils->getSessionHistory($payload['workerName']),
                                     $metadata + ['socket_id' => $payload['socket_id']]
@@ -466,8 +471,6 @@ class go extends Factory
 
                             if (WORKER_MAIN === $payload['sender']) {
                                 if (0 < $new_messages) {
-                                    $this->setStatus(self::STATUS_BUSY);
-
                                     $metadata = $this->utils->getMessageMarker(
                                         $payload['sender'],
                                         $payload['workerName'],
@@ -475,6 +478,8 @@ class go extends Factory
                                         $payload['workerName'],
                                         $payload['isSubTalk']
                                     );
+
+                                    $this->setStatus(self::STATUS_BUSY);
 
                                     $this->openai->talk(
                                         $this->utils->getMainIDX(),
@@ -572,8 +577,8 @@ class go extends Factory
      */
     public function onHeartbeat(string $socket_id): string
     {
-        if (self::STATUS_BUSY === ($this->wait_status & self::STATUS_BUSY)) {
-            if (self::STATUS_WAIT === ($this->wait_status & self::STATUS_WAIT) || $this->wait_until > time()) {
+        if (self::STATUS_IDLE !== $this->wait_status) {
+            if ($this->wait_until > time()) {
                 return '';
             }
 
@@ -612,6 +617,8 @@ class go extends Factory
             AGENT_NAME,
             0
         );
+
+        $this->setStatus(self::STATUS_BUSY);
 
         $this->openai->talk(
             $this->utils->getMainIDX(),
@@ -751,7 +758,6 @@ class go extends Factory
         $count_llm_data = count($llm_data);
         if (0 < $count_llm_data) {
             $this->utils->debug('User: Sending ' . $count_llm_data . ' message(s) to ' . WORKER_MAIN, 'trace');
-            $this->setStatus(self::STATUS_BUSY);
             $this->utils->refreshSessionHistory(WORKER_MAIN);
             $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
@@ -763,6 +769,8 @@ class go extends Factory
                 AGENT_NAME,
                 0
             );
+
+            $this->setStatus(self::STATUS_BUSY);
 
             $this->openai->talk(
                 $this->utils->getMainIDX(),
@@ -785,8 +793,8 @@ class go extends Factory
      */
     public function onSendString(string $socket_id): array
     {
-        if (self::STATUS_BUSY === ($this->wait_status & self::STATUS_BUSY)) {
-            if (self::STATUS_WAIT === ($this->wait_status & self::STATUS_WAIT) || $this->wait_until > time()) {
+        if (self::STATUS_IDLE !== $this->wait_status) {
+            if ($this->wait_until > time()) {
                 return [];
             }
 
@@ -811,7 +819,6 @@ class go extends Factory
 
         if (0 < $new_messages) {
             $this->utils->debug('System: Sending ' . $new_messages . ' message(s) to ' . WORKER_MAIN, 'trace');
-            $this->setStatus(self::STATUS_BUSY);
 
             $metadata = $this->utils->getMessageMarker(
                 WORKER_MAIN,
@@ -820,6 +827,8 @@ class go extends Factory
                 AGENT_NAME,
                 0
             );
+
+            $this->setStatus(self::STATUS_BUSY);
 
             $this->openai->talk(
                 $this->utils->getMainIDX(),
@@ -857,18 +866,19 @@ class go extends Factory
     private function setStatus(int $status, bool $timeout = false): void
     {
         if (self::STATUS_IDLE === $status) {
-            $this->utils->debug('AgentBee: IDLE (' . (!$timeout ? 'stream ended' : 'timeout') . ')', 'trace');
+            $this->utils->debug('AgentBee: IDLE (' . (!$timeout ? 'stream ended' : 'response timeout') . ')', 'trace');
             $this->wait_status = $status;
 
             unset($status, $timeout);
             return;
         }
 
+        $this->wait_until = time() + ($this->utils->agent_config['agent_llm']['timeout']);
+
         if (($this->wait_status & $status) !== $status) {
             switch ($status) {
                 case self::STATUS_BUSY:
-                    $this->wait_until = time() + ($this->utils->agent_config['agent_llm']['timeout']);
-                    $this->utils->debug('AgentBee: BUSY (timeout at ' . date('H:i:s', $this->wait_until) . ')', 'trace');
+                    $this->utils->debug('AgentBee: BUSY (waiting for response)', 'trace');
                     break;
                 case self::STATUS_WAIT:
                     $this->utils->debug('AgentBee: WAIT (receiving stream data)', 'trace');

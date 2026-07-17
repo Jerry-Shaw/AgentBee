@@ -361,11 +361,11 @@ class procWorker extends Factory
 
         // Normal content
         if (isset($delta['content']) && '' !== $delta['content']) {
-            if ('<|channel>thought' === $delta['content']) {
+            if ('<|channel>' === $delta['content']) {
                 $this->message_type = 'think';
             } elseif ('<channel|>' === $delta['content']) {
                 $this->message_type = 'content';
-            } else {
+            } elseif ('content' === $this->message_type || 'thought' !== $delta['content'] || '' !== $reasons_content) {
                 if ('content' === $this->message_type) {
                     $assistant_content .= $delta['content'];
                 } elseif ('think' === $this->message_type) {

@@ -943,13 +943,11 @@ class utils extends Factory
 
         return $list
             . PHP_EOL . PHP_EOL
-            . '**调用规则：**' . PHP_EOL
-            . '- 专项技能优先于可用工具，功能重叠时，优先使用技能。' . PHP_EOL
-            . '- 用户请求匹配某技能时，调用 System-loadSkill("技能名") 加载完整指令并严格执行，严禁猜测。'
-            . PHP_EOL . PHP_EOL
             . '**执行规范：**' . PHP_EOL
-            . '- 加载技能后，先安装依赖（如有），再按技能指令执行。' . PHP_EOL
-            . '- references/examples 按需读取，scripts 按需执行，assets 为静态模板。';
+            . '- 专项技能优先于可用工具，功能重叠时，优先使用技能。' . PHP_EOL
+            . '- 用户请求匹配某技能时，先调用 System-loadSkill("技能名") 加载技能。' . PHP_EOL
+            . '- 技能加载后，如有依赖，先进入技能目录安装依赖，再按照完整指令严格执行，严禁猜测。' . PHP_EOL
+            . '- 如有资源目录：references/examples 按需读取，scripts 按需执行，assets 为静态模板。';
     }
 
     /**

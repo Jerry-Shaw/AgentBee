@@ -947,7 +947,7 @@ class utils extends Factory
             . '- 专项技能优先于可用工具，功能重叠时，优先使用技能。' . PHP_EOL
             . '- 用户请求匹配某技能时，先调用 System-loadSkill("技能名") 加载技能。' . PHP_EOL
             . '- 技能加载后，如有依赖，先进入技能目录安装依赖，再按照完整指令严格执行，严禁猜测。' . PHP_EOL
-            . '- 如有资源目录：references/examples 按需读取，scripts 按需执行，assets 为静态模板。';
+            . '- 如有资源目录：references/examples 按需读取，scripts 按要求执行，assets 为静态模板。';
     }
 
     /**

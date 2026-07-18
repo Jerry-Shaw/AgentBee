@@ -95,11 +95,36 @@ class go extends Factory
             $body = trim($content);
         }
 
-        $result = '' !== $body
-            ? ['status' => 'success', 'skill_path' => $skill_path, 'skill_data' => $body]
-            : ['status' => 'success', 'skill_path' => $skill_path, 'message' => '警告：技能 "' . $skill_name . '" 的指令内容为空'];
+        $resources    = [];
+        $dependencies = [];
 
-        unset($skill_name, $skill_path, $md_file, $content, $parts);
+        foreach (['requirements.txt', 'package.json', 'scripts/', 'references/', 'examples/', 'assets/'] as $value) {
+            $full_path = $skill_path . $value;
+
+            if (is_dir($full_path)) {
+                $resources[] = $value;
+            } elseif (is_file($full_path)) {
+                $dependencies[] = $value;
+            }
+        }
+
+        $result = ['status' => 'success', 'skill_path' => $skill_path];
+
+        if (!empty($resources)) {
+            $result['resources'] = $resources;
+        }
+
+        if (!empty($dependencies)) {
+            $result['dependencies'] = $dependencies;
+        }
+
+        if ('' !== $body) {
+            $result['skill_data'] = $body;
+        } else {
+            $result['message'] = '警告：技能"' . $skill_name . '"的指令为空';
+        }
+
+        unset($skill_name, $skill_path, $md_file, $content, $parts, $body, $resources, $dependencies, $value, $full_path);
         return $result;
     }
 

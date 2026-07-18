@@ -42,7 +42,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'loadSkill',
-                'description' => '加载专项技能的完整指令。仅在用户请求明确匹配某技能的适用场景时调用，获取技能完整指令后按要求执行。返回：{status, skill_path, skill_data}或{status, message/error}。如有依赖或资源目录，会附加返回dependencies（依赖文件列表，需安装）或resources（资源目录列表，按需查看）。',
+                'description' => '加载专项技能的完整指令。仅在用户请求明确匹配某技能的适用场景时调用，获取技能完整指令后按要求执行。返回：{status, skill_path, skill_data}或{status, message/error}。如有依赖或资源目录，会附加返回install_guide（安装指南）、dependencies（依赖文件列表，执行前需安装）或resources（资源目录列表，按需查看）。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

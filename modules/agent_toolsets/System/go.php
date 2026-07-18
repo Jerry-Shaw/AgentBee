@@ -115,7 +115,8 @@ class go extends Factory
         }
 
         if (!empty($dependencies)) {
-            $result['dependencies'] = $dependencies;
+            $result['dependencies']  = $dependencies;
+            $result['install_guide'] = '本技能有依赖，请先进入技能目录，安装依赖后再执行，详情查看dependencies字段。';
         }
 
         if ('' !== $body) {

@@ -933,7 +933,7 @@ class utils extends Factory
             }
 
             if (!empty($meta['resource'])) {
-                $list .= ' [资源：' . implode('、', $meta['resource']) . ']';
+                $list .= ' [依赖及资源：' . implode('、', $meta['resource']) . ']';
             }
 
             $list .= PHP_EOL;

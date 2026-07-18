@@ -915,6 +915,8 @@ class utils extends Factory
         unset($skills, $key, $meta, $num, $name, $desc, $triggers);
 
         return '用户请求匹配某技能时，调用 System-loadSkill("技能名") 加载完整指令并严格执行，严禁猜测。'
+            . PHP_EOL
+            . '**注意**：专项技能优先于可用工具，功能重叠时，优先使用技能。'
             . PHP_EOL . PHP_EOL
             . '**可用技能：**' . PHP_EOL
             . $list
@@ -996,7 +998,7 @@ class utils extends Factory
         $prompts[] = '**搜索**：明确提及记录/人名/事件时主动搜索，结果仅当前回复。无则告知。';
 
         $prompts[] = '## 可用工具';
-        $prompts[] = '- **强制优先**：有专用工具时禁止`exec`，优先使用工具。';
+        $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';
         $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
         $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
@@ -1062,9 +1064,9 @@ class utils extends Factory
         $prompts[] = '`根目录：' . $this->app->root_path . '` | `框架：' . NS_ROOT . '` | `工作区：' . $this->agent_config['workspace_path'] . '` | `日志：' . $this->app->log_path . '` | `模块：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '`';
 
         $prompts[] = '## 可用工具';
-        $prompts[] = '- **强制优先**：有专用工具时优先调用工具。';
+        $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';
         $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
-        $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则输出错误信息。';
+        $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
         $prompts[] = '- 任务完成即止，勿重复调用工具。';
 
         $skills = $this->fetchSkills('skills');

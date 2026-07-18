@@ -829,11 +829,11 @@ class utils extends Factory
 
             $md_meta['resource'] = [];
 
-            foreach (['scripts/', 'references/', 'examples/', 'assets/'] as $dir) {
-                $dir_path = $item['absolute_path'] . DIRECTORY_SEPARATOR . $dir;
+            foreach (['requirements.txt', 'package.json', 'scripts/', 'references/', 'examples/', 'assets/'] as $value) {
+                $full_path = $item['absolute_path'] . DIRECTORY_SEPARATOR . $value;
 
-                if (is_dir($dir_path)) {
-                    $md_meta['resource'][] = $dir;
+                if (is_dir($full_path) || is_file($full_path)) {
+                    $md_meta['resource'][] = $value;
                 }
             }
 
@@ -842,7 +842,7 @@ class utils extends Factory
 
         $prompt = $this->getSkillPrompt($skills);
 
-        unset($dirname, $skills, $dir_list, $item, $md_file, $md_meta, $dir);
+        unset($dirname, $skills, $dir_list, $item, $md_file, $md_meta, $value, $full_path);
         return $prompt;
     }
 
@@ -941,15 +941,15 @@ class utils extends Factory
 
         unset($skills, $key, $meta, $num, $name, $desc, $triggers);
 
-        return '用户请求匹配某技能时，调用 System-loadSkill("技能名") 加载完整指令并严格执行，严禁猜测。'
-            . PHP_EOL
-            . '**注意**：专项技能优先于可用工具，功能重叠时，优先使用技能。'
+        return $list
             . PHP_EOL . PHP_EOL
-            . '**可用技能：**' . PHP_EOL
-            . $list
-            . PHP_EOL
-            . '**资源说明：**' . PHP_EOL
-            . '加载技能后，references/examples 按需读取，scripts 按需执行，assets 为静态模板。';
+            . '**调用规则：**' . PHP_EOL
+            . '- 专项技能优先于可用工具，功能重叠时，优先使用技能。' . PHP_EOL
+            . '- 用户请求匹配某技能时，调用 System-loadSkill("技能名") 加载完整指令并严格执行，严禁猜测。'
+            . PHP_EOL . PHP_EOL
+            . '**执行规范：**' . PHP_EOL
+            . '- 加载技能后，先安装依赖（如有），再按技能指令执行。' . PHP_EOL
+            . '- references/examples 按需读取，scripts 按需执行，assets 为静态模板。';
     }
 
     /**
@@ -1033,7 +1033,7 @@ class utils extends Factory
         $prompts[] = '## 可用工具（Tool Calls）';
         $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';
         $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
-        $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
+        $prompts[] = '- **错误处理**：工具发生错误时，修正重试最多2次，再次失败则向用户转述错误内容。';
         $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
         $prompts[] = '- 任务完成即止，勿重复调用工具。';
 
@@ -1106,7 +1106,7 @@ class utils extends Factory
         $prompts[] = '## 可用工具（Tool Calls）';
         $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';
         $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
-        $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
+        $prompts[] = '- **错误处理**：工具发生错误时，修正重试最多2次，再次失败则向用户转述错误内容。';
         $prompts[] = '- 任务完成即止，勿重复调用工具。';
 
         $skills = $this->fetchSkills('skills');

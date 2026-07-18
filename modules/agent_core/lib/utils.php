@@ -685,6 +685,33 @@ class utils extends Factory
     }
 
     /**
+     * @return string
+     */
+    public function fetchPrograms(): string
+    {
+        $prompt    = '';
+        $available = [];
+        $name_list = ['git', 'curl', 'php', 'python', 'pip', 'uv', 'node', 'npm', 'npx', 'ffmpeg'];
+
+        foreach ($name_list as $name) {
+            $paths = $this->OSMgr->findPath($name);
+
+            if (!empty($paths)) {
+                $available[] = $name;
+            }
+        }
+
+        if (!empty($available)) {
+            $prompt = '- 可用：' . implode('、', $available)
+                . PHP_EOL
+                . '- 其他：执行前先用 `where`（Windows）或 `which`（Unix）探测。';
+        }
+
+        unset($available, $name_list, $name, $paths);
+        return $prompt;
+    }
+
+    /**
      * @param string $dirname
      * @param string $module
      * @param array  $tool_names
@@ -977,9 +1004,15 @@ class utils extends Factory
         $prompts[] = '- **输出前检查**：核实能否更短、是否自然、是否快速切入主题，同时核实是否遵守以上准则，违反则修正（**不向用户显示**）。';
         $prompts[] = '- **交付内容与格式**：直接输出最终结果，无开场白、总结或客套话。';
 
-        $prompts[] = '## 系统';
+        $prompts[] = '## 系统信息';
         $prompts[] = '`架构：' . AGENT_NAME . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `OS：' . php_uname() . '` | `PHP：' . PHP_VERSION . '(' . $php_path . ')`';
         $prompts[] = '`根目录：' . $this->app->root_path . '` | `框架：' . NS_ROOT . '` | `工作区：' . $work_path . '` | `日志：' . $this->app->log_path . '` | `模块：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '` | `入口：' . $this->app->script_path . '`';
+
+        $programs = $this->fetchPrograms();
+        if ('' !== $programs) {
+            $prompts[] = '## 外部程序（exec调用）';
+            $prompts[] = $programs;
+        }
 
         $prompts[] = '## 上下文';
         $prompts[] = '- 主动管理，历史>' . $max_limit . '条自动裁剪；单次输出上限：' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token（超长需分段）。';
@@ -997,7 +1030,7 @@ class utils extends Factory
         $prompts[] = '**读取**：新会话必须先加载misc记忆（20-50条），再回复；空则读daily；按日期查daily，按主题查important。';
         $prompts[] = '**搜索**：明确提及记录/人名/事件时主动搜索，结果仅当前回复。无则告知。';
 
-        $prompts[] = '## 可用工具';
+        $prompts[] = '## 可用工具（Tool Calls）';
         $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';
         $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
@@ -1016,6 +1049,7 @@ class utils extends Factory
         } else {
             $prompts[] = '- **沙箱关闭**：按绝对路径，优先工作区，**禁止 ../ 绕开系统关键目录**（如 `C:\Windows\System32`）。';
         }
+
         $prompts[] = '- **exec 调用安全**：调用 `exec` 前必须验证输入参数，禁止拼接未过滤的用户输入，防止命令注入。';
         $prompts[] = '- **危险操作**（删/执行命令）：先告知风险，等确认。';
         $prompts[] = '- **绝对禁止**：`rm -rf /, dd, shutdown`；改系统配置（/etc/, C:\\Windows\\System32\）；改系统核心脚本（`' . $this->app->root_path . '/modules/*`）；装/卸软件；泄露敏感信息。';
@@ -1059,11 +1093,17 @@ class utils extends Factory
         $prompts[] = date('Y-m-d H:i:s') . ' | 时区：' . $this->app->timezone;
         $prompts[] = '';
 
-        $prompts[] = '## 系统';
+        $prompts[] = '## 系统信息';
         $prompts[] = '`OS：' . php_uname() . '` | `PHP：' . PHP_VERSION . '(' . $this->OSMgr->getPhpPath() . ')`';
         $prompts[] = '`根目录：' . $this->app->root_path . '` | `框架：' . NS_ROOT . '` | `工作区：' . $this->agent_config['workspace_path'] . '` | `日志：' . $this->app->log_path . '` | `模块：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '`';
 
-        $prompts[] = '## 可用工具';
+        $programs = $this->fetchPrograms();
+        if ('' !== $programs) {
+            $prompts[] = '## 外部程序（exec调用）';
+            $prompts[] = $programs;
+        }
+
+        $prompts[] = '## 可用工具（Tool Calls）';
         $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';
         $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具返回error时修正重试（最多2次），失败则向用户转述error内容。';
@@ -1081,6 +1121,7 @@ class utils extends Factory
         } else {
             $prompts[] = '- **沙箱关闭**：按绝对路径，优先工作区，**禁止 ../ 绕开系统关键目录**（如 `C:\Windows\System32`）。';
         }
+
         $prompts[] = '- **危险操作**（删/执行命令）：先告知风险，等确认。';
         $prompts[] = '- **绝对禁止**：`rm -rf /, dd, shutdown`；改系统配置（/etc/, C:\\Windows\\System32\）；改系统核心脚本（`' . $this->app->root_path . '/modules/*`）；装/卸软件；泄露敏感信息。';
         $prompts[] = '- **批量/多文件**：每批 ≤100个，操作前列清单确认。';

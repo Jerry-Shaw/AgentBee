@@ -810,9 +810,10 @@ class go extends Factory
         $current_count = $this->utils->countSessionHistory(WORKER_MAIN);
 
         if ($current_count > $this->utils->agent_config['max_ctx_len'] * 3) {
-            $cleaned = $this->utils->cleanSessionHistory(WORKER_MAIN);
+            $keep_len = ceil($this->utils->agent_config['max_ctx_len'] / 10);
+            $cleaned  = $this->utils->cleanSessionHistory(WORKER_MAIN, $keep_len * 4, $keep_len);
             $this->utils->debug('System: History truncated (' . $current_count . ' -> ' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
-            unset($cleaned);
+            unset($keep_len, $cleaned);
         }
 
         $new_messages = $this->utils->refreshSessionHistory(WORKER_MAIN);

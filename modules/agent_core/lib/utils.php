@@ -689,9 +689,8 @@ class utils extends Factory
      */
     public function fetchPrograms(): string
     {
-        $prompt    = '';
         $available = [];
-        $name_list = ['git', 'curl', 'php', 'python', 'pip', 'uv', 'node', 'npm', 'npx', 'ffmpeg'];
+        $name_list = ['7z', 'git', 'curl', 'php', 'python', 'pip', 'uv', 'node', 'npm', 'npx', 'ffmpeg'];
 
         foreach ($name_list as $name) {
             $paths = $this->OSMgr->findPath($name);
@@ -701,11 +700,10 @@ class utils extends Factory
             }
         }
 
-        if (!empty($available)) {
-            $prompt = '- 可用：' . implode('、', $available)
-                . PHP_EOL
-                . '- 其他：执行前先用 `where`（Windows）或 `which`（Unix）探测。';
-        }
+        $prompt = !empty($available)
+            ? '- 可直接调用（已存在于 PATH）：' . implode('、', $available) . PHP_EOL
+            . '- 未列出的程序，执行前先用 `where`（Windows）或 `which`（Unix）探测路径。'
+            : '- 执行外部程序前，先用 `where`（Windows）或 `which`（Unix）探测路径，确认存在后再调用。';
 
         unset($available, $name_list, $name, $paths);
         return $prompt;
@@ -944,8 +942,8 @@ class utils extends Factory
         return $list
             . PHP_EOL . PHP_EOL
             . '**执行规范：**' . PHP_EOL
-            . '- 专项技能优先于可用工具，功能重叠时，优先使用技能。' . PHP_EOL
-            . '- 用户请求匹配某技能时，先调用 System-loadSkill("技能名") 加载技能。' . PHP_EOL
+            . '- 专项技能与可用工具功能重叠时，必须使用专项技能，禁止使用可用工具。' . PHP_EOL
+            . '- 用户请求匹配某技能使用场景时，先调用 System-loadSkill("技能名") 加载技能。' . PHP_EOL
             . '- 技能加载后，如有依赖文件，必须先进入技能目录安装依赖，再按照完整指令严格执行，严禁猜测。' . PHP_EOL
             . '- 如有资源目录：references/examples 按需读取，scripts 按要求执行，assets 为静态模板。';
     }
@@ -1006,11 +1004,8 @@ class utils extends Factory
         $prompts[] = '`架构：' . AGENT_NAME . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `OS：' . php_uname() . '` | `PHP：' . PHP_VERSION . '(' . $php_path . ')`';
         $prompts[] = '`根目录：' . $this->app->root_path . '` | `框架：' . NS_ROOT . '` | `工作区：' . $work_path . '` | `日志：' . $this->app->log_path . '` | `模块：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '` | `入口：' . $this->app->script_path . '`';
 
-        $programs = $this->fetchPrograms();
-        if ('' !== $programs) {
-            $prompts[] = '## 外部程序（exec调用）';
-            $prompts[] = $programs;
-        }
+        $prompts[] = '## 外部程序（exec调用）';
+        $prompts[] = $this->fetchPrograms();
 
         $prompts[] = '## 上下文';
         $prompts[] = '- 主动管理，历史>' . $max_limit . '条自动裁剪；单次输出上限：' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token（超长需分段）。';
@@ -1095,11 +1090,8 @@ class utils extends Factory
         $prompts[] = '`OS：' . php_uname() . '` | `PHP：' . PHP_VERSION . '(' . $this->OSMgr->getPhpPath() . ')`';
         $prompts[] = '`根目录：' . $this->app->root_path . '` | `框架：' . NS_ROOT . '` | `工作区：' . $this->agent_config['workspace_path'] . '` | `日志：' . $this->app->log_path . '` | `模块：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '`';
 
-        $programs = $this->fetchPrograms();
-        if ('' !== $programs) {
-            $prompts[] = '## 外部程序（exec调用）';
-            $prompts[] = $programs;
-        }
+        $prompts[] = '## 外部程序（exec调用）';
+        $prompts[] = $this->fetchPrograms();
 
         $prompts[] = '## 可用工具（Tool Calls）';
         $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';

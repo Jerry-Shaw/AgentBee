@@ -642,16 +642,14 @@ class utils extends Factory
 
         ob_start();
         switch ($image_mime) {
+            case 'image/webp':
+                $image_mime = 'image/png';
             case 'image/png':
                 imagepng($new_image);
                 break;
             case 'image/gif':
                 imagegif($new_image);
                 break;
-            case 'image/webp':
-                imagewebp($new_image);
-                break;
-            case 'image/jpeg':
             default:
                 imagejpeg($new_image, null, 90);
                 break;

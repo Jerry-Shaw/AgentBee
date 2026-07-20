@@ -242,7 +242,6 @@ class message extends Factory
      * @param array  $data_content
      *
      * @return array Associative array with 'need_llm' (bool) and 'text' (multimodal content array).
-     * @throws \ReflectionException
      */
     public function process_chat(string $socket_id, array $data_content): array
     {
@@ -271,13 +270,22 @@ class message extends Factory
                 }
 
                 unset($text);
+                continue;
             }
 
             // 2. Handle images
             if ('image_url' === $data['type']) {
                 if (isset($data['image_url']['url']) && '' !== $data['image_url']['url']) {
-                    $content[] = ['type' => 'image_url', 'image_url' => ['url' => $this->utils->resizeImage($data['image_url']['url'])]];
+                    try {
+                        $base64    = $this->utils->resizeImage($data['image_url']['url']);
+                        $content[] = ['type' => 'image_url', 'image_url' => ['url' => $base64]];
+                    } catch (\Throwable $throwable) {
+                        $this->utils->debug('Image format ERROR: ' . $throwable->getMessage());
+                        unset($throwable);
+                    }
                 }
+
+                continue;
             }
 
             // 3. Handle text files (only allowed pure text content)
@@ -287,12 +295,19 @@ class message extends Factory
                     && '' !== $data['file']['content']
                     && $this->file_is_allowed($data['file']['filename'])
                 ) {
+                    $detected  = mb_detect_encoding($data['file']['content'], ['UTF-8', 'GB18030', 'GBK', 'BIG-5', 'ASCII'], true);
+                    $file_text = mb_convert_encoding($data['file']['content'], 'UTF-8//IGNORE', $detected ?: 'auto');
+
+                    if ('' === $file_text) {
+                        continue;
+                    }
+
                     $content[] = [
                         'type' => 'text',
                         'text' => '--- 文件开始 ---' . "\n"
                             . '文件名: ' . $data['file']['filename'] . "\n"
                             . 'MIME类型: ' . $data['file']['mimeType'] . "\n"
-                            . '文件内容:' . "\n" . $data['file']['content'] . "\n"
+                            . '文件内容:' . "\n" . $file_text . "\n"
                             . '--- 文件结束 ---'
                     ];
                 }
@@ -316,7 +331,7 @@ class message extends Factory
             ];
         }
 
-        unset($socket_id, $data_content, $content, $saves, $reset, $data);
+        unset($socket_id, $data_content, $content, $saves, $reset, $data, $base64, $detected, $file_text);
         return $result;
     }
 
@@ -375,10 +390,17 @@ class message extends Factory
                 $binary = $binary_blocks[$block_idx++] ?? '';
 
                 if ('' !== $binary) {
-                    $content[$key]['image_url']['url'] = 'data:' . $this->get_image_mime_type($binary) . ';base64,' . base64_encode($binary);
+                    try {
+                        $content[$key]['image_url']['url'] = $this->utils->resizeImage($binary);
+                    } catch (\Throwable $throwable) {
+                        $this->utils->debug('Image format ERROR: ' . $throwable->getMessage());
+                        unset($content[$key], $throwable);
+                    }
                 } else {
                     unset($content[$key]);
                 }
+
+                continue;
             }
 
             // Handle file
@@ -386,9 +408,9 @@ class message extends Factory
                 $binary = $binary_blocks[$block_idx++] ?? '';
 
                 if ('' !== $binary) {
-                    $content[$key]['file']['content'] = !mb_check_encoding($binary, 'UTF-8')
-                        ? mb_convert_encoding($binary, 'UTF-8', 'auto')
-                        : $binary;
+                    $detected = mb_detect_encoding($binary, ['UTF-8', 'GB18030', 'GBK', 'BIG-5', 'ASCII'], true);
+
+                    $content[$key]['file']['content'] = mb_convert_encoding($binary, 'UTF-8//IGNORE', $detected ?: 'auto');
                 } else {
                     unset($content[$key]);
                 }
@@ -479,6 +501,21 @@ class message extends Factory
     }
 
     /**
+     * @param string $filename
+     *
+     * @return bool
+     */
+    private function image_is_allowed(string $filename): bool
+    {
+        $whitelist = ['jpg', 'jpeg', 'bmp', 'png', 'gif', 'webp'];
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $allowed   = in_array($extension, $whitelist, true);
+
+        unset($filename, $whitelist, $extension);
+        return $allowed;
+    }
+
+    /**
      * Detect image MIME type from binary data using magic bytes
      *
      * @param string $binary
@@ -498,6 +535,10 @@ class message extends Factory
             return 'image/jpeg';
         }
 
+        if (str_starts_with($hex, '424d')) {
+            return 'image/bmp';
+        }
+
         if (str_starts_with($hex, '89504e47')) {
             return 'image/png';
         }
@@ -508,10 +549,6 @@ class message extends Factory
 
         if (str_starts_with($hex, '52494646') && str_contains($hex, '57454250')) {
             return 'image/webp';
-        }
-
-        if (str_starts_with($hex, '424d')) {
-            return 'image/bmp';
         }
 
         unset($binary, $magic, $hex);

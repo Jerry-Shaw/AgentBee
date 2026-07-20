@@ -26,6 +26,7 @@ use Nervsys\Core\Lib\Error;
 use Nervsys\Core\Mgr\OSMgr;
 use Nervsys\Core\Mgr\ProcMgr;
 use Nervsys\Ext\libFileIO;
+use Nervsys\Ext\libImage;
 
 class utils extends Factory
 {
@@ -603,6 +604,64 @@ class utils extends Factory
         if (empty($this->child_workers[$type])) {
             unset($this->child_workers[$type]);
         }
+    }
+
+    /**
+     * @param string $binary
+     * @param int    $width
+     * @param int    $height
+     *
+     * @return string
+     * @throws \ReflectionException
+     */
+    public function resizeImage(string $binary, int $width = 2048, int $height = 2048): string
+    {
+        if (str_starts_with($binary, 'data:image/')) {
+            $base64_pos = strpos($binary, ',');
+
+            if (false !== $base64_pos) {
+                $base64 = substr($binary, $base64_pos + 1);
+                $binary = base64_decode($base64);
+
+                unset($base64);
+            }
+
+            unset($base64_pos);
+        }
+
+        $src_image = imagecreatefromstring($binary);
+
+        if (false === $src_image) {
+            return '';
+        }
+
+        $new_image = libImage::new()->gd_resize($src_image, $width, $height);
+
+        $image_info = getimagesizefromstring($binary);
+        $image_mime = $image_info['mime'] ?? 'image/jpeg';
+
+        ob_start();
+        switch ($image_mime) {
+            case 'image/png':
+                imagepng($new_image);
+                break;
+            case 'image/gif':
+                imagegif($new_image);
+                break;
+            case 'image/webp':
+                imagewebp($new_image);
+                break;
+            case 'image/jpeg':
+            default:
+                imagejpeg($new_image, null, 90);
+                break;
+        }
+        $image_binary = ob_get_clean();
+
+        $data_uri = 'data:' . $image_mime . ';base64,' . base64_encode($image_binary);
+
+        unset($binary, $width, $height, $src_image, $new_image, $image_info, $image_mime, $image_binary);
+        return $data_uri;
     }
 
     /**

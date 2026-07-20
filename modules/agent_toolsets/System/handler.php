@@ -24,6 +24,7 @@ class handler extends Factory
             1
         );
 
+        unset($payload_data, $agent_core);
         return '[系统提醒] 上下文已清理，继续原有任务。';
     }
 
@@ -32,40 +33,38 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return array|string[]
+     * @throws \ReflectionException
      */
     public function readImage(array $payload_data, agent_core $agent_core): array
     {
-        $full_path = $agent_core->utils->securePath($payload_data['file_path']);
+        $file_path = $agent_core->utils->securePath($payload_data['file_path']);
 
-        if (!is_file($full_path)) {
-            return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
+        if (!is_file($file_path)) {
+            return ['status' => 'error', 'error' => 'File not found: ' . $file_path];
         }
 
-        if (!is_readable($full_path)) {
-            return ['status' => 'error', 'error' => 'File not readable: ' . $full_path];
+        if (!is_readable($file_path)) {
+            return ['status' => 'error', 'error' => 'File not readable: ' . $file_path];
         }
 
-        $info = getimagesize($full_path);
+        $image_info = getimagesize($file_path);
 
-        if (false === $info || empty($info['mime'])) {
+        if (false === $image_info || empty($image_info['mime'])) {
             return ['status' => 'error', 'error' => 'Cannot identify image type or unsupported format'];
         }
 
-        $mime_type = $info['mime'];
-        $allowed   = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
+        $image_mime = $image_info['mime'];
+        $allowed    = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
 
-        if (!in_array($mime_type, $allowed, true)) {
-            return ['status' => 'error', 'error' => 'Unsupported image type: ' . $mime_type];
+        if (!in_array($image_mime, $allowed, true)) {
+            return ['status' => 'error', 'error' => 'Unsupported image type: ' . $image_mime];
         }
 
-        $data = file_get_contents($full_path);
+        $binary_data = file_get_contents($file_path);
 
-        if (false === $data) {
-            return ['status' => 'error', 'error' => 'Failed to read image data: ' . $full_path];
+        if (false === $binary_data) {
+            return ['status' => 'error', 'error' => 'Failed to read image data: ' . $file_path];
         }
-
-        $base64    = base64_encode($data);
-        $image_url = 'data:' . $mime_type . ';base64,' . $base64;
 
         $agent_core->utils->addSessionHistory(
             $payload_data['process_name'],
@@ -74,7 +73,7 @@ class handler extends Factory
                 'content' => [
                     [
                         'type'      => 'image_url',
-                        'image_url' => ['url' => $image_url]
+                        'image_url' => ['url' => $agent_core->utils->resizeImage($binary_data)]
                     ]
                 ]
             ]
@@ -83,11 +82,11 @@ class handler extends Factory
         $result = [
             'status'    => 'success',
             'message'   => '[系统提醒] 图片已加载，按需使用',
-            'filename'  => basename($full_path),
-            'mime_type' => $mime_type
+            'filename'  => basename($file_path),
+            'mime_type' => $image_mime
         ];
 
-        unset($file_path, $full_path, $info, $mime_type, $allowed, $data, $base64, $image_url);
+        unset($payload_data, $agent_core, $file_path, $image_info, $image_mime, $allowed, $binary_data);
         return $result;
     }
 }

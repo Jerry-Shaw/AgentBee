@@ -25,6 +25,16 @@ use Nervsys\Core\Factory;
 
 class message extends Factory
 {
+    public utils $utils;
+
+    /**
+     * @throws \ReflectionException
+     */
+    public function __construct()
+    {
+        $this->utils = utils::new();
+    }
+
     /**
      * @param string $socket_id
      * @param array  $data_content
@@ -232,6 +242,7 @@ class message extends Factory
      * @param array  $data_content
      *
      * @return array Associative array with 'need_llm' (bool) and 'text' (multimodal content array).
+     * @throws \ReflectionException
      */
     public function process_chat(string $socket_id, array $data_content): array
     {
@@ -265,7 +276,7 @@ class message extends Factory
             // 2. Handle images
             if ('image_url' === $data['type']) {
                 if (isset($data['image_url']['url']) && '' !== $data['image_url']['url']) {
-                    $content[] = ['type' => 'image_url', 'image_url' => ['url' => $data['image_url']['url']]];
+                    $content[] = ['type' => 'image_url', 'image_url' => ['url' => $this->utils->resizeImage($data['image_url']['url'])]];
                 }
             }
 

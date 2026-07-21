@@ -27,7 +27,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程，异步。必须收到回复就绪后（状态为ready），才能调用talk发任务。返回：{message}。',
+                'description' => '创建Worker子进程，异步。子进程回复就绪后，才可调用talk进行交互。子进程推送消息，主进程按需调用talk持续交互，直至完成。用于对抗式辩论/多进程协作等场景。返回{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -43,7 +43,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker进程发消息，异步，需等回复。Worker卡住/未响应时允许非ready状态打断，但禁连续多发（阻塞）。任务拆短防超时，回复自动推送。长时间无响应可重启。返回：{message}。',
+                'description' => '向Worker子进程发送消息，异步，需等回复。Worker卡住/未响应时允许非ready状态打断，但禁连续多发（阻塞）。任务拆短防超时，回复自动推送。长时间无响应可重启。返回：{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -58,7 +58,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '终止Worker进程。任务完成后正常关闭；长时间无响应先打断，等待无效再关；上下文过长，保存后再关。若需继续，重启Worker，发送摘要恢复上下文。返回：{message}。',
+                'description' => '终止Worker子进程。任务完成后正常关闭；长时间无响应先打断，等待无效再关；上下文过长，保存后再关。若需继续，重启Worker，发送摘要恢复上下文。返回：{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

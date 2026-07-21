@@ -232,20 +232,18 @@ class message extends Factory
      *
      * Expected input $data structure:
      * - 'text' (string): plain text message
-     * - 'images' (array): list of images, each can be:
-     *      - full Data URL (e.g. "data:image/png;base64,...")
-     *      - associative array ['name' => ..., 'mime' => ..., 'data' => ...] (base64 data)
-     * - 'files' (array): list of text files, each as:
-     *      ['name' => ..., 'mime' => ..., 'content' => ...] (raw text content)
+     * - 'file' (array): list of text files, each as:
+     *      ['filename' => ..., 'mimeType' => ..., 'content' => ...] (base64 content)
      *
      * @param string $socket_id
      * @param array  $data_content
      *
-     * @return array Associative array with 'need_llm' (bool) and 'text' (multimodal content array).
+     * @return array Associative array with 'need_llm' (bool), 'content' (multimodal content array) and others.
      */
     public function process_chat(string $socket_id, array $data_content): array
     {
         $content = [];
+        $errors  = [];
         $saves   = [];
         $reset   = false;
 
@@ -269,47 +267,63 @@ class message extends Factory
                     $reset = true;
                 }
 
-                unset($text);
                 continue;
             }
 
-            // 2. Handle images
-            if ('image_url' === $data['type']) {
-                if (isset($data['image_url']['url']) && '' !== $data['image_url']['url']) {
-                    try {
-                        $base64    = $this->utils->resizeImage($data['image_url']['url']);
-                        $content[] = ['type' => 'image_url', 'image_url' => ['url' => $base64]];
-                    } catch (\Throwable $throwable) {
-                        $this->utils->debug('Image format ERROR: ' . $throwable->getMessage());
-                        unset($throwable);
-                    }
+            // 2. Handle files/images
+            if ('file' === $data['type']) {
+                if (!isset($data['file']['filename']) || !isset($data['file']['content']) || '' === $data['file']['content']) {
+                    continue;
                 }
 
-                continue;
-            }
+                $binary = base64_decode($data['file']['content']);
 
-            // 3. Handle text files (only allowed pure text content)
-            if ('file' === $data['type']) {
-                if (
-                    isset($data['file']['content'])
-                    && '' !== $data['file']['content']
-                    && $this->file_is_allowed($data['file']['filename'])
-                ) {
-                    $detected  = mb_detect_encoding($data['file']['content'], ['UTF-8', 'GB18030', 'GBK', 'BIG-5', 'ASCII'], true);
-                    $file_text = mb_convert_encoding($data['file']['content'], 'UTF-8//IGNORE', $detected ?: 'auto');
+                // 2.1 Process images
+                if ($this->fileIsImage($binary)) {
+                    if (!$this->imageIsAllowed($data['file']['filename'])) {
+                        $errors[] = $data['file']['filename'] . '：图片格式不支持';
+                        continue;
+                    }
+
+                    try {
+                        $data_uri  = $this->utils->resizeImage($binary);
+                        $content[] = ['type' => 'image_url', 'image_url' => ['url' => $data_uri]];
+                    } catch (\Throwable $throwable) {
+                        $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();
+                        unset($throwable);
+                        continue;
+                    }
+
+                    continue;
+                }
+
+                // 2.2 Process plain text files
+                if (!$this->fileIsAllowed($data['file']['filename']) || str_contains($binary, "\0")) {
+                    $errors[] = $data['file']['filename'] . '：文件格式不支持';
+                    continue;
+                }
+
+                try {
+                    $detected  = mb_detect_encoding($binary, ['GB18030', 'UTF-8', 'BIG-5', 'ASCII'], true);
+                    $file_text = iconv($detected ?: 'UTF-8', 'UTF-8//IGNORE', $binary) ?: '';
 
                     if ('' === $file_text) {
-                        continue;
+                        throw new \RuntimeException('文本提取失败');
                     }
 
                     $content[] = [
                         'type' => 'text',
-                        'text' => '--- 文件开始 ---' . "\n"
+                        'text' => '--- 文件信息 ---' . "\n"
                             . '文件名: ' . $data['file']['filename'] . "\n"
                             . 'MIME类型: ' . $data['file']['mimeType'] . "\n"
-                            . '文件内容:' . "\n" . $file_text . "\n"
-                            . '--- 文件结束 ---'
+                            . '--- 文件内容（开始） ---' . "\n"
+                            . $file_text . "\n"
+                            . '--- 文件内容（结束） ---'
                     ];
+                } catch (\Throwable $throwable) {
+                    $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();
+                    unset($throwable);
+                    continue;
                 }
             }
         }
@@ -318,6 +332,7 @@ class message extends Factory
             $result = [
                 'need_llm' => true,
                 'content'  => $content,
+                'errors'   => $errors,
                 'saves'    => $saves,
                 'type'     => 'chat'
             ];
@@ -331,100 +346,52 @@ class message extends Factory
             ];
         }
 
-        unset($socket_id, $data_content, $content, $saves, $reset, $data, $base64, $detected, $file_text);
+        unset($socket_id, $data_content, $content, $errors, $saves, $reset, $data, $text, $binary, $data_uri, $detected, $file_text);
         return $result;
     }
 
     /**
-     * Process binary data with multimodal content
+     * @param string $binary
      *
-     * @param string $socket_id
-     * @param string $data Binary data from WebSocket
-     *
-     * @return string JSON string that can be processed by onMessage
-     * @throws \Exception
+     * @return bool
      */
-    public function process_binary(string $socket_id, string $data): string
+    public function fileIsImage(string $binary): bool
     {
-        if (4 > strlen($data)) {
-            throw new \Exception('Binary packet too short', E_USER_NOTICE);
-        }
+        $result = false;
+        $header = bin2hex(substr($binary, 0, 12));
 
-        $meta_len = unpack('N', substr($data, 0, 4))[1];
+        $magics = [
+            '424d'             => 'bmp',
+            'ffd8ff'           => 'jpg',
+            '89504e470d0a1a0a' => 'png',
+            '47494638'         => 'gif',
+            '52494646'         => 'webp'
+        ];
 
-        if (0 >= $meta_len || $meta_len > strlen($data) - 4) {
-            throw new \Exception('Invalid metadata length', E_USER_NOTICE);
-        }
-
-        $meta = json_decode(substr($data, 4, $meta_len), true);
-
-        if (!is_array($meta) || !isset($meta['content'])) {
-            throw new \Exception('Invalid JSON metadata', E_USER_NOTICE);
-        }
-
-        // Extract binary blocks
-        $binary_offset = 0;
-        $binary_blocks = [];
-        $binary_data   = substr($data, 4 + $meta_len);
-
-        if (isset($meta['binary_sizes']) && is_array($meta['binary_sizes'])) {
-            foreach ($meta['binary_sizes'] as $size) {
-                $binary_blocks[] = substr($binary_data, $binary_offset, $size);
-                $binary_offset   += $size;
-            }
-        } elseif (!empty($binary_data)) {
-            $binary_blocks[] = $binary_data;
-        }
-
-        // Replace placeholders
-        $content   = $meta['content'];
-        $block_idx = 0;
-
-        foreach ($content as $key => $item) {
-            if (!isset($item['type'])) {
-                continue;
-            }
-
-            // Handle image_url
-            if ('image_url' === $item['type'] && isset($item['image_url']['url']) && str_starts_with($item['image_url']['url'], '__BINARY__')) {
-                $binary = $binary_blocks[$block_idx++] ?? '';
-
-                if ('' !== $binary) {
-                    try {
-                        $content[$key]['image_url']['url'] = $this->utils->resizeImage($binary);
-                    } catch (\Throwable $throwable) {
-                        $this->utils->debug('Image format ERROR: ' . $throwable->getMessage());
-                        unset($content[$key], $throwable);
-                    }
-                } else {
-                    unset($content[$key]);
-                }
-
-                continue;
-            }
-
-            // Handle file
-            if ('file' === $item['type'] && isset($item['file']['content']) && str_starts_with($item['file']['content'], '__BINARY__')) {
-                $binary = $binary_blocks[$block_idx++] ?? '';
-
-                if ('' !== $binary) {
-                    $detected = mb_detect_encoding($binary, ['UTF-8', 'GB18030', 'GBK', 'BIG-5', 'ASCII'], true);
-
-                    $content[$key]['file']['content'] = mb_convert_encoding($binary, 'UTF-8//IGNORE', $detected ?: 'auto');
-                } else {
-                    unset($content[$key]);
-                }
+        foreach ($magics as $magic => $type) {
+            if (str_starts_with($header, $magic)) {
+                $result = true;
+                break;
             }
         }
 
-        $meta['content'] = array_values($content);
-
-        unset($meta['binary_sizes']);
-
-        $result = json_encode($meta, JSON_UNESCAPED_UNICODE);
-
-        unset($socket_id, $data, $meta_len, $meta, $binary_data, $binary_offset, $binary_blocks, $content, $block_idx);
+        unset($binary, $header, $magics, $magic, $type);
         return $result;
+    }
+
+    /**
+     * @param string $filename
+     *
+     * @return bool
+     */
+    private function imageIsAllowed(string $filename): bool
+    {
+        $whitelist = ['jpg', 'jpeg', 'bmp', 'png', 'gif', 'webp'];
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $allowed   = in_array($extension, $whitelist, true);
+
+        unset($filename, $whitelist, $extension);
+        return $allowed;
     }
 
     /**
@@ -434,7 +401,7 @@ class message extends Factory
      *
      * @return bool
      */
-    private function file_is_allowed(string $filename): bool
+    private function fileIsAllowed(string $filename): bool
     {
         $whitelist = [
             // ----- 纯文本与日志 -----
@@ -498,60 +465,5 @@ class message extends Factory
 
         unset($filename, $whitelist, $extension);
         return $allowed;
-    }
-
-    /**
-     * @param string $filename
-     *
-     * @return bool
-     */
-    private function image_is_allowed(string $filename): bool
-    {
-        $whitelist = ['jpg', 'jpeg', 'bmp', 'png', 'gif', 'webp'];
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        $allowed   = in_array($extension, $whitelist, true);
-
-        unset($filename, $whitelist, $extension);
-        return $allowed;
-    }
-
-    /**
-     * Detect image MIME type from binary data using magic bytes
-     *
-     * @param string $binary
-     *
-     * @return string
-     */
-    private function get_image_mime_type(string $binary): string
-    {
-        if (empty($binary)) {
-            return 'image/jpeg';
-        }
-
-        $magic = substr($binary, 0, 12);
-        $hex   = bin2hex($magic);
-
-        if (str_starts_with($hex, 'ffd8')) {
-            return 'image/jpeg';
-        }
-
-        if (str_starts_with($hex, '424d')) {
-            return 'image/bmp';
-        }
-
-        if (str_starts_with($hex, '89504e47')) {
-            return 'image/png';
-        }
-
-        if (str_starts_with($hex, '47494638')) {
-            return 'image/gif';
-        }
-
-        if (str_starts_with($hex, '52494646') && str_contains($hex, '57454250')) {
-            return 'image/webp';
-        }
-
-        unset($binary, $magic, $hex);
-        return 'image/jpeg';
     }
 }

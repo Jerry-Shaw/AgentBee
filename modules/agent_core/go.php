@@ -723,6 +723,10 @@ class go extends Factory
                 $this->memory->save('misc', 'user', implode(' ', $result['saves']));
             }
 
+            if (isset($result['errors']) && !empty($result['errors'])) {
+                $this->core->sendMessage($socket_id, json_encode(['type' => 'error', 'error' => implode("\n", $result['errors'])], JSON_FORMAT));
+            }
+
             if (self::STATUS_IDLE === $this->wait_status) {
                 $llm_data = $result['content'];
 

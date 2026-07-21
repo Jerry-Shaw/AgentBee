@@ -632,7 +632,7 @@ class utils extends Factory
         $src_image = imagecreatefromstring($binary);
 
         if (false === $src_image) {
-            return '';
+            throw new \RuntimeException('图片文件损坏，加载失败');
         }
 
         $new_image = libImage::new()->gd_resize($src_image, $width, $height);

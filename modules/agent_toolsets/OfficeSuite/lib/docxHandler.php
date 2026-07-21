@@ -406,7 +406,7 @@ class docxHandler extends Factory
                                 if (false !== $image_data) {
                                     $ext     = strtolower(pathinfo($image_target, PATHINFO_EXTENSION));
                                     $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
-                                    if (false === in_array($ext, $allowed, true)) {
+                                    if (!in_array($ext, $allowed, true)) {
                                         $ext = 'png';
                                     }
                                     $temp_image_path = $temp_dir . '/img_' . uniqid() . '.' . $ext;
@@ -548,7 +548,7 @@ class docxHandler extends Factory
 
             $ext     = strtolower(pathinfo($image_target, PATHINFO_EXTENSION));
             $allowed = ['png', 'jpg', 'jpeg', 'gif', 'bmp'];
-            if (false === in_array($ext, $allowed, true)) {
+            if (!in_array($ext, $allowed, true)) {
                 $ext = 'png';
             }
             $image_filename  = 'img_' . $image_counter . '.' . $ext;

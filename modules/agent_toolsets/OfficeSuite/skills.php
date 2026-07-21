@@ -219,92 +219,12 @@ class skills
                 ],
             ],
         ],
-
         // PPTX 读取
         [
             'type'     => 'function',
             'function' => [
                 'name'        => 'readPptx',
                 'description' => '读取PPTX所有幻灯片，提取文本和图片。返回：{status, file, slides_count, slides, images_temp_dir}或{error}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'path' => ['type' => 'string'],
-                    ],
-                    'required'   => ['path'],
-                ],
-            ],
-        ],
-        // PPTX 初始化
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'initPptx',
-                'description' => '初始化PPTX缓冲区。之后调用 addPptxSlide / savePptx。返回：{status, message}。',
-            ],
-        ],
-        // PPTX 添加幻灯片
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'addPptxSlide',
-                'description' => '添加幻灯片。示例：{"title":"标题","paragraphs":["段落1","段落2"],"image_path":"/a.png"}。图片尺寸单位EMU（1英寸=914400EMU），默认值适合普通大小。返回：{status, message}或{error}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'title'        => ['type' => 'string'],
-                        'paragraphs'   => [
-                            'type'  => 'array',
-                            'items' => ['type' => 'string'],
-                        ],
-                        'image_path'   => ['type' => 'string'],
-                        'image_width'  => ['type' => 'integer', 'default' => 2540000],
-                        'image_height' => ['type' => 'integer', 'default' => 1905000],
-                        'image_x'      => ['type' => 'integer', 'default' => 8000000],
-                        'image_y'      => ['type' => 'integer', 'default' => 500000],
-                    ],
-                ],
-            ],
-        ],
-        // PPTX 追加幻灯片
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'appendPptx',
-                'description' => '向现有PPTX文件追加幻灯片（保留原内容）。示例：{"path":"/a.pptx","slides":[{"title":"新页","paragraphs":["内容"]}]}。返回：{status, path, appended, total_slides, message}或{error}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'path'   => ['type' => 'string'],
-                        'slides' => [
-                            'type'  => 'array',
-                            'items' => [
-                                'type'       => 'object',
-                                'properties' => [
-                                    'title'        => ['type' => 'string'],
-                                    'paragraphs'   => [
-                                        'type'  => 'array',
-                                        'items' => ['type' => 'string'],
-                                    ],
-                                    'image_path'   => ['type' => 'string'],
-                                    'image_width'  => ['type' => 'integer', 'default' => 2540000],
-                                    'image_height' => ['type' => 'integer', 'default' => 1905000],
-                                    'image_x'      => ['type' => 'integer', 'default' => 8000000],
-                                    'image_y'      => ['type' => 'integer', 'default' => 500000],
-                                ],
-                            ],
-                        ],
-                    ],
-                    'required'   => ['path', 'slides'],
-                ],
-            ],
-        ],
-        // PPTX 保存
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'savePptx',
-                'description' => '将当前缓冲区保存为PPTX文件（覆盖）。示例：{"path":"/out.pptx"}。返回：{status, path, slides_count, message}或{error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

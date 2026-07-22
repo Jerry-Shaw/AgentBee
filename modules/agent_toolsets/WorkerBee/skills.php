@@ -27,7 +27,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程，异步。子进程回复就绪后，才可调用talk进行交互。子进程推送消息，主进程按需调用talk继续互动，直至完成。用于对抗式辩论/多进程协作等场景。返回{message}。',
+                'description' => '创建异步Worker进程。进程回复“已就绪”后，才可调用talk进行交互。所有回复异步推送，按需调用talk保持互动，直至完成。适用于对抗式辩论/多进程协作等场景。返回{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -43,7 +43,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker子进程发送消息，异步，需等回复。Worker卡住/未响应时允许非ready状态打断，但禁连续多发（阻塞）。任务拆短防超时，回复自动推送。长时间无响应可重启。返回：{message}。',
+                'description' => '向Worker进程发送消息，回复异步推送。长时间无响应可尝试打断/重启，避免连续多发（防阻塞）。长消息建议拆分。返回：{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -58,7 +58,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '终止Worker子进程。任务完成后正常关闭；长时间无响应先打断，等待无效再关；上下文过长，保存后再关。若需继续，重启Worker，发送摘要恢复上下文。返回：{message}。',
+                'description' => '终止Worker进程并释放资源。用于任务完成、进程无响应或上下文过长需重置时。大量输出时关闭可能偶发短暂阻塞。如需继续，重新启动并传入摘要。返回 {message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -72,7 +72,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '列出所有Worker进程及其状态（ready/processing/calling_tools等）。仅限偶尔查看，禁止高频调用，以免阻塞通信。返回：Worker状态列表。'
+                'description' => '获取所有活跃Worker进程的状态（ready/busy/streaming/calling_tools）。仅调试用，避免高频调用影响通信。返回状态列表。'
             ],
         ]
     ];

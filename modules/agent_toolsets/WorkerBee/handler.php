@@ -27,11 +27,11 @@ class handler extends Factory
                 WORKER_MAIN,
                 [
                     'type' => 'text',
-                    'text' => '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')'
+                    'text' => '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')'
                 ]
             );
 
-            return '[WorkerBee] "' . $payload_data['worker_name'] . '" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
+            return '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
         }
 
         $proc_idx = $agent_core->runProcWorker(
@@ -42,7 +42,7 @@ class handler extends Factory
 
         $agent_core->utils->debug('WorkerBee started: ' . $payload_data['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload_data['worker_role'] . ')', 'trace');
 
-        $init_prompt  = $payload_data['init_prompt'] . ' | 先阅读用户要求，用一句话介绍你的名字和角色，并回复“**已就绪**”。';
+        $init_prompt  = $payload_data['init_prompt'] . ' | 先阅读用户要求，用一句话介绍你的名字和角色，并回复“`已就绪`”。';
         $child_prompt = $agent_core->utils->getChildPrompt(
             $payload_data['worker_name'],
             $payload_data['worker_role']
@@ -52,7 +52,7 @@ class handler extends Factory
             'socket_id'   => $payload_data['socket_id'],
             'worker_name' => $payload_data['worker_name'],
             'worker_role' => $payload_data['worker_role'],
-            'status'      => 'processing',
+            'status'      => 'busy',
             'last_talk'   => date('Y-m-d H:i:s'),
             'talk_count'  => 0
         ];
@@ -80,7 +80,7 @@ class handler extends Factory
             $metadata + ['socket_id' => $payload_data['socket_id']]
         );
 
-        $message = 'Worker子进程正在启动。收到"**' . $payload_data['worker_name'] . '**"的“已就绪”信息后，即可调用talk发送消息。';
+        $message = 'Worker子进程正在启动。收到"`' . $payload_data['worker_name'] . '`"的“已就绪”信息后，即可调用talk开始互动。';
 
         unset($payload_data, $agent_core, $proc_idx, $init_prompt, $child_prompt, $worker_info, $metadata);
         return $message;
@@ -105,11 +105,11 @@ class handler extends Factory
                 WORKER_MAIN,
                 [
                     'type' => 'text',
-                    'text' => '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败'
+                    'text' => '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 进程已终止，消息发送失败'
                 ]
             );
 
-            return '[WorkerBee] "' . $payload_data['worker_name'] . '" 进程已终止，消息发送失败';
+            return '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 进程已终止，消息发送失败';
         }
 
         if ('ready' !== $worker_info['status']) {
@@ -130,7 +130,7 @@ class handler extends Factory
 
         $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');
 
-        $agent_core->utils->setChildWorker('WorkerBee', $worker_info['worker_name'], 'status', 'processing');
+        $agent_core->utils->setChildWorker('WorkerBee', $worker_info['worker_name'], 'status', 'busy');
         $agent_core->utils->refreshSessionHistory($worker_info['worker_name']);
 
         $this->sendMessage($agent_core, $worker_info, $payload_data);
@@ -155,7 +155,7 @@ class handler extends Factory
             $metadata + ['socket_id' => $payload_data['socket_id']]
         );
 
-        $message = '消息已发送给"**' . $worker_info['worker_name'] . '**"，请勿重复发送。回复将异步推送。';
+        $message = '消息已发送给"`' . $worker_info['worker_name'] . '`"，请勿重复发送。回复将异步推送，收到回复后可，按需继续保持互动。';
 
         unset($payload_data, $agent_core, $worker_info, $worker_message, $metadata);
         return $message;
@@ -185,7 +185,7 @@ class handler extends Factory
             $agent_core->utils->debug('WorkerBee not found: ' . $payload_data['worker_name'], 'trace');
         }
 
-        $message = '"' . $payload_data['worker_name'] . '" 进程已终止';
+        $message = '"`' . $payload_data['worker_name'] . '`" 进程已终止';
 
         unset($payload_data, $agent_core, $worker_info, $metadata);
         return $message;

@@ -161,14 +161,38 @@ class procWorker extends Factory
 
                     // Model requested tool calls (common in non-streaming)
                     case 'tool_calls':
+                        $tool_count = count($tool_calls_buffer);
+
+                        $tool_calls_buffer = array_filter(
+                            $tool_calls_buffer,
+                            function (array $tool): bool
+                            {
+                                return '' !== trim($tool['function']['arguments'] ?? '');
+                            }
+                        );
+
+                        $tool_calls_buffer = array_values($tool_calls_buffer);
+
                         if (empty($tool_calls_buffer)) {
                             if ('' !== $assistant_content || '' !== $reasons_content) {
                                 $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
                                 $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
                             }
 
+                            $user_message = [
+                                'role'    => 'user',
+                                'content' => [[
+                                    'type' => 'text',
+                                    'text' => '[系统提示] 工具调用参数缺失，已全部过滤。请补全参数后重新调用。'
+                                ]]
+                            ];
+
+                            $this->sendMsg($socket_id, 'history', 'add', $metadata, $user_message);
+
                             $this->sendMsg($socket_id, 'stream', 'end', $metadata);
                             $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
+
+                            unset($user_message);
                             break;
                         }
 
@@ -237,10 +261,23 @@ class procWorker extends Factory
                             }
                         }
 
+                        if (count($tool_calls_buffer) < $tool_count) {
+                            $user_message = [
+                                'role'    => 'user',
+                                'content' => [[
+                                    'type' => 'text',
+                                    'text' => '[系统提示] 部分工具调用参数缺失，已自动过滤。请补全参数后重新调用。'
+                                ]]
+                            ];
+
+                            $this->sendMsg($socket_id, 'history', 'add', $metadata, $user_message);
+                            unset($user_message);
+                        }
+
                         $this->sendMsg($socket_id, 'stream', 'end', $metadata);
                         $this->sendMsg($socket_id, 'end', 'tools', $metadata, $tool_calls_buffer);
 
-                        unset($tool_results, $result, $result_data, $tool_history);
+                        unset($tool_count, $tool_results, $result, $result_data, $tool_history);
                         break;
 
                     // Content filtered by safety policy (optional, e.g., Azure)

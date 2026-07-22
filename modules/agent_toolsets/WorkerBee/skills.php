@@ -27,7 +27,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建Worker子进程，异步。子进程回复就绪后，才可调用talk进行交互。子进程推送消息，主进程按需调用talk持续交互，直至完成。用于对抗式辩论/多进程协作等场景。返回{message}。',
+                'description' => '创建Worker子进程，异步。子进程回复就绪后，才可调用talk进行交互。子进程推送消息，主进程按需调用talk继续互动，直至完成。用于对抗式辩论/多进程协作等场景。返回{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

@@ -42,28 +42,27 @@ class handler extends Factory
 
         $agent_core->utils->debug('WorkerBee started: ' . $payload_data['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload_data['worker_role'] . ')', 'trace');
 
-        $agent_core->utils->addChildWorker(
-            'WorkerBee',
-            $payload_data['worker_name'], [
-                'proc_idx'    => $proc_idx,
-                'socket_id'   => $payload_data['socket_id'],
-                'worker_name' => $payload_data['worker_name'],
-                'worker_role' => $payload_data['worker_role'],
-                'status'      => 'processing',
-                'last_talk'   => date('Y-m-d H:i:s'),
-                'talk_count'  => 0
-            ]
-        );
-
+        $init_prompt  = $payload_data['init_prompt'] . ' | 先阅读用户要求，用一句话介绍你的名字和角色，并回复“**已就绪**”。';
         $child_prompt = $agent_core->utils->getChildPrompt(
             $payload_data['worker_name'],
             $payload_data['worker_role']
         );
+        $worker_info  = [
+            'proc_idx'    => $proc_idx,
+            'socket_id'   => $payload_data['socket_id'],
+            'worker_name' => $payload_data['worker_name'],
+            'worker_role' => $payload_data['worker_role'],
+            'status'      => 'processing',
+            'last_talk'   => date('Y-m-d H:i:s'),
+            'talk_count'  => 0
+        ];
 
+        $this->sendMessage($agent_core, $worker_info, ['content' => $init_prompt]);
+        $agent_core->utils->addChildWorker('WorkerBee', $payload_data['worker_name'], $worker_info);
         $agent_core->utils->setSessionHistory($payload_data['worker_name'], [$child_prompt]);
         $agent_core->utils->addSessionHistory(
             $payload_data['worker_name'],
-            ['role' => 'user', 'content' => '[用户要求] ' . $payload_data['init_prompt'] . ' | 用一句话概述你的名字，角色，阅读用户要求，并回复“已就绪”']
+            ['role' => 'user', 'content' => '[用户要求] ' . $init_prompt]
         );
 
         $metadata = $agent_core->utils->getMessageMarker(
@@ -81,8 +80,10 @@ class handler extends Factory
             $metadata + ['socket_id' => $payload_data['socket_id']]
         );
 
-        unset($payload_data, $agent_core, $proc_idx, $child_prompt, $metadata);
-        return '启动Worker操作已提交，稍后会自动推送结果，待就绪后即可发送消息。';
+        $message = 'Worker子进程正在启动。收到"**' . $payload_data['worker_name'] . '**"的“已就绪”信息后，即可调用talk发送消息。';
+
+        unset($payload_data, $agent_core, $proc_idx, $init_prompt, $child_prompt, $worker_info, $metadata);
+        return $message;
     }
 
     /**
@@ -90,8 +91,8 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return string
-     * @throws \ReflectionException
      * @throws RandomException
+     * @throws \ReflectionException
      * @throws \Exception
      */
     public function talk(array $payload_data, agent_core $agent_core): string
@@ -154,8 +155,10 @@ class handler extends Factory
             $metadata + ['socket_id' => $payload_data['socket_id']]
         );
 
+        $message = '消息已发送给"**' . $worker_info['worker_name'] . '**"，请勿重复发送。回复将异步推送。';
+
         unset($payload_data, $agent_core, $worker_info, $worker_message, $metadata);
-        return '消息已发送，无需等待，回复会主动推送。请勿重复发送消息。';
+        return $message;
     }
 
     /**
@@ -172,25 +175,12 @@ class handler extends Factory
         if (!empty($worker_info) && 0 < $agent_core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             $agent_core->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
 
-            $metadata = $agent_core->utils->getMessageMarker(
-                WORKER_CHILD,
-                $worker_info['worker_name'],
-                $worker_info['worker_role'],
-                $worker_info['worker_name'],
-                1
-            );
-
-            $agent_core->openai->talk(
-                $worker_info['proc_idx'],
-                'close',
-                $agent_core->utils->getSessionHistory($worker_info['worker_name']),
-                $metadata + ['socket_id' => $payload_data['socket_id']]
-            );
-
             $agent_core->utils->procMgr->close($worker_info['proc_idx']);
             $agent_core->utils->removeSessionHistory($worker_info['worker_name']);
             $agent_core->utils->removeMessageQueue($worker_info['worker_name']);
             $agent_core->utils->removeChildWorker('WorkerBee', $payload_data['worker_name']);
+
+            $this->sendMessage($agent_core, $worker_info, ['content' => '子进程"' . $payload_data['worker_name'] . '"已关闭。']);
         } else {
             $agent_core->utils->debug('WorkerBee not found: ' . $payload_data['worker_name'], 'trace');
         }

@@ -253,7 +253,12 @@ class go extends Factory
 
             switch ($message['type']) {
                 case 'stream':
-                    $this->setStatus(self::STATUS_WAIT);
+                    if (WORKER_MAIN === $payload['sender']) {
+                        $this->setStatus(self::STATUS_WAIT);
+                    } else {
+                        $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'streaming');
+                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' working on streaming', 'debug');
+                    }
 
                     switch ($payload_type) {
                         case 'length':
@@ -275,18 +280,29 @@ class go extends Factory
                                     $this->utils->getSessionHistory(WORKER_MAIN),
                                     $metadata + ['socket_id' => $payload['socket_id']]
                                 );
-                            } elseif (isset($this->utils->getChildWorker('WorkerBee', $payload['workerName'])['proc_idx'])) {
-                                $this->openai->talk(
-                                    $this->utils->getChildWorker('WorkerBee', $payload['workerName'])['proc_idx'],
-                                    'talk',
-                                    $this->utils->getSessionHistory($payload['workerName']),
-                                    $metadata + ['socket_id' => $payload['socket_id']]
-                                );
+                            } else {
+                                $worker_info = $this->utils->getChildWorker('WorkerBee', $payload['workerName']);
+
+                                if (isset($worker_info['proc_idx'])) {
+                                    $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'busy');
+
+                                    $this->openai->talk(
+                                        $worker_info['proc_idx'],
+                                        'talk',
+                                        $this->utils->getSessionHistory($payload['workerName']),
+                                        $metadata + ['socket_id' => $payload['socket_id']]
+                                    );
+                                }
                             }
                             break;
 
                         case 'error':
-                            $this->setStatus(self::STATUS_IDLE);
+                            if (WORKER_MAIN === $payload['sender']) {
+                                $this->setStatus(self::STATUS_IDLE);
+                            } else {
+                                $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'ready');
+                            }
+
                             unset($this->utils->stream_buffers[$ext_id]);
                             $this->core->sendMessage($message['socket_id'], json_encode(['type' => 'error'] + $payload['data'], JSON_FORMAT));
                             break;
@@ -330,7 +346,11 @@ class go extends Factory
 
                 case 'context':
                     // Reset main worker status
-                    $this->setStatus(self::STATUS_IDLE);
+                    if (WORKER_MAIN === $payload['sender']) {
+                        $this->setStatus(self::STATUS_IDLE);
+                    } else {
+                        $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'ready');
+                    }
 
                     switch ($payload_type) {
                         case 'callHandler':
@@ -414,7 +434,7 @@ class go extends Factory
                                     'role'    => 'user',
                                     'content' => [[
                                         'type' => 'text',
-                                        'text' => '停止重复调用 ' . $payload['data']['function_name'] . '，立即审视历史中的错误与上下文，调整策略；无法解决则上报用户。'
+                                        'text' => '停止重复调用 `' . $payload['data']['function_name'] . '`，立即审视历史中的错误与上下文，调整策略；无法解决则上报用户。'
                                     ]]
                                 ]
                             );
@@ -423,7 +443,13 @@ class go extends Factory
                     break;
 
                 case 'end':
-                    $this->setStatus(self::STATUS_IDLE);
+                    if (WORKER_MAIN === $payload['sender']) {
+                        $this->setStatus(self::STATUS_IDLE);
+                    } else {
+                        $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'ready');
+                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' reply completed, ready.', 'trace');
+                    }
+
                     $new_messages = $this->utils->refreshSessionHistory($payload['workerName']);
 
                     switch ($payload_type) {
@@ -441,8 +467,8 @@ class go extends Factory
                                     break;
                                 }
 
-                                $worker_idx = $worker_info['proc_idx'];
                                 $this->utils->setChildWorker('WorkerBee', $worker_info['worker_name'], 'status', 'calling_tools');
+                                $worker_idx = $worker_info['proc_idx'];
 
                                 unset($worker_info);
                             }
@@ -507,32 +533,54 @@ class go extends Factory
                                     unset($current_count, $limit_count);
                                 }
                             } else {
-                                $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' reply completed, ready.', 'trace');
-
                                 if ('' !== $payload['data']) {
                                     $this->utils->addMessageQueue(
                                         WORKER_MAIN,
                                         [
                                             'type' => 'text',
-                                            'text' => '**[WorkerBee] 来自 `' . $payload['workerName'] . '`（' . $payload['workerRole'] . '）**' . "\n" . '> ' . $payload['data']
+                                            'text' => '[WorkerBee] 异步消息' . "\n\n" . '`' . $payload['workerName'] . '`：' . $payload['workerRole'] . "\n\n" . '消息内容：' . "\n" . $payload['data']
                                         ]
                                     );
                                 }
 
-                                $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'ready');
-                                $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'last_talk', date('Y-m-d H:i:s'));
-                                $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'talk_count', $payload['talk_count']);
+                                $worker_info = $this->utils->getChildWorker('WorkerBee', $payload['workerName']);
 
-                                if ($payload['talk_count'] > $limit_count) {
-                                    $this->utils->debug('WorkerBee: History too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
-                                    $this->utils->addMessageQueue(
-                                        WORKER_MAIN,
-                                        [
-                                            'type' => 'text',
-                                            'text' => '[WorkerBee] "' . $payload['workerName'] . '" | ' . $payload['workerRole'] . '，对话已达上限。必须闭环：①保存状态 → ②关闭进程 → ③重启加载 → ④注入关键历史（从记忆提取摘要）→ ⑤继续原任务指令 → ⑥通知用户。禁止中断，自动接续。'
-                                        ]
-                                    );
+                                if (isset($worker_info['proc_idx'])) {
+                                    $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'last_talk', date('Y-m-d H:i:s'));
+                                    $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'talk_count', $payload['talk_count']);
+
+                                    if (0 < $new_messages) {
+                                        $metadata = $this->utils->getMessageMarker(
+                                            $payload['sender'],
+                                            $payload['workerName'],
+                                            $payload['workerRole'],
+                                            $payload['workerName'],
+                                            $payload['isSubTalk']
+                                        );
+
+                                        $this->utils->setChildWorker('WorkerBee', $payload['workerName'], 'status', 'busy');
+                                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' receiving ' . $new_messages . ' message(s).', 'trace');
+
+                                        $this->openai->talk(
+                                            $worker_info['proc_idx'],
+                                            'talk',
+                                            $this->utils->getSessionHistory($payload['workerName']),
+                                            $metadata + ['socket_id' => $payload['socket_id']]
+                                        );
+                                    } elseif ($payload['talk_count'] > $limit_count) {
+                                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' history too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
+
+                                        $this->utils->addMessageQueue(
+                                            WORKER_MAIN,
+                                            [
+                                                'type' => 'text',
+                                                'text' => '[WorkerBee] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '，对话已达上限。必须闭环：①保存状态 → ②关闭进程 → ③重启加载 → ④注入关键历史（从记忆提取摘要）→ ⑤继续原任务指令 → ⑥通知用户。禁止中断，自动接续。'
+                                            ]
+                                        );
+                                    }
                                 }
+
+                                unset($worker_info);
                             }
 
                             unset($max_ctx_len, $warning_count, $limit_count);
@@ -651,7 +699,8 @@ class go extends Factory
         $this->utils->debug('User: receiving [' . (!$is_binary ? 'TEXT' : 'BINARY') . '] message', 'debug');
 
         if ($is_binary) {
-            $message = $this->message->process_binary($socket_id, $message);
+            $this->utils->debug('System: Binary message is NOT supported yet', 'trace');
+            return;
         }
 
         $this->utils->socket_session[$socket_id] = $this->utils->getMessageMarker(
@@ -737,7 +786,7 @@ class go extends Factory
                     array_unshift(
                         $llm_data, [
                             'type' => 'text',
-                            'text' => '新会话：先加载misc记忆再回复，加载过程不汇报。'
+                            'text' => '新会话：先加载`misc`记忆再回复，加载过程不汇报。'
                         ]
                     );
                 }

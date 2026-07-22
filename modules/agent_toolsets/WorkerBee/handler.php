@@ -42,7 +42,7 @@ class handler extends Factory
 
         $agent_core->utils->debug('WorkerBee started: ' . $payload_data['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload_data['worker_role'] . ')', 'trace');
 
-        $init_prompt  = $payload_data['init_prompt'] . ' | 先阅读用户要求，用一句话介绍你的名字和角色，并回复“`已就绪`”。';
+        $init_prompt  = $payload_data['init_prompt'] . ' | 先阅读用户要求，用一句话介绍你的名字和角色，并回复“已就绪”。';
         $child_prompt = $agent_core->utils->getChildPrompt(
             $payload_data['worker_name'],
             $payload_data['worker_role']
@@ -125,7 +125,7 @@ class handler extends Factory
                 ]
             );
 
-            return '[WorkerBee] `' . $worker_info['worker_name'] . '` 正忙（' . $worker_info['status'] . '）。消息已入队，请先处理其他事务，回复会主动推送。';
+            return '[WorkerBee] `' . $worker_info['worker_name'] . '` 正忙（' . $worker_info['status'] . '）。消息已入队，请继续处理其他任务，回复将异步推送。';
         }
 
         $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');

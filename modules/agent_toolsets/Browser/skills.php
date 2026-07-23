@@ -28,7 +28,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '启动浏览器实例，禁止连续调用。默认有头模式，除非用户明确要求无头。返回：{message}。',
+                'description' => '启动浏览器实例，优先复用已有实例，避免重复启动。默认有头模式，无头需用户明确。返回：{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

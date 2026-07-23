@@ -75,8 +75,9 @@ class handler extends Factory
             $start_args[] = '--headless=new';
         }
 
-        $workers  = $agent_core->utils->getChildWorker('Browser');
-        $user_dir = 'BrowserData' . DIRECTORY_SEPARATOR . count($workers);
+        $worker_count = count($agent_core->utils->getChildWorker('Browser'));
+
+        $user_dir = 'BrowserData' . DIRECTORY_SEPARATOR . $worker_count;
         $data_dir = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . $user_dir;
 
         $start_args[] = '--user-data-dir=' . $data_dir;
@@ -182,9 +183,9 @@ class handler extends Factory
         $agent_core->utils->debug('Browser: WebSocket Debugger Url is ' . $ws_addr . ', ready for connections.', 'trace');
         $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is ready!', 'trace');
 
-        $message = '实例 "' . $payload_data['worker_name'] . '" 已就绪。';
+        $message = '浏览器实例"`' . $payload_data['worker_name'] . '`"已就绪，当前共' . ++$worker_count . '个实例在运行，可开始操作。';
 
-        unset($payload_data, $agent_core, $worker_info, $start_args, $workers, $user_dir, $data_dir, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
+        unset($payload_data, $agent_core, $worker_info, $start_args, $worker_count, $user_dir, $data_dir, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
         return $message;
     }
 

@@ -64,6 +64,7 @@ class handler extends Factory
      * @return string
      * @throws \Random\RandomException
      * @throws \ReflectionException
+     * @throws \Exception
      */
     public function start(array $payload_data, agent_core $agent_core): string
     {
@@ -111,41 +112,52 @@ class handler extends Factory
             $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
             $agent_core->utils->removePid($browser_pid);
-
             return '无法获取浏览器WebSocket地址，浏览器实例已关闭。';
         }
 
-        $target    = [];
-        $ws_addr   = '';
-        $target_id = '';
-
         $local_port = parse_url($browser_addr, PHP_URL_PORT);
         $debugger   = $this->fetchDebugger($local_port);
+        $tab_list   = [];
+        $ws_addr    = '';
 
-        if (!empty($debugger)) {
-            foreach ($debugger as $item) {
-                if (isset($item['type']) && 'page' === $item['type'] && isset($item['webSocketDebuggerUrl'])) {
-                    $ws_addr   = $item['webSocketDebuggerUrl'];
-                    $target_id = $item['id'] ?? '';
-                    $target    = $item;
-                    break;
+        foreach ($debugger as $item) {
+            if (isset($item['type']) && 'page' === $item['type'] && isset($item['webSocketDebuggerUrl'])) {
+                $tab_id = $item['id'] ?? '';
+                $tab_ws = $item['webSocketDebuggerUrl'];
+
+                if ('' !== $tab_id && '' !== $tab_ws) {
+                    if ('' === $ws_addr) {
+                        $ws_addr       = $tab_ws;
+                        $this->curr_id = $tab_id;
+                    }
+
+                    $tab_list[$tab_id] = [
+                        'ws_addr' => $tab_ws,
+                        'url'     => $item['url'] ?? '',
+                        'title'   => $item['title'] ?? '',
+                        'status'  => 'ready',
+                        'action'  => 'idle',
+                    ];
                 }
-            }
-
-            if ('' === $ws_addr && isset($debugger[0]['webSocketDebuggerUrl'])) {
-                $ws_addr   = $debugger[0]['webSocketDebuggerUrl'];
-                $target_id = $debugger[0]['id'] ?? '';
-                $target    = $debugger[0];
             }
         }
 
-        if ('' === $ws_addr) {
+        if (empty($tab_list)) {
             $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
             $agent_core->utils->removePid($browser_pid);
-
             return '无法获取目标页面WebSocket地址，浏览器实例已关闭。';
         }
+
+        $this->tab_list = $tab_list;
+
+        $this->browser_data = [
+            'browser_idx' => $browser_idx,
+            'browser_pid' => $browser_pid,
+            'debug_addr'  => $ws_addr,
+            'debug_port'  => $local_port,
+            'data_dir'    => $data_dir,
+        ];
 
         $socketMgr = SocketMgr::new('browser');
         $socketMgr->createWSClient($ws_addr);
@@ -168,31 +180,11 @@ class handler extends Factory
 
         Factory::destroy($socketMgr);
 
-        $this->browser_data = [
-            'browser_idx' => $browser_idx,
-            'browser_pid' => $browser_pid,
-            'socket_addr' => $ws_addr,
-            'debug_port'  => $local_port,
-            'data_dir'    => $data_dir,
-        ];
-
-        if (!empty($target) && '' !== $target_id) {
-            $this->tab_list[$target_id] = [
-                'ws_addr' => $ws_addr,
-                'url'     => $target['url'] ?? '',
-                'title'   => $target['title'] ?? '',
-                'status'  => 'ready',
-                'action'  => 'idle',
-            ];
-
-            $this->curr_id = $target_id;
-        }
-
         $agent_core->utils->debug('Browser: Debugger Url "' . $ws_addr . '", ready for connections.', 'trace');
 
-        $message = '浏览器已就绪，初始标签页`target_id`: `' . $target_id . '`，可继续操作。';
+        $message = '浏览器已就绪，当前标签页`target_id`：`' . $this->curr_id . '`，可继续操作。';
 
-        unset($payload_data, $agent_core, $start_args, $data_dir, $browser_idx, $browser_addr, $browser_pid, $i, $err_msg, $target, $ws_addr, $target_id, $local_port, $debugger, $item, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
+        unset($payload_data, $agent_core, $start_args, $data_dir, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $local_port, $debugger, $tab_list, $ws_addr, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
         return $message;
     }
 
@@ -252,6 +244,7 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return array|string[]
+     * @throws \ReflectionException
      */
     public function listTabs(array $payload_data, agent_core $agent_core): array
     {
@@ -259,27 +252,50 @@ class handler extends Factory
             return ['status' => 'error', 'error' => '浏览器实例未启动，请先启动浏览器。'];
         }
 
-        $list = [];
+        $tab_list = [];
+        $debugger = $this->fetchDebugger($this->browser_data['debug_port']);
 
-        foreach ($this->tab_list as $target_id => $item) {
-            $list[] = [
-                'target_id'  => $target_id,
-                'url'        => $item['url'] ?? '',
-                'title'      => $item['title'] ?? '',
-                'status'     => $item['status'] ?? 'ready',
-                'action'     => $item['action'] ?? 'idle',
-                'is_current' => ($target_id === $this->curr_id),
-            ];
+        foreach ($debugger as $item) {
+            if (isset($item['type']) && 'page' === $item['type'] && isset($item['webSocketDebuggerUrl'])) {
+                $tab_id = $item['id'] ?? '';
+                $tab_ws = $item['webSocketDebuggerUrl'];
+
+                if ('' === $tab_id || '' === $tab_ws) {
+                    continue;
+                }
+
+                $tab_list[$tab_id] = [
+                    'target_id' => $tab_id,
+                    'ws_addr'   => $tab_ws,
+                    'url'       => $item['url'] ?? '',
+                    'title'     => $item['title'] ?? '',
+                    'status'    => $this->tab_list[$tab_id]['status'] ?? 'ready',
+                    'action'    => $this->tab_list[$tab_id]['action'] ?? 'idle',
+                ];
+            }
         }
 
-        $result = [
-            'status'  => 'success',
-            'data'    => $list,
-            'message' => '共' . count($list) . '个标签页。'
-        ];
+        $this->tab_list = $tab_list;
 
-        unset($payload_data, $agent_core, $list, $target_id, $item);
-        return $result;
+        if (!isset($this->tab_list[$this->curr_id])) {
+            $this->curr_id = array_key_first($this->tab_list) ?: '';
+
+            if ('' !== $this->curr_id && isset($this->tab_list[$this->curr_id]['ws_addr'])) {
+                $this->browser_data['debug_addr'] = $this->tab_list[$this->curr_id]['ws_addr'];
+            }
+        }
+
+        foreach ($tab_list as $tab_id => $item) {
+            unset($tab_list[$tab_id]['ws_addr']);
+            $tab_list[$tab_id]['is_current'] = $tab_id === $this->curr_id;
+        }
+
+        unset($payload_data, $agent_core, $debugger, $item, $tab_id, $tab_ws);
+        return [
+            'status'  => 'success',
+            'data'    => array_values($tab_list),
+            'message' => '共' . count($tab_list) . '个标签页。'
+        ];
     }
 
     /**
@@ -876,7 +892,11 @@ class handler extends Factory
             return ['status' => 'error', 'error' => '浏览器实例未启动，请先启动浏览器。'];
         }
 
-        $target_id = $payload_data['params']['target_id'] ?? $this->curr_id ?? '';
+        $target_id = $payload_data['params']['target_id'] ?? '';
+
+        if ('' === $target_id) {
+            $target_id = $this->curr_id;
+        }
 
         if ('' === $target_id) {
             return ['status' => 'error', 'error' => '无可用标签页，请先创建或切换。'];
@@ -915,7 +935,7 @@ class handler extends Factory
         $this->tab_list[$target_id]['status'] = 'busy';
         $this->tab_list[$target_id]['action'] = $action;
 
-        $ws_addr = $tab_info['ws_addr'];
+        $ws_addr = $tab_info['ws_addr'] ?? '';
 
         if ('' === $ws_addr) {
             unset($this->tab_list[$target_id]);
@@ -951,12 +971,12 @@ class handler extends Factory
                 )
             );
 
-            $this->tab_list[$target_id]['status'] = 'ready';
-            $this->tab_list[$target_id]['action'] = 'idle';
-
             if (1 === (int)stream_select($master_sock, $write, $except, $this->timeout, 0)) {
                 $message  = $socketMgr->readMessage($master_id, true);
                 $msg_data = json_decode($message, true);
+
+                $this->tab_list[$target_id]['status'] = 'ready';
+                $this->tab_list[$target_id]['action'] = 'idle';
 
                 if (is_null($msg_data)) {
                     return [
@@ -1029,6 +1049,11 @@ class handler extends Factory
 
                 if ('switchTab' === $action) {
                     $this->curr_id = $target_id;
+
+                    if (isset($this->tab_list[$target_id]['ws_addr'])) {
+                        $this->browser_data['debug_addr'] = $this->tab_list[$target_id]['ws_addr'];
+                    }
+
                     return ['status' => 'success', 'message' => '当前标签页已切换至`' . $target_id . '`，可继续操作。'];
                 }
 
@@ -1042,6 +1067,9 @@ class handler extends Factory
                     'message' => $this->getMessage($action),
                 ];
             } else {
+                $this->tab_list[$target_id]['status'] = 'ready';
+                $this->tab_list[$target_id]['action'] = 'idle';
+
                 return [
                     'status' => 'error',
                     'error'  => '执行"' . $action . '"超时未响应（' . $this->timeout . '秒），请增加超时时间或重启实例。',

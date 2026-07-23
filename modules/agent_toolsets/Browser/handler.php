@@ -62,8 +62,8 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return string
+     * @throws \Random\RandomException
      * @throws \ReflectionException
-     * @throws \Exception
      */
     public function start(array $payload_data, agent_core $agent_core): string
     {
@@ -227,7 +227,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function createTab(array $payload_data, agent_core $agent_core): array
@@ -239,22 +239,12 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
+     * @throws \ReflectionException
      */
     public function switchTab(array $payload_data, agent_core $agent_core): array
     {
-        if (!isset($payload_data['params']['target_id']) || '' === $payload_data['params']['target_id']) {
-            return ['status' => 'error', 'error' => '缺少`target_id`'];
-        }
-
-        if (!isset($this->tab_list[$payload_data['params']['target_id']])) {
-            return ['status' => 'error', 'error' => '标签页`' . $payload_data['params']['target_id'] . '`不存在。'];
-        }
-
-        $this->curr_id = $payload_data['params']['target_id'];
-
-        unset($payload_data, $agent_core);
-        return ['status' => 'success', 'message' => '当前标签页已切换至`' . $this->curr_id . '`，可继续操作。'];
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
@@ -296,7 +286,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function closeTab(array $payload_data, agent_core $agent_core): array
@@ -308,7 +298,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function navigate(array $payload_data, agent_core $agent_core): array
@@ -320,7 +310,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function click(array $payload_data, agent_core $agent_core): array
@@ -332,7 +322,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function type(array $payload_data, agent_core $agent_core): array
@@ -344,7 +334,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function submit(array $payload_data, agent_core $agent_core): array
@@ -356,7 +346,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function getUrl(array $payload_data, agent_core $agent_core): array
@@ -368,7 +358,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function getTitle(array $payload_data, agent_core $agent_core): array
@@ -380,7 +370,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function getContent(array $payload_data, agent_core $agent_core): array
@@ -392,7 +382,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function getValue(array $payload_data, agent_core $agent_core): array
@@ -404,7 +394,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function getAttribute(array $payload_data, agent_core $agent_core): array
@@ -416,7 +406,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function setAttribute(array $payload_data, agent_core $agent_core): array
@@ -428,7 +418,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function scrollIntoView(array $payload_data, agent_core $agent_core): array
@@ -440,7 +430,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function selectOption(array $payload_data, agent_core $agent_core): array
@@ -452,7 +442,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function evaluate(array $payload_data, agent_core $agent_core): array
@@ -464,7 +454,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function screenshot(array $payload_data, agent_core $agent_core): array
@@ -476,7 +466,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function waitForSelector(array $payload_data, agent_core $agent_core): array
@@ -488,7 +478,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function waitForPageLoad(array $payload_data, agent_core $agent_core): array
@@ -500,7 +490,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function waitForText(array $payload_data, agent_core $agent_core): array
@@ -512,7 +502,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function waitForElementVisible(array $payload_data, agent_core $agent_core): array
@@ -524,7 +514,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function waitForUrl(array $payload_data, agent_core $agent_core): array
@@ -536,7 +526,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function hover(array $payload_data, agent_core $agent_core): array
@@ -548,7 +538,7 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
     public function pressKey(array $payload_data, agent_core $agent_core): array
@@ -691,6 +681,11 @@ class handler extends Factory
             case 'createTab':
                 $method     = 'Target.createTarget';
                 $cdp_params = ['url' => $params['url'] ?? 'about:blank'];
+                break;
+
+            case 'switchTab':
+                $method     = 'Target.activateTarget';
+                $cdp_params = ['targetId' => $params['target_id']];
                 break;
 
             case 'closeTab':
@@ -1030,6 +1025,11 @@ class handler extends Factory
 
                 if ('closeTab' === $action) {
                     return $this->handleCloseTab($payload_data, $msg_data);
+                }
+
+                if ('switchTab' === $action) {
+                    $this->curr_id = $target_id;
+                    return ['status' => 'success', 'message' => '当前标签页已切换至`' . $target_id . '`，可继续操作。'];
                 }
 
                 if ('navigate' === $action && isset($data['url'])) {

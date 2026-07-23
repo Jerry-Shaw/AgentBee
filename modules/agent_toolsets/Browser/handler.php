@@ -30,7 +30,12 @@ class handler extends Factory
     public int $cmd_id  = 0;
     public int $timeout = 60;
 
-    private const START_ARGS = [
+    public string $curr_id = '';
+
+    public array $tab_list     = [];
+    public array $browser_data = [];
+
+    public const START_ARGS = [
         '--lang=zh-CN',
         '--window-size=1366,768',
         '--excludeSwitches=enable-automation',
@@ -62,24 +67,18 @@ class handler extends Factory
      */
     public function start(array $payload_data, agent_core $agent_core): string
     {
-        $worker_info = $agent_core->utils->getChildWorker('Browser', $payload_data['worker_name']);
-
-        if (!empty($worker_info)) {
-            return '实例 "' . $payload_data['worker_name'] . '" 已存在，可直接调用。';
+        if (!empty($this->browser_data)) {
+            return '浏览器实例已存在，可直接进行操作。当前已打开' . count($this->tab_list) . '个标签页。';
         }
 
         $start_args = self::START_ARGS;
 
-        if ($payload_data['headless']) {
+        if ($payload_data['params']['headless'] ?? false) {
             $start_args[] = '--disable-gpu';
             $start_args[] = '--headless=new';
         }
 
-        $worker_count = count($agent_core->utils->getChildWorker('Browser'));
-
-        $user_dir = 'BrowserData' . DIRECTORY_SEPARATOR . $worker_count;
-        $data_dir = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . $user_dir;
-
+        $data_dir     = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . 'BrowserData';
         $start_args[] = '--user-data-dir=' . $data_dir;
 
         $browser_idx = $agent_core->utils
@@ -94,7 +93,7 @@ class handler extends Factory
         $browser_pid  = $agent_core->utils->procMgr->getPid($browser_idx);
 
         $agent_core->utils->savePid($browser_pid);
-        $agent_core->utils->debug('Browser started: ' . $payload_data['worker_name'] . ' (PID: ' . $browser_pid . ')', 'trace');
+        $agent_core->utils->debug('Browser started (PID: ' . $browser_pid . ')', 'trace');
 
         for ($i = 0; $i < 10; ++$i) {
             $err_msg = trim($agent_core->utils->procMgr->readProc($browser_idx, 'stderr'));
@@ -108,30 +107,35 @@ class handler extends Factory
         }
 
         if ('' === $browser_addr) {
-            $agent_core->utils->debug('Browser ERROR: Failed to fetch address, closing ' . $payload_data['worker_name'] . ' (PID: ' . $browser_pid . ')', 'trace');
+            $agent_core->utils->debug('Browser ERROR: Failed to fetch address, closing (PID: ' . $browser_pid . ')', 'trace');
             $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
             $agent_core->utils->removePid($browser_pid);
 
-            return '无法获取浏览器 WebSocket 地址，实例已关闭。';
+            return '无法获取浏览器WebSocket地址，浏览器实例已关闭。';
         }
 
-        $local_port = parse_url($browser_addr, PHP_URL_PORT);
-        $json_addr  = 'http://127.0.0.1:' . $local_port . '/json';
-        $dev_json   = libHttp::new()->fetch($json_addr);
-        $dev_data   = json_decode($dev_json, true);
-        $ws_addr    = '';
+        $target    = [];
+        $ws_addr   = '';
+        $target_id = '';
 
-        if (is_array($dev_data) && !empty($dev_data)) {
-            foreach ($dev_data as $target) {
-                if (isset($target['type']) && 'page' === $target['type'] && isset($target['webSocketDebuggerUrl'])) {
-                    $ws_addr = $target['webSocketDebuggerUrl'];
+        $local_port = parse_url($browser_addr, PHP_URL_PORT);
+        $debugger   = $this->fetchDebugger($local_port);
+
+        if (!empty($debugger)) {
+            foreach ($debugger as $item) {
+                if (isset($item['type']) && 'page' === $item['type'] && isset($item['webSocketDebuggerUrl'])) {
+                    $ws_addr   = $item['webSocketDebuggerUrl'];
+                    $target_id = $item['id'] ?? '';
+                    $target    = $item;
                     break;
                 }
             }
 
-            if ('' === $ws_addr && isset($dev_data[0]['webSocketDebuggerUrl'])) {
-                $ws_addr = $dev_data[0]['webSocketDebuggerUrl'];
+            if ('' === $ws_addr && isset($debugger[0]['webSocketDebuggerUrl'])) {
+                $ws_addr   = $debugger[0]['webSocketDebuggerUrl'];
+                $target_id = $debugger[0]['id'] ?? '';
+                $target    = $debugger[0];
             }
         }
 
@@ -140,10 +144,10 @@ class handler extends Factory
             $agent_core->utils->procMgr->close($browser_idx);
             $agent_core->utils->removePid($browser_pid);
 
-            return '无法获取目标页面 WebSocket 地址，实例已关闭。';
+            return '无法获取目标页面WebSocket地址，浏览器实例已关闭。';
         }
 
-        $socketMgr = SocketMgr::new($payload_data['worker_name']);
+        $socketMgr = SocketMgr::new('browser');
         $socketMgr->createWSClient($ws_addr);
 
         $write       = $except = [];
@@ -164,29 +168,140 @@ class handler extends Factory
 
         Factory::destroy($socketMgr);
 
-        $agent_core->utils->addChildWorker(
-            'Browser',
-            $payload_data['worker_name'],
-            [
-                'browser_idx' => $browser_idx,
-                'browser_pid' => $browser_pid,
-                'worker_name' => $payload_data['worker_name'],
-                'socket_id'   => $payload_data['socket_id'],
-                'socket_addr' => $ws_addr,
-                'status'      => 'ready',
-                'action'      => 'idle',
-                'open_at'     => date('Y-m-d H:i:s'),
-                'data_dir'    => $data_dir
-            ]
-        );
+        $this->browser_data = [
+            'browser_idx' => $browser_idx,
+            'browser_pid' => $browser_pid,
+            'socket_addr' => $ws_addr,
+            'debug_port'  => $local_port,
+            'data_dir'    => $data_dir,
+        ];
 
-        $agent_core->utils->debug('Browser: WebSocket Debugger Url is ' . $ws_addr . ', ready for connections.', 'trace');
-        $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is ready!', 'trace');
+        if (!empty($target) && '' !== $target_id) {
+            $this->tab_list[$target_id] = [
+                'ws_addr' => $ws_addr,
+                'url'     => $target['url'] ?? '',
+                'title'   => $target['title'] ?? '',
+                'status'  => 'ready',
+                'action'  => 'idle',
+            ];
 
-        $message = '浏览器实例"`' . $payload_data['worker_name'] . '`"已就绪，当前共' . ++$worker_count . '个实例在运行，可开始操作。';
+            $this->curr_id = $target_id;
+        }
 
-        unset($payload_data, $agent_core, $worker_info, $start_args, $worker_count, $user_dir, $data_dir, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
+        $agent_core->utils->debug('Browser: Debugger Url "' . $ws_addr . '", ready for connections.', 'trace');
+
+        $message = '浏览器已就绪，初始标签页`target_id`: `' . $target_id . '`，可继续操作。';
+
+        unset($payload_data, $agent_core, $start_args, $data_dir, $browser_idx, $browser_addr, $browser_pid, $i, $err_msg, $target, $ws_addr, $target_id, $local_port, $debugger, $item, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
         return $message;
+    }
+
+    /**
+     * @param array      $payload_data
+     * @param agent_core $agent_core
+     *
+     * @return string
+     */
+    public function close(array $payload_data, agent_core $agent_core): string
+    {
+        if (empty($this->browser_data)) {
+            return '浏览器实例未启动，无需关闭。';
+        }
+
+        try {
+            $agent_core->utils->OSMgr->killPid($this->browser_data['browser_pid']);
+            $agent_core->utils->procMgr->close($this->browser_data['browser_idx']);
+            $agent_core->utils->removePid($this->browser_data['browser_pid']);
+        } catch (\Throwable) {
+        }
+
+        $this->curr_id      = '';
+        $this->tab_list     = [];
+        $this->browser_data = [];
+
+        $agent_core->utils->debug('Browser closed.', 'trace');
+        return '浏览器实例已关闭。';
+    }
+
+    /**
+     * @param array      $payload_data
+     * @param agent_core $agent_core
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function createTab(array $payload_data, agent_core $agent_core): array
+    {
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
+    }
+
+    /**
+     * @param array      $payload_data
+     * @param agent_core $agent_core
+     *
+     * @return array
+     */
+    public function switchTab(array $payload_data, agent_core $agent_core): array
+    {
+        if (!isset($payload_data['params']['target_id']) || '' === $payload_data['params']['target_id']) {
+            return ['status' => 'error', 'error' => '缺少`target_id`'];
+        }
+
+        if (!isset($this->tab_list[$payload_data['params']['target_id']])) {
+            return ['status' => 'error', 'error' => '标签页`' . $payload_data['params']['target_id'] . '`不存在。'];
+        }
+
+        $this->curr_id = $payload_data['params']['target_id'];
+
+        unset($payload_data, $agent_core);
+        return ['status' => 'success', 'message' => '当前标签页已切换至`' . $this->curr_id . '`，可继续操作。'];
+    }
+
+    /**
+     * @param array      $payload_data
+     * @param agent_core $agent_core
+     *
+     * @return array|string[]
+     */
+    public function listTabs(array $payload_data, agent_core $agent_core): array
+    {
+        if (empty($this->browser_data)) {
+            return ['status' => 'error', 'error' => '浏览器实例未启动，请先启动浏览器。'];
+        }
+
+        $list = [];
+
+        foreach ($this->tab_list as $target_id => $item) {
+            $list[] = [
+                'target_id'  => $target_id,
+                'url'        => $item['url'] ?? '',
+                'title'      => $item['title'] ?? '',
+                'status'     => $item['status'] ?? 'ready',
+                'action'     => $item['action'] ?? 'idle',
+                'is_current' => ($target_id === $this->curr_id),
+            ];
+        }
+
+        $result = [
+            'status'  => 'success',
+            'data'    => $list,
+            'message' => '共' . count($list) . '个标签页。'
+        ];
+
+        unset($payload_data, $agent_core, $list, $target_id, $item);
+        return $result;
+    }
+
+    /**
+     * @param array      $payload_data
+     * @param agent_core $agent_core
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function closeTab(array $payload_data, agent_core $agent_core): array
+    {
+        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
     }
 
     /**
@@ -442,70 +557,314 @@ class handler extends Factory
     }
 
     /**
-     * @param array      $payload_data
-     * @param agent_core $agent_core
+     * @param int $port
      *
      * @return array
+     * @throws \ReflectionException
      */
-    public function list(array $payload_data, agent_core $agent_core): array
+    public function fetchDebugger(int $port): array
     {
-        $list    = [];
-        $now     = time();
-        $workers = $agent_core->utils->getChildWorker('Browser');
+        $json_addr = 'http://127.0.0.1:' . $port . '/json';
+        $response  = libHttp::new()->fetch($json_addr);
+        $results   = json_decode($response, true) ?? [];
 
-        foreach ($workers as $name => $info) {
-            $list[] = [
-                'worker_name'   => $name,
-                'status'        => $info['status'],
-                'action'        => $info['action'],
-                'running_sec'   => $now - strtotime($info['open_at']),
-                'user_data_dir' => $info['data_dir'],
-            ];
-        }
-
-        unset($payload_data, $agent_core, $now, $workers, $name, $info);
-        return $list;
+        unset($port, $json_addr, $response);
+        return $results;
     }
 
     /**
-     * @param array      $payload_data
      * @param agent_core $agent_core
+     * @param string     $img_base64
+     * @param string     $file_path
      *
      * @return string
      */
-    public function close(array $payload_data, agent_core $agent_core): string
+    public function saveScreenshot(agent_core $agent_core, string $img_base64, string $file_path): string
     {
-        $worker_info = $agent_core->utils->getChildWorker('Browser', $payload_data['worker_name']);
+        $image_data = base64_decode($img_base64);
 
-        if (!empty($worker_info)) {
-            $this->closeProcess($agent_core, $worker_info, $payload_data['worker_name']);
+        if (false === $image_data) {
+            return '';
         }
 
-        $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is closed.', 'trace');
-        $message = '实例 "' . $payload_data['worker_name'] . '" 已关闭。';
+        $file_path = $agent_core->utils->securePath($file_path);
+        $dir_path  = dirname($file_path);
 
-        unset($payload_data, $agent_core, $worker_info);
-        return $message;
+        if (!is_dir($dir_path) && !mkdir($dir_path, 0755, true)) {
+            return '';
+        }
+
+        $save = file_put_contents($file_path, $image_data);
+
+        unset($agent_core, $img_base64, $image_data, $dir_path);
+        return false !== $save ? $file_path : '';
     }
 
     /**
-     * @param agent_core $agent_core
-     * @param array      $worker_info
-     * @param string     $worker_name
+     * @param array $payload_data
+     * @param array $msg_data
      *
-     * @return void
+     * @return array|string[]
+     * @throws \ReflectionException
      */
-    private function closeProcess(agent_core $agent_core, array $worker_info, string $worker_name): void
+    public function handleCreateTab(array $payload_data, array $msg_data): array
     {
-        try {
-            $agent_core->utils->removeChildWorker('Browser', $worker_name);
-            $agent_core->utils->OSMgr->killPid($worker_info['browser_pid']);
-            $agent_core->utils->procMgr->close($worker_info['browser_idx']);
-            $agent_core->utils->removePid($worker_info['browser_pid']);
-        } catch (\Throwable) {
+        if (!isset($msg_data['result']['targetId'])) {
+            return ['status' => 'error', 'error' => '创建标签页失败：未返回targetId。'];
         }
 
-        unset($agent_core, $worker_info, $worker_name);
+        $ws_addr   = '';
+        $debugger  = $this->fetchDebugger($this->browser_data['debug_port']);
+        $target_id = $msg_data['result']['targetId'];
+
+        if (!empty($debugger)) {
+            foreach ($debugger as $item) {
+                if (isset($item['id']) && $item['id'] === $target_id && $item['type'] === 'page') {
+                    $ws_addr = $item['webSocketDebuggerUrl'] ?? '';
+                    break;
+                }
+            }
+        }
+
+        if ('' === $ws_addr) {
+            return ['status' => 'error', 'error' => '创建标签页失败：无法获取新标签页的WebSocket地址。'];
+        }
+
+        $this->tab_list[$target_id] = [
+            'ws_addr' => $ws_addr,
+            'url'     => $payload_data['params']['url'] ?? 'about:blank',
+            'title'   => '',
+            'status'  => 'ready',
+            'action'  => 'idle',
+        ];
+
+        $this->curr_id = $target_id;
+
+        unset($payload_data, $msg_data, $ws_addr, $debugger, $item);
+        return [
+            'status'  => 'success',
+            'data'    => ['target_id' => $target_id],
+            'message' => '新标签页已创建，当前页已切换至`' . $target_id . '`，可继续操作。'
+        ];
+    }
+
+    /**
+     * @param array $payload_data
+     * @param array $msg_data
+     *
+     * @return string[]
+     */
+    public function handleCloseTab(array $payload_data, array $msg_data): array
+    {
+        if (isset($msg_data['result']['success']) && false === $msg_data['result']['success']) {
+            return ['status' => 'error', 'error' => '标签页关闭失败。'];
+        }
+
+        $target_id = $payload_data['params']['target_id'] ?? '';
+
+        if ('' !== $target_id && isset($this->tab_list[$target_id])) {
+            unset($this->tab_list[$target_id]);
+        }
+
+        if ($this->curr_id === $target_id) {
+            $tab_ids       = array_keys($this->tab_list);
+            $this->curr_id = !empty($tab_ids) ? $tab_ids[0] : '';
+            unset($tab_ids);
+        }
+
+        unset($payload_data, $msg_data, $target_id);
+        return ['status' => 'success', 'message' => '标签页已关闭。'];
+    }
+
+    /**
+     * @param string $action
+     * @param array  $params
+     * @param int    $cmd_id
+     *
+     * @return string
+     */
+    public function buildCommand(string $action, array $params, int $cmd_id): string
+    {
+        $timeout_ms = (int)($params['timeout'] ?? $this->timeout) * 1000;
+
+        switch ($action) {
+            case 'createTab':
+                $method     = 'Target.createTarget';
+                $cdp_params = ['url' => $params['url'] ?? 'about:blank'];
+                break;
+
+            case 'closeTab':
+                $method     = 'Target.closeTarget';
+                $cdp_params = ['targetId' => $params['target_id']];
+                break;
+
+            case 'navigate':
+                $method     = 'Page.navigate';
+                $cdp_params = ['url' => $params['url']];
+                break;
+
+            case 'click':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); el.click(); return true; })()',
+                    'returnByValue' => true
+                ];
+                break;
+
+            case 'type':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $text       = json_encode($params['text'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); el.value = ' . $text . '; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); return true; })()',
+                    'returnByValue' => true
+                ];
+                break;
+
+            case 'submit':
+                $selector   = json_encode($params['selector'] ?? 'form', JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Form not found: " + ' . $selector . '); el.submit(); return true; })()',
+                    'returnByValue' => true
+                ];
+                break;
+
+            case 'getUrl':
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => 'window.location.href', 'returnByValue' => true];
+                break;
+
+            case 'getTitle':
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => 'document.title', 'returnByValue' => true];
+                break;
+
+            case 'getContent':
+                $html       = $params['html'] ?? false;
+                $expr       = (true === $html) ? 'document.documentElement.outerHTML' : 'document.body.innerText';
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => $expr, 'returnByValue' => true];
+                break;
+
+            case 'getValue':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').value', 'returnByValue' => true];
+                break;
+
+            case 'getAttribute':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $attribute  = json_encode($params['attribute'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').getAttribute(' . $attribute . ')', 'returnByValue' => true];
+                break;
+
+            case 'setAttribute':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $attribute  = json_encode($params['attribute'], JSON_FORMAT);
+                $value      = json_encode($params['value'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').setAttribute(' . $attribute . ', ' . $value . ');', 'returnByValue' => false];
+                break;
+
+            case 'scrollIntoView':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').scrollIntoView();', 'returnByValue' => false];
+                break;
+
+            case 'selectOption':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $value      = json_encode($params['value'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').value = ' . $value . ';', 'returnByValue' => false];
+                break;
+
+            case 'evaluate':
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => $params['script'], 'returnByValue' => $params['return_by_value'] ?? true];
+                break;
+
+            case 'screenshot':
+                $method     = 'Page.captureScreenshot';
+                $cdp_params = ['format' => $params['format'] ?? 'jpeg', 'quality' => $params['quality'] ?? 80];
+                break;
+
+            case 'waitForSelector':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = [
+                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.querySelector(' . $selector . ')) resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'returnByValue' => true
+                ];
+                break;
+
+            case 'waitForPageLoad':
+                $method     = 'Runtime.evaluate';
+                $cdp_params = [
+                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.readyState==="complete") resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'returnByValue' => true
+                ];
+                break;
+
+            case 'waitForText':
+                $text       = json_encode($params['text'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = [
+                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.body.innerText.includes(' . $text . ')) resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'returnByValue' => true
+                ];
+                break;
+
+            case 'waitForElementVisible':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = [
+                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ const el=document.querySelector(' . $selector . '); if(el && getComputedStyle(el).display!=="none" && getComputedStyle(el).visibility!=="hidden") resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'returnByValue' => true
+                ];
+                break;
+
+            case 'waitForUrl':
+                $url_pattern = json_encode($params['url_pattern'], JSON_FORMAT);
+                $method      = 'Runtime.evaluate';
+                $cdp_params  = [
+                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(window.location.href.includes(' . $url_pattern . ')) resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
+                    'returnByValue' => true
+                ];
+                break;
+
+            case 'hover':
+                $selector   = json_encode($params['selector'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').dispatchEvent(new MouseEvent("mouseover", {bubbles:true}));', 'returnByValue' => false];
+                break;
+
+            case 'pressKey':
+                $mod_props = [];
+                $modifiers = $params['modifiers'] ?? [];
+                foreach ($modifiers as $mod) {
+                    $mod_props[] = strtolower($mod) . 'Key: true';
+                }
+                $mod_str    = implode(',', $mod_props);
+                $key        = json_encode($params['key'], JSON_FORMAT);
+                $method     = 'Runtime.evaluate';
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.activeElement; if (!el) return false; const event = new KeyboardEvent("keydown", { key: ' . $key . ', bubbles: true, ' . $mod_str . ' }); el.dispatchEvent(event); return true; })()',
+                    'returnByValue' => true
+                ];
+                break;
+
+            default:
+                return '';
+        }
+
+        $command = json_encode(['id' => $cmd_id, 'method' => $method, 'params' => $cdp_params], JSON_FORMAT);
+
+        unset($action, $params, $cmd_id, $timeout_ms, $method, $cdp_params);
+        return $command;
     }
 
     /**
@@ -516,35 +875,72 @@ class handler extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    private function sendCommand(agent_core $agent_core, array $payload_data, string $action): array
+    public function sendCommand(agent_core $agent_core, array $payload_data, string $action): array
     {
-        $worker_info = $agent_core->utils->getChildWorker('Browser', $payload_data['worker_name']);
-
-        if (empty($worker_info)) {
-            $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' NOT found!', 'trace');
-            return [
-                'status' => 'error',
-                'error'  => '实例 "' . $payload_data['worker_name'] . '" 不存在，请先启动实例。'
-            ];
+        if (empty($this->browser_data)) {
+            return ['status' => 'error', 'error' => '浏览器实例未启动，请先启动浏览器。'];
         }
 
-        if ('ready' !== $worker_info['status'] || 'idle' !== $worker_info['action']) {
-            $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is busy on ' . $action . '!', 'trace');
-            return [
-                'status' => 'error',
-                'error'  => '实例 ' . $payload_data['worker_name'] . ' 忙碌中 (操作: ' . $worker_info['action'] . ')，待结束后再操作。',
-            ];
+        $target_id = $payload_data['params']['target_id'] ?? $this->curr_id ?? '';
+
+        if ('' === $target_id) {
+            return ['status' => 'error', 'error' => '无可用标签页，请先创建或切换。'];
         }
 
-        $socketMgr     = SocketMgr::new($payload_data['worker_name']);
+        // Sync debugger data from browser
+        if (!isset($this->tab_list[$target_id])) {
+            $debugger = $this->fetchDebugger($this->browser_data['debug_port']);
+
+            if (!empty($debugger)) {
+                foreach ($debugger as $item) {
+                    if (isset($item['id']) && $item['id'] === $target_id && $item['type'] === 'page') {
+                        $this->tab_list[$target_id] = [
+                            'ws_addr' => $item['webSocketDebuggerUrl'] ?? '',
+                            'url'     => $item['url'] ?? '',
+                            'title'   => $item['title'] ?? '',
+                            'status'  => 'ready',
+                            'action'  => 'idle',
+                        ];
+                        break;
+                    }
+                }
+            }
+
+            if (!isset($this->tab_list[$target_id])) {
+                return ['status' => 'error', 'error' => '标签页`' . $target_id . '`不存在或已关闭。'];
+            }
+        }
+
+        $tab_info = $this->tab_list[$target_id];
+
+        if ('busy' === $tab_info['status']) {
+            return ['status' => 'error', 'error' => '标签页`' . $target_id . '`正忙（操作: ' . $tab_info['action'] . '），请稍后重试。'];
+        }
+
+        $this->tab_list[$target_id]['status'] = 'busy';
+        $this->tab_list[$target_id]['action'] = $action;
+
+        $ws_addr = $tab_info['ws_addr'];
+
+        if ('' === $ws_addr) {
+            unset($this->tab_list[$target_id]);
+
+            if ($this->curr_id === $target_id) {
+                $tab_ids       = array_keys($this->tab_list);
+                $this->curr_id = !empty($tab_ids) ? $tab_ids[0] : '';
+                unset($tab_ids);
+            }
+
+            return ['status' => 'error', 'error' => '标签页`' . $target_id . '`已失效，已自动移除。请创建或切换新标签页。'];
+        }
+
+        $socketMgr     = SocketMgr::new('browser');
         $this->timeout = $agent_core->utils->agent_config['chrome_timeout'] ?? 60;
 
         try {
-            $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' is working on ' . $action . '.', 'trace');
-            $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'busy');
-            $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', $action);
+            $agent_core->utils->debug('Browser: working on ' . $action . '.', 'trace');
 
-            $socketMgr->createWSClient($worker_info['socket_addr']);
+            $socketMgr->createWSClient($ws_addr);
 
             $write       = $except = [];
             $cmd_id      = $this->cmd_id++;
@@ -560,17 +956,17 @@ class handler extends Factory
                 )
             );
 
-            if (1 === (int)stream_select($master_sock, $write, $except, $this->timeout, 0)) {
-                $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'status', 'ready');
-                $agent_core->utils->setChildWorker('Browser', $payload_data['worker_name'], 'action', 'idle');
+            $this->tab_list[$target_id]['status'] = 'ready';
+            $this->tab_list[$target_id]['action'] = 'idle';
 
+            if (1 === (int)stream_select($master_sock, $write, $except, $this->timeout, 0)) {
                 $message  = $socketMgr->readMessage($master_id, true);
                 $msg_data = json_decode($message, true);
 
                 if (is_null($msg_data)) {
                     return [
                         'status'  => 'error',
-                        'error'   => '执行失败，响应格式异常，请重试或重启实例。',
+                        'error'   => '执行"' . $action . '"失败，响应格式异常，请重试或重启实例。',
                         'content' => $message
                     ];
                 }
@@ -578,7 +974,7 @@ class handler extends Factory
                 if (isset($msg_data['error'])) {
                     return [
                         'status' => 'error',
-                        'error'  => 'CDP 协议错误，请重启浏览器实例。错误详情: ' . ($msg_data['error']['message'] ?? '未知错误'),
+                        'error'  => 'CDP协议错误，请重启浏览器实例。错误详情: ' . ($msg_data['error']['message'] ?? '未知错误'),
                     ];
                 }
 
@@ -617,13 +1013,27 @@ class handler extends Factory
                 }
 
                 if (
-                    false === $data
-                    && in_array($action, ['waitForSelector', 'waitForPageLoad', 'waitForText', 'waitForElementVisible', 'waitForUrl'], true)
+                    in_array($action, ['waitForSelector', 'waitForPageLoad', 'waitForText', 'waitForElementVisible', 'waitForUrl'], true)
+                    && is_array($data)
+                    && isset($data['value'])
+                    && false === $data['value']
                 ) {
                     return [
                         'status' => 'error',
-                        'error'  => '等待超时，条件未满足，请检查页面是否正常加载或增加超时时间。',
+                        'error'  => '执行"' . $action . '"等待超时，条件未满足，请检查页面是否正常加载或增加超时时间。',
                     ];
+                }
+
+                if ('createTab' === $action) {
+                    return $this->handleCreateTab($payload_data, $msg_data);
+                }
+
+                if ('closeTab' === $action) {
+                    return $this->handleCloseTab($payload_data, $msg_data);
+                }
+
+                if ('navigate' === $action && isset($data['url'])) {
+                    $this->tab_list[$target_id]['url'] = $data['url'];
                 }
 
                 return [
@@ -634,217 +1044,22 @@ class handler extends Factory
             } else {
                 return [
                     'status' => 'error',
-                    'error'  => '执行 "' . $action . '" 超时未响应（' . $this->timeout . '秒），请增加超时时间或重启实例。',
+                    'error'  => '执行"' . $action . '"超时未响应（' . $this->timeout . '秒），请增加超时时间或重启实例。',
                 ];
             }
         } catch (\Throwable $throwable) {
-            $agent_core->utils->debug('Browser: ' . $payload_data['worker_name'] . ' closed due to communication errors. (' . $throwable->getMessage() . ')', 'trace');
-
-            $this->closeProcess($agent_core, $worker_info, $payload_data['worker_name']);
+            $agent_core->utils->debug('Browser closed due to communication errors. (' . $throwable->getMessage() . ')', 'trace');
+            $this->close($payload_data, $agent_core);
 
             unset($throwable);
             return [
                 'status' => 'error',
-                'error'  => '实例 "' . $payload_data['worker_name'] . '" 通信错误，已关闭实例。',
+                'error'  => '浏览器实例通信错误，已关闭。',
             ];
         } finally {
             Factory::destroy($socketMgr);
-            unset($agent_core, $payload_data, $action, $worker_info, $socketMgr, $cmd_id, $write, $except, $master_id, $master_sock, $message, $msg_data, $runtime_error);
+            unset($agent_core, $payload_data, $action, $socketMgr, $cmd_id, $write, $except, $master_id, $master_sock, $message, $msg_data, $runtime_error);
         }
-    }
-
-    /**
-     * @param agent_core $agent_core
-     * @param string     $img_base64
-     * @param string     $file_path
-     *
-     * @return string
-     */
-    private function saveScreenshot(agent_core $agent_core, string $img_base64, string $file_path): string
-    {
-        $image_data = base64_decode($img_base64);
-
-        if (false === $image_data) {
-            return '';
-        }
-
-        $file_path = $agent_core->utils->securePath($file_path);
-        $dir_path  = dirname($file_path);
-
-        if (!is_dir($dir_path) && !mkdir($dir_path, 0755, true)) {
-            return '';
-        }
-
-        $save = file_put_contents($file_path, $image_data);
-
-        unset($agent_core, $img_base64, $image_data, $dir_path);
-        return false !== $save ? $file_path : '';
-    }
-
-    /**
-     * @param string $action
-     * @param array  $params
-     * @param int    $cmd_id
-     *
-     * @return string
-     */
-    private function buildCommand(string $action, array $params, int $cmd_id): string
-    {
-        $timeout_ms = (int)($params['timeout'] ?? $this->timeout) * 1000;
-
-        switch ($action) {
-            case 'navigate':
-                $method     = 'Page.navigate';
-                $cdp_params = ['url' => $params['url']];
-                break;
-
-            case 'click':
-                $selector   = json_encode($params['selector'], JSON_FORMAT);
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "(function() { const el = document.querySelector($selector); if (!el) throw new Error('Element not found: ' + $selector); el.click(); return true; })()",
-                    'returnByValue' => true
-                ];
-                break;
-
-            case 'type':
-                $selector   = json_encode($params['selector'], JSON_FORMAT);
-                $text       = json_encode($params['text'], JSON_FORMAT);
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "(function() { const el = document.querySelector($selector); if (!el) throw new Error('Element not found: ' + $selector); el.value = $text; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()",
-                    'returnByValue' => true
-                ];
-                break;
-
-            case 'submit':
-                $selector   = json_encode($params['selector'] ?? 'form', JSON_FORMAT);
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "(function() { const el = document.querySelector($selector); if (!el) throw new Error('Form not found: ' + $selector); el.submit(); return true; })()",
-                    'returnByValue' => true
-                ];
-                break;
-
-            case 'getUrl':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'window.location.href', 'returnByValue' => true];
-                break;
-
-            case 'getTitle':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.title', 'returnByValue' => true];
-                break;
-
-            case 'getContent':
-                $html       = $params['html'] ?? false;
-                $expr       = (true === $html) ? 'document.documentElement.outerHTML' : 'document.body.innerText';
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => $expr, 'returnByValue' => true];
-                break;
-
-            case 'getValue':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ').value', 'returnByValue' => true];
-                break;
-
-            case 'getAttribute':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ').getAttribute(' . json_encode($params['attribute'], JSON_FORMAT) . ')', 'returnByValue' => true];
-                break;
-
-            case 'setAttribute':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ').setAttribute(' . json_encode($params['attribute'], JSON_FORMAT) . ', ' . json_encode($params['value'], JSON_FORMAT) . ');', 'returnByValue' => false];
-                break;
-
-            case 'scrollIntoView':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ').scrollIntoView();', 'returnByValue' => false];
-                break;
-
-            case 'selectOption':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ').value = ' . json_encode($params['value'], JSON_FORMAT) . ';', 'returnByValue' => false];
-                break;
-
-            case 'evaluate':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => $params['script'], 'returnByValue' => $params['return_by_value'] ?? true];
-                break;
-
-            case 'screenshot':
-                $method     = 'Page.captureScreenshot';
-                $cdp_params = ['format' => $params['format'] ?? 'jpeg', 'quality' => $params['quality'] ?? 80];
-                break;
-
-            case 'waitForSelector':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.querySelector(" . json_encode($params['selector'], JSON_FORMAT) . ")) resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
-                    'returnByValue' => true
-                ];
-                break;
-
-            case 'waitForPageLoad':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.readyState==='complete') resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
-                    'returnByValue' => true
-                ];
-                break;
-
-            case 'waitForText':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.body.innerText.includes(" . json_encode($params['text'], JSON_FORMAT) . ")) resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
-                    'returnByValue' => true
-                ];
-                break;
-
-            case 'waitForElementVisible':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ const el=document.querySelector(" . json_encode($params['selector'], JSON_FORMAT) . "); if(el && getComputedStyle(el).display!=='none' && getComputedStyle(el).visibility!=='hidden') resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
-                    'returnByValue' => true
-                ];
-                break;
-
-            case 'waitForUrl':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "new Promise(resolve => { let s=Date.now(); const c=()=>{ if(window.location.href.includes(" . json_encode($params['url_pattern'], JSON_FORMAT) . ")) resolve(true); else if(Date.now()-s>$timeout_ms) resolve(false); else setTimeout(c,100); }; c(); })",
-                    'returnByValue' => true
-                ];
-                break;
-
-            case 'hover':
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . json_encode($params['selector'], JSON_FORMAT) . ').dispatchEvent(new MouseEvent("mouseover", {bubbles:true}));', 'returnByValue' => false];
-                break;
-
-            case 'pressKey':
-                $mod_props = [];
-                $modifiers = $params['modifiers'] ?? [];
-                foreach ($modifiers as $mod) {
-                    $mod_props[] = strtolower($mod) . 'Key: true';
-                }
-                $mod_str    = implode(',', $mod_props);
-                $method     = 'Runtime.evaluate';
-                $cdp_params = [
-                    'expression'    => "(function() { const el = document.activeElement; if (!el) return false; const event = new KeyboardEvent('keydown', { key: " . json_encode($params['key'], JSON_FORMAT) . ", bubbles: true, " . $mod_str . " }); el.dispatchEvent(event); return true; })()",
-                    'returnByValue' => true
-                ];
-                break;
-
-            default:
-                return '';
-        }
-
-        $command = json_encode(['id' => $cmd_id, 'method' => $method, 'params' => $cdp_params], JSON_FORMAT);
-
-        unset($action, $params, $cmd_id, $timeout_ms, $method, $cdp_params);
-        return $command;
     }
 
     /**
@@ -852,49 +1067,32 @@ class handler extends Factory
      *
      * @return string
      */
-    private function getMessage(string $action): string
+    public function getMessage(string $action): string
     {
-        switch ($action) {
-            case 'navigate':
-                return '导航已启动，请等待页面加载完成后（可通过 waitForPageLoad 确认）再继续操作，不要频繁发起请求。';
-            case 'submit':
-                return '表单已提交，若页面发生跳转请等待加载完成，避免连续操作。';
-            case 'click':
-                return '点击操作已执行，若页面发生跳转请等待加载完成后继续。';
-            case 'type':
-                return '文本输入成功。';
-            case 'getUrl':
-                return '当前页面 URL 已获取。';
-            case 'getTitle':
-                return '页面标题已获取。';
-            case 'getContent':
-                return '页面内容已获取。';
-            case 'getValue':
-                return '元素值已获取。';
-            case 'getAttribute':
-                return '元素属性值已获取。';
-            case 'setAttribute':
-                return '属性设置成功。';
-            case 'scrollIntoView':
-                return '元素已滚动到可视区域。';
-            case 'selectOption':
-                return '选项已选择。';
-            case 'evaluate':
-                return '脚本执行完成。';
-            case 'screenshot':
-                return '截图已完成（数据已返回）。';
-            case 'waitForSelector':
-            case 'waitForPageLoad':
-            case 'waitForText':
-            case 'waitForElementVisible':
-            case 'waitForUrl':
-                return '等待条件已满足。';
-            case 'hover':
-                return '悬停操作成功。';
-            case 'pressKey':
-                return '键盘按键模拟成功。';
-            default:
-                return '操作已完成。';
-        }
+        $messages = [
+            'navigate'              => '导航已启动，请等待页面加载完成后（可通过`waitForPageLoad`确认）再继续操作，不要频繁发起请求。',
+            'submit'                => '表单已提交，若页面发生跳转请等待加载完成，避免连续操作。',
+            'click'                 => '点击操作已执行，若页面发生跳转请等待加载完成后继续。',
+            'type'                  => '文本输入成功。',
+            'getUrl'                => '当前页面URL已获取。',
+            'getTitle'              => '页面标题已获取。',
+            'getContent'            => '页面内容已获取。',
+            'getValue'              => '元素值已获取。',
+            'getAttribute'          => '元素属性值已获取。',
+            'setAttribute'          => '属性设置成功。',
+            'scrollIntoView'        => '元素已滚动到可视区域。',
+            'selectOption'          => '选项已选择。',
+            'evaluate'              => '脚本执行完成。',
+            'screenshot'            => '截图已保存。',
+            'waitForSelector'       => '等待条件已满足。',
+            'waitForPageLoad'       => '等待条件已满足。',
+            'waitForText'           => '等待条件已满足。',
+            'waitForElementVisible' => '等待条件已满足。',
+            'waitForUrl'            => '等待条件已满足。',
+            'hover'                 => '悬停操作成功。',
+            'pressKey'              => '键盘按键模拟成功。',
+        ];
+
+        return $messages[$action] ?? '操作已完成。';
     }
 }

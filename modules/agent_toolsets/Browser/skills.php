@@ -28,14 +28,69 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '启动浏览器实例，优先复用已有实例，避免重复启动。默认有头模式，无头需用户明确。返回：{message}。',
+                'description' => '启动浏览器实例（单例模式，已存在则复用，通过标签页进行操作）。默认有头模式，无头需用户明确。返回：{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例唯一名称'],
-                        'headless'    => ['type' => 'boolean', 'description' => '无头模式（默认false）'],
+                        'headless' => ['type' => 'boolean', 'default' => false, 'description' => '无头模式（默认false）'],
                     ],
-                    'required'   => ['worker_name'],
+                ],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'close',
+                'description' => '关闭浏览器实例，释放所有资源。返回：{message}。',
+            ],
+        ],
+
+        // === Tab Management ===
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'createTab',
+                'description' => '在当前浏览器实例中创建新标签页，并自动切换到该标签页。返回：{status, data: {target_id}, message}。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'url' => ['type' => 'string', 'default' => 'about:blank', 'description' => '初始 URL'],
+                    ],
+                ],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'switchTab',
+                'description' => '切换到指定target_id的标签页。返回：{status, message}。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'target_id' => ['type' => 'string', 'description' => '标签页 target_id（从 listTabs 获取）'],
+                    ],
+                    'required'   => ['target_id'],
+                ],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'listTabs',
+                'description' => '列出当前浏览器实例的所有标签页。返回：{status, data: [{target_id, url, title, status, is_current}]}。',
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'closeTab',
+                'description' => '关闭指定标签页。若关闭的是当前标签页，自动切换到第一个可用标签页。返回：{status, message}。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'target_id' => ['type' => 'string', 'description' => '标签页 target_id'],
+                    ],
+                    'required'   => ['target_id'],
                 ],
             ],
         ],
@@ -49,10 +104,9 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'url'         => ['type' => 'string', 'description' => '目标地址'],
+                        'url' => ['type' => 'string', 'description' => '目标地址'],
                     ],
-                    'required'   => ['worker_name', 'url'],
+                    'required'   => ['url'],
                 ],
             ],
         ],
@@ -66,10 +120,9 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
                     ],
-                    'required'   => ['worker_name', 'selector'],
+                    'required'   => ['selector'],
                 ],
             ],
         ],
@@ -81,11 +134,10 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
-                        'text'        => ['type' => 'string', 'description' => '要输入的文本'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'text'     => ['type' => 'string', 'description' => '要输入的文本'],
                     ],
-                    'required'   => ['worker_name', 'selector', 'text'],
+                    'required'   => ['selector', 'text'],
                 ],
             ],
         ],
@@ -97,10 +149,8 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => '表单选择器（默认form）'],
+                        'selector' => ['type' => 'string', 'default' => 'form', 'description' => '表单选择器'],
                     ],
-                    'required'   => ['worker_name'],
                 ],
             ],
         ],
@@ -111,13 +161,6 @@ class skills
             'function' => [
                 'name'        => 'getUrl',
                 'description' => '获取当前页面URL。返回：{status, data: url, message}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                    ],
-                    'required'   => ['worker_name'],
-                ],
             ],
         ],
         [
@@ -125,13 +168,6 @@ class skills
             'function' => [
                 'name'        => 'getTitle',
                 'description' => '获取当前页面标题。返回：{status, data: title, message}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                    ],
-                    'required'   => ['worker_name'],
-                ],
             ],
         ],
         [
@@ -142,10 +178,8 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'html'        => ['type' => 'boolean', 'default' => false, 'description' => 'true 返回 HTML，否则纯文本'],
+                        'html' => ['type' => 'boolean', 'default' => false, 'description' => 'true 返回 HTML，否则纯文本'],
                     ],
-                    'required'   => ['worker_name'],
                 ],
             ],
         ],
@@ -157,10 +191,9 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
                     ],
-                    'required'   => ['worker_name', 'selector'],
+                    'required'   => ['selector'],
                 ],
             ],
         ],
@@ -172,11 +205,10 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
-                        'attribute'   => ['type' => 'string', 'description' => '属性名（如 href）'],
+                        'selector'  => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'attribute' => ['type' => 'string', 'description' => '属性名（如 href）'],
                     ],
-                    'required'   => ['worker_name', 'selector', 'attribute'],
+                    'required'   => ['selector', 'attribute'],
                 ],
             ],
         ],
@@ -188,12 +220,11 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
-                        'attribute'   => ['type' => 'string', 'description' => '属性名'],
-                        'value'       => ['type' => 'string', 'description' => '属性值'],
+                        'selector'  => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'attribute' => ['type' => 'string', 'description' => '属性名'],
+                        'value'     => ['type' => 'string', 'description' => '属性值'],
                     ],
-                    'required'   => ['worker_name', 'selector', 'attribute', 'value'],
+                    'required'   => ['selector', 'attribute', 'value'],
                 ],
             ],
         ],
@@ -205,10 +236,9 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
                     ],
-                    'required'   => ['worker_name', 'selector'],
+                    'required'   => ['selector'],
                 ],
             ],
         ],
@@ -220,11 +250,10 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => '<select> 的 CSS 选择器'],
-                        'value'       => ['type' => 'string', 'description' => '要选的 option value'],
+                        'selector' => ['type' => 'string', 'description' => '<select> 的 CSS 选择器'],
+                        'value'    => ['type' => 'string', 'description' => '要选的 option value'],
                     ],
-                    'required'   => ['worker_name', 'selector', 'value'],
+                    'required'   => ['selector', 'value'],
                 ],
             ],
         ],
@@ -234,15 +263,14 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'evaluate',
-                'description' => '执行自定义JavaScript代码。返回：{status, data: result, message}。',
+                'description' => '执行自定义JavaScript代码。如需返回值，请将代码写为表达式或使用IIFE（立即执行函数），例如：(function(){ return document.title; })()。返回：{status, data: result, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name'     => ['type' => 'string', 'description' => '实例名称'],
                         'script'          => ['type' => 'string', 'description' => 'JS 代码'],
                         'return_by_value' => ['type' => 'boolean', 'default' => true, 'description' => '是否序列化返回'],
                     ],
-                    'required'   => ['worker_name', 'script'],
+                    'required'   => ['script'],
                 ],
             ],
         ],
@@ -254,12 +282,11 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'save_path'   => ['type' => 'string', 'description' => '保存路径（含文件名）'],
-                        'format'      => ['type' => 'string', 'enum' => ['jpeg', 'png'], 'default' => 'jpeg', 'description' => '图片格式'],
-                        'quality'     => ['type' => 'integer', 'default' => 80, 'minimum' => 1, 'maximum' => 100, 'description' => '画质（仅 jpeg）'],
+                        'save_path' => ['type' => 'string', 'description' => '保存路径（含文件名）'],
+                        'format'    => ['type' => 'string', 'enum' => ['jpeg', 'png'], 'default' => 'jpeg', 'description' => '图片格式'],
+                        'quality'   => ['type' => 'integer', 'default' => 80, 'minimum' => 1, 'maximum' => 100, 'description' => '画质（仅 jpeg）'],
                     ],
-                    'required'   => ['worker_name', 'save_path'],
+                    'required'   => ['save_path'],
                 ],
             ],
         ],
@@ -273,11 +300,10 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
-                        'timeout'     => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'timeout'  => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
                     ],
-                    'required'   => ['worker_name', 'selector'],
+                    'required'   => ['selector'],
                 ],
             ],
         ],
@@ -289,10 +315,8 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'timeout'     => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
+                        'timeout' => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
                     ],
-                    'required'   => ['worker_name'],
                 ],
             ],
         ],
@@ -304,11 +328,10 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'text'        => ['type' => 'string', 'description' => '要等待的文本'],
-                        'timeout'     => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
+                        'text'    => ['type' => 'string', 'description' => '要等待的文本'],
+                        'timeout' => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
                     ],
-                    'required'   => ['worker_name', 'text'],
+                    'required'   => ['text'],
                 ],
             ],
         ],
@@ -320,11 +343,10 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
-                        'timeout'     => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'timeout'  => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
                     ],
-                    'required'   => ['worker_name', 'selector'],
+                    'required'   => ['selector'],
                 ],
             ],
         ],
@@ -336,11 +358,10 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
                         'url_pattern' => ['type' => 'string', 'description' => '要匹配的 URL 片段'],
                         'timeout'     => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
                     ],
-                    'required'   => ['worker_name', 'url_pattern'],
+                    'required'   => ['url_pattern'],
                 ],
             ],
         ],
@@ -354,10 +375,9 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'selector'    => ['type' => 'string', 'description' => 'CSS 选择器'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
                     ],
-                    'required'   => ['worker_name', 'selector'],
+                    'required'   => ['selector'],
                 ],
             ],
         ],
@@ -369,34 +389,10 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                        'key'         => ['type' => 'string', 'description' => '键名（如 Enter）'],
-                        'modifiers'   => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['Control', 'Shift', 'Alt', 'Meta']], 'description' => '修饰键列表'],
+                        'key'       => ['type' => 'string', 'description' => '键名（如 Enter）'],
+                        'modifiers' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['Control', 'Shift', 'Alt', 'Meta']], 'description' => '修饰键列表'],
                     ],
-                    'required'   => ['worker_name', 'key'],
-                ],
-            ],
-        ],
-
-        // === Management ===
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'list',
-                'description' => '列出所有浏览器实例及其状态，禁止高频调用以免阻塞通信。返回：{instances: [...]}。',
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'close',
-                'description' => '关闭指定浏览器实例，释放资源。返回：{message}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '实例名称'],
-                    ],
-                    'required'   => ['worker_name'],
+                    'required'   => ['key'],
                 ],
             ],
         ],

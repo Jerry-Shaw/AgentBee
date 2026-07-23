@@ -25,464 +25,416 @@ use Nervsys\Core\Factory;
 class go extends Factory
 {
     /**
-     * @param string $worker_name
-     * @param bool   $headless
+     * @param bool $headless
      *
      * @return array
      */
-    public function start(string $worker_name, bool $headless = false): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'headless'    => $headless,
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $headless);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $url
-     *
-     * @return array
-     */
-    public function navigate(string $worker_name, string $url): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['url' => $url],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $url);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     *
-     * @return array
-     */
-    public function click(string $worker_name, string $selector): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     * @param string $text
-     *
-     * @return array
-     */
-    public function type(string $worker_name, string $selector, string $text): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector, 'text' => $text],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector, $text);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     *
-     * @return array
-     */
-    public function submit(string $worker_name, string $selector = 'form'): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     *
-     * @return array
-     */
-    public function getUrl(string $worker_name): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => [],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     *
-     * @return array
-     */
-    public function getTitle(string $worker_name): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => [],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param bool   $html
-     *
-     * @return array
-     */
-    public function getContent(string $worker_name, bool $html = false): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['html' => $html],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $html);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     *
-     * @return array
-     */
-    public function getValue(string $worker_name, string $selector): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     * @param string $attribute
-     *
-     * @return array
-     */
-    public function getAttribute(string $worker_name, string $selector, string $attribute): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector, 'attribute' => $attribute],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector, $attribute);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     * @param string $attribute
-     * @param string $value
-     *
-     * @return array
-     */
-    public function setAttribute(string $worker_name, string $selector, string $attribute, string $value): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector, 'attribute' => $attribute, 'value' => $value],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector, $attribute, $value);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     *
-     * @return array
-     */
-    public function scrollIntoView(string $worker_name, string $selector): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     * @param string $value
-     *
-     * @return array
-     */
-    public function selectOption(string $worker_name, string $selector, string $value): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector, 'value' => $value],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector, $value);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $script
-     * @param bool   $return_by_value
-     *
-     * @return array
-     */
-    public function evaluate(string $worker_name, string $script, bool $return_by_value = true): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['script' => $script, 'return_by_value' => $return_by_value],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $script, $return_by_value);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $save_path
-     * @param string $format
-     * @param int    $quality
-     *
-     * @return array|string[]
-     */
-    public function screenshot(string $worker_name, string $save_path, string $format = 'jpeg', int $quality = 80): array
-    {
-        if (!in_array($format, ['jpeg', 'png'], true)) {
-            $format = 'jpeg';
-        }
-
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['save_path' => $save_path, 'format' => $format, 'quality' => $quality],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $save_path, $format, $quality);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     * @param int    $timeout
-     *
-     * @return array
-     */
-    public function waitForSelector(string $worker_name, string $selector, int $timeout = 30): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector, 'timeout' => $timeout],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector, $timeout);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param int    $timeout
-     *
-     * @return array
-     */
-    public function waitForPageLoad(string $worker_name, int $timeout = 30): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['timeout' => $timeout],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $timeout);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $text
-     * @param int    $timeout
-     *
-     * @return array
-     */
-    public function waitForText(string $worker_name, string $text, int $timeout = 30): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['text' => $text, 'timeout' => $timeout],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $text, $timeout);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     * @param int    $timeout
-     *
-     * @return array
-     */
-    public function waitForElementVisible(string $worker_name, string $selector, int $timeout = 30): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector, 'timeout' => $timeout],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector, $timeout);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $url_pattern
-     * @param int    $timeout
-     *
-     * @return array
-     */
-    public function waitForUrl(string $worker_name, string $url_pattern, int $timeout = 30): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['url_pattern' => $url_pattern, 'timeout' => $timeout],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $url_pattern, $timeout);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $selector
-     *
-     * @return array
-     */
-    public function hover(string $worker_name, string $selector): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['selector' => $selector],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $selector);
-        return $result;
-    }
-
-    /**
-     * @param string $worker_name
-     * @param string $key
-     * @param array  $modifiers
-     *
-     * @return array
-     */
-    public function pressKey(string $worker_name, string $key, array $modifiers = []): array
-    {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'params'      => ['key' => $key, 'modifiers' => $modifiers],
-            'handler'     => handler::class,
-        ];
-        unset($worker_name, $key, $modifiers);
-        return $result;
-    }
-
-    /**
-     * @return string[]
-     */
-    public function list(): array
+    public function start(bool $headless = false): array
     {
         return [
             'async'   => false,
             'action'  => __FUNCTION__,
+            'params'  => ['headless' => $headless],
             'handler' => handler::class,
         ];
     }
 
     /**
-     * @param string $worker_name
-     *
-     * @return string[]
+     * @return array
      */
-    public function close(string $worker_name): array
+    public function close(): array
     {
-        $result = [
-            'async'       => false,
-            'action'      => __FUNCTION__,
-            'worker_name' => $worker_name,
-            'handler'     => handler::class,
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => [],
+            'handler' => handler::class,
         ];
-        unset($worker_name);
-        return $result;
+    }
+
+    /**
+     * @param string $url
+     *
+     * @return array
+     */
+    public function createTab(string $url = 'about:blank'): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['url' => $url],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $target_id
+     *
+     * @return array
+     */
+    public function switchTab(string $target_id): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['target_id' => $target_id],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @return array
+     */
+    public function listTabs(): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => [],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $target_id
+     *
+     * @return array
+     */
+    public function closeTab(string $target_id): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['target_id' => $target_id],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $url
+     *
+     * @return array
+     */
+    public function navigate(string $url): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['url' => $url],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     *
+     * @return array
+     */
+    public function click(string $selector): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     * @param string $text
+     *
+     * @return array
+     */
+    public function type(string $selector, string $text): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector, 'text' => $text],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     *
+     * @return array
+     */
+    public function submit(string $selector = 'form'): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @return array
+     */
+    public function getUrl(): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => [],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @return array
+     */
+    public function getTitle(): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => [],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param bool $html
+     *
+     * @return array
+     */
+    public function getContent(bool $html = false): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['html' => $html],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     *
+     * @return array
+     */
+    public function getValue(string $selector): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     * @param string $attribute
+     *
+     * @return array
+     */
+    public function getAttribute(string $selector, string $attribute): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector, 'attribute' => $attribute],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     * @param string $attribute
+     * @param string $value
+     *
+     * @return array
+     */
+    public function setAttribute(string $selector, string $attribute, string $value): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector, 'attribute' => $attribute, 'value' => $value],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     *
+     * @return array
+     */
+    public function scrollIntoView(string $selector): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     * @param string $value
+     *
+     * @return array
+     */
+    public function selectOption(string $selector, string $value): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector, 'value' => $value],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $script
+     * @param bool   $return_by_value
+     *
+     * @return array
+     */
+    public function evaluate(string $script, bool $return_by_value = true): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['script' => $script, 'return_by_value' => $return_by_value],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $save_path
+     * @param string $format
+     * @param int    $quality
+     *
+     * @return array
+     */
+    public function screenshot(string $save_path, string $format = 'jpeg', int $quality = 80): array
+    {
+        if (!in_array($format, ['jpeg', 'png'], true)) {
+            $format = 'jpeg';
+        }
+
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['save_path' => $save_path, 'format' => $format, 'quality' => $quality],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     * @param int    $timeout
+     *
+     * @return array
+     */
+    public function waitForSelector(string $selector, int $timeout = 30): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector, 'timeout' => $timeout],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param int $timeout
+     *
+     * @return array
+     */
+    public function waitForPageLoad(int $timeout = 30): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['timeout' => $timeout],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $text
+     * @param int    $timeout
+     *
+     * @return array
+     */
+    public function waitForText(string $text, int $timeout = 30): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['text' => $text, 'timeout' => $timeout],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     * @param int    $timeout
+     *
+     * @return array
+     */
+    public function waitForElementVisible(string $selector, int $timeout = 30): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector, 'timeout' => $timeout],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $url_pattern
+     * @param int    $timeout
+     *
+     * @return array
+     */
+    public function waitForUrl(string $url_pattern, int $timeout = 30): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['url_pattern' => $url_pattern, 'timeout' => $timeout],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $selector
+     *
+     * @return array
+     */
+    public function hover(string $selector): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['selector' => $selector],
+            'handler' => handler::class,
+        ];
+    }
+
+    /**
+     * @param string $key
+     * @param array  $modifiers
+     *
+     * @return array
+     */
+    public function pressKey(string $key, array $modifiers = []): array
+    {
+        return [
+            'async'   => false,
+            'action'  => __FUNCTION__,
+            'params'  => ['key' => $key, 'modifiers' => $modifiers],
+            'handler' => handler::class,
+        ];
     }
 }

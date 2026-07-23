@@ -75,7 +75,10 @@ class handler extends Factory
             $start_args[] = '--headless=new';
         }
 
-        $data_dir     = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . 'BrowserData';
+        $workers  = $agent_core->utils->getChildWorker('Browser');
+        $user_dir = 'BrowserData' . DIRECTORY_SEPARATOR . count($workers);
+        $data_dir = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . $user_dir;
+
         $start_args[] = '--user-data-dir=' . $data_dir;
 
         $browser_idx = $agent_core->utils
@@ -181,7 +184,7 @@ class handler extends Factory
 
         $message = '实例 "' . $payload_data['worker_name'] . '" 已就绪。';
 
-        unset($payload_data, $agent_core, $worker_info, $start_args, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
+        unset($payload_data, $agent_core, $worker_info, $start_args, $workers, $user_dir, $data_dir, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $ws_addr, $local_port, $json_addr, $dev_json, $dev_data, $target, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
         return $message;
     }
 

@@ -165,13 +165,12 @@ final class core extends Factory
     }
 
     /**
-     * Send WebSocket message.
-     *
      * @param string $socket_id
      * @param string $message
      *
      * @return void
-     * @throws \ReflectionException|\Random\RandomException
+     * @throws \Random\RandomException
+     * @throws \ReflectionException
      */
     public function sendMessage(string $socket_id, string $message): void
     {

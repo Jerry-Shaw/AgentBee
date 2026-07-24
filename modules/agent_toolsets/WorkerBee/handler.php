@@ -4,7 +4,6 @@ namespace modules\agent_toolsets\WorkerBee;
 
 use modules\agent_core\go as agent_core;
 use Nervsys\Core\Factory;
-use Random\RandomException;
 
 class handler extends Factory
 {
@@ -91,9 +90,7 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return string
-     * @throws RandomException
      * @throws \ReflectionException
-     * @throws \Exception
      */
     public function talk(array $payload_data, agent_core $agent_core): string
     {
@@ -222,7 +219,7 @@ class handler extends Factory
      * @param array      $payload_data
      *
      * @return void
-     * @throws RandomException
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     private function sendMessage(agent_core $agent_core, array $worker_info, array $payload_data): void

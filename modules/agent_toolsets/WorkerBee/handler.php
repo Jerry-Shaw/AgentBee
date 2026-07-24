@@ -12,7 +12,8 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return string
-     * @throws \Exception
+     * @throws \Random\RandomException
+     * @throws \ReflectionException
      */
     public function start(array $payload_data, agent_core $agent_core): string
     {
@@ -90,7 +91,9 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return string
+     * @throws \Random\RandomException
      * @throws \ReflectionException
+     * @throws \Exception
      */
     public function talk(array $payload_data, agent_core $agent_core): string
     {
@@ -152,7 +155,7 @@ class handler extends Factory
             $metadata + ['socket_id' => $payload_data['socket_id']]
         );
 
-        $message = '消息已发送给"`' . $worker_info['worker_name'] . '`"，请勿重复发送。回复将异步推送，收到回复后可，按需继续保持互动。';
+        $message = '消息已发送，当前任务结束。`' . $worker_info['worker_name'] . '`将异步推送回复，无需等待，禁止连续发送，可继续处理其他任务。';
 
         unset($payload_data, $agent_core, $worker_info, $worker_message, $metadata);
         return $message;
@@ -163,7 +166,8 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return string
-     * @throws \Exception
+     * @throws \Random\RandomException
+     * @throws \ReflectionException
      */
     public function close(array $payload_data, agent_core $agent_core): string
     {

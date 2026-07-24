@@ -43,7 +43,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker进程发送消息，回复异步推送。长时间无响应可尝试打断/重启，避免连续多发（防阻塞）。长消息建议拆分。返回：{message}。',
+                'description' => '向Worker进程发送消息，回复将异步推送。发送后当前任务结束，无需等待，禁止重发，可继续处理其他任务。长消息建议拆分。返回：{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

@@ -96,13 +96,13 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'readFile',
-                'description' => '读取文件内容。offset起始偏移字节（默认0），limit读取字节数（默认8192，0表示全部）。返回：{status, content, file_path}或{status, error}。',
+                'description' => '读取文件内容。offset起始偏移字节（默认0），limit读取字节数（默认0=全部，小文件一次读取，大文件分块读取）。返回：{status, content, file_path} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'file_path' => ['type' => 'string', 'description' => '文件路径'],
                         'offset'    => ['type' => 'integer', 'default' => 0, 'description' => '起始偏移字节'],
-                        'limit'     => ['type' => 'integer', 'default' => 8192, 'description' => '读取字节数（0=全部）']
+                        'limit'     => ['type' => 'integer', 'default' => 0, 'description' => '读取字节数（0=全部）']
                     ],
                     'required'   => ['file_path']
                 ],
@@ -112,7 +112,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'writeFile',
-                'description' => '写入文件（自动创建目录）。append=false时覆盖，建议单次content不超过4096字符，大文件请分多次追加。返回：{status, file_path, bytes_written}或{status, error}。',
+                'description' => '写入文件（自动创建目录）。append=false时覆盖，小文件一次写入，大文件分批追加。返回：{status, file_path, bytes_written} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

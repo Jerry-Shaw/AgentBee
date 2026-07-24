@@ -271,7 +271,7 @@ class go extends Factory
      *
      * @return array
      */
-    public function readFile(string $file_path, int $offset = 0, int $limit = 8192): array
+    public function readFile(string $file_path, int $offset = 0, int $limit = 0): array
     {
         $full_path = $this->utils->securePath($file_path);
 
@@ -290,8 +290,15 @@ class go extends Factory
         }
 
         fseek($file_handle, $offset);
+
         $content = fread($file_handle, (0 === $limit) ? filesize($full_path) : $limit);
-        $content = (string)mb_convert_encoding($content, 'UTF-8', 'auto');
+        $charset = mb_detect_encoding($content, ['UTF-8', 'GBK', 'GB2312', 'BIG5', 'ISO-8859-1'], true);
+        $charset = is_string($charset) ? strtoupper($charset) : 'UTF-8';
+
+        if ('UTF-8' !== $charset) {
+            $content = (string)mb_convert_encoding($content, 'UTF-8', $charset);
+        }
+
         fclose($file_handle);
 
         $result = [
@@ -300,7 +307,7 @@ class go extends Factory
             'file_path' => $full_path
         ];
 
-        unset($file_path, $offset, $limit, $full_path, $file_handle, $content);
+        unset($file_path, $offset, $limit, $full_path, $file_handle, $content, $charset);
         return $result;
     }
 

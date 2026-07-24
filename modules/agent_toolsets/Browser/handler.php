@@ -62,13 +62,12 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return string
-     * @throws \Random\RandomException
      * @throws \ReflectionException
      * @throws \Exception
      */
     public function start(array $payload_data, agent_core $agent_core): string
     {
-        if (!empty($this->browser_data)) {
+        if ($this->isBrowserAlive($payload_data, $agent_core)) {
             return '浏览器实例已存在，可直接进行操作。当前已打开' . count($this->tab_list) . '个标签页。';
         }
 
@@ -152,39 +151,18 @@ class handler extends Factory
         $this->tab_list = $tab_list;
 
         $this->browser_data = [
-            'browser_idx' => $browser_idx,
-            'browser_pid' => $browser_pid,
-            'debug_addr'  => $ws_addr,
-            'debug_port'  => $local_port,
-            'data_dir'    => $data_dir,
+            'browser_idx'  => $browser_idx,
+            'browser_pid'  => $browser_pid,
+            'browser_addr' => $browser_addr,
+            'debug_addr'   => $ws_addr,
+            'debug_port'   => $local_port,
+            'data_dir'     => $data_dir,
         ];
 
-        $socketMgr = SocketMgr::new('browser');
-        $socketMgr->createWSClient($ws_addr);
-
-        $write       = $except = [];
-        $master_id   = $socketMgr->master_id;
-        $master_sock = $socketMgr->master_sock;
-
-        $browser_script = json_encode([
-            'id'     => $this->cmd_id++,
-            'method' => 'Page.addScriptToEvaluateOnNewDocument',
-            'params' => ['source' => '(function() { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); })();']
-        ], JSON_FORMAT);
-
-        $socketMgr->sendMessage($master_id, $socketMgr->wsEncode($browser_script, false, true));
-
-        if (1 === (int)stream_select($master_sock, $write, $except, 10, 0)) {
-            $socketMgr->readMessage($master_id, true);
-        }
-
-        Factory::destroy($socketMgr);
-
-        $agent_core->utils->debug('Browser: Debugger Url "' . $ws_addr . '", ready for connections.', 'trace');
-
+        $agent_core->utils->debug('Browser ready for connections.', 'trace');
         $message = '浏览器已就绪，当前标签页`target_id`：`' . $this->curr_id . '`，可继续操作。';
 
-        unset($payload_data, $agent_core, $start_args, $data_dir, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $local_port, $debugger, $tab_list, $ws_addr, $socketMgr, $write, $except, $master_id, $master_sock, $browser_script);
+        unset($payload_data, $agent_core, $start_args, $data_dir, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $local_port, $debugger, $tab_list, $ws_addr);
         return $message;
     }
 
@@ -219,7 +197,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function createTab(array $payload_data, agent_core $agent_core): array
@@ -231,7 +210,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function switchTab(array $payload_data, agent_core $agent_core): array
@@ -286,7 +266,7 @@ class handler extends Factory
         }
 
         foreach ($tab_list as $tab_id => $item) {
-            unset($tab_list[$tab_id]['ws_addr']);
+            unset($tab_list[$tab_id]['ws_addr'], $tab_list[$tab_id]['injected']);
             $tab_list[$tab_id]['is_current'] = $tab_id === $this->curr_id;
         }
 
@@ -302,7 +282,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function closeTab(array $payload_data, agent_core $agent_core): array
@@ -314,7 +295,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function navigate(array $payload_data, agent_core $agent_core): array
@@ -326,7 +308,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function click(array $payload_data, agent_core $agent_core): array
@@ -338,7 +321,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function type(array $payload_data, agent_core $agent_core): array
@@ -350,7 +334,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function submit(array $payload_data, agent_core $agent_core): array
@@ -362,7 +347,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function getUrl(array $payload_data, agent_core $agent_core): array
@@ -374,7 +360,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function getTitle(array $payload_data, agent_core $agent_core): array
@@ -386,7 +373,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function getContent(array $payload_data, agent_core $agent_core): array
@@ -398,7 +386,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function getValue(array $payload_data, agent_core $agent_core): array
@@ -410,7 +399,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function getAttribute(array $payload_data, agent_core $agent_core): array
@@ -422,7 +412,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function setAttribute(array $payload_data, agent_core $agent_core): array
@@ -434,7 +425,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function scrollIntoView(array $payload_data, agent_core $agent_core): array
@@ -446,7 +438,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function selectOption(array $payload_data, agent_core $agent_core): array
@@ -458,7 +451,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function evaluate(array $payload_data, agent_core $agent_core): array
@@ -470,7 +464,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function screenshot(array $payload_data, agent_core $agent_core): array
@@ -482,7 +477,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function waitForSelector(array $payload_data, agent_core $agent_core): array
@@ -494,7 +490,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function waitForPageLoad(array $payload_data, agent_core $agent_core): array
@@ -506,7 +503,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function waitForText(array $payload_data, agent_core $agent_core): array
@@ -518,7 +516,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function waitForElementVisible(array $payload_data, agent_core $agent_core): array
@@ -530,7 +529,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function waitForUrl(array $payload_data, agent_core $agent_core): array
@@ -542,7 +542,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function hover(array $payload_data, agent_core $agent_core): array
@@ -554,12 +555,86 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return array|string[]
+     * @return string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function pressKey(array $payload_data, agent_core $agent_core): array
     {
         return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
+    }
+
+    /**
+     * @param string     $target_id
+     * @param agent_core $agent_core
+     *
+     * @return void
+     * @throws \Random\RandomException
+     * @throws \ReflectionException
+     * @throws \Exception
+     */
+    public function injectScript(string $target_id, agent_core $agent_core): void
+    {
+        if (isset($this->tab_list[$target_id]['injected']) && true === $this->tab_list[$target_id]['injected']) {
+            return;
+        }
+
+        if (!isset($this->tab_list[$target_id]['ws_addr']) || '' === $this->tab_list[$target_id]['ws_addr']) {
+            return;
+        }
+
+        $socketMgr = SocketMgr::new('injector');
+        $socketMgr->createWSClient($this->tab_list[$target_id]['ws_addr']);
+
+        $write  = $except = [];
+        $script = json_encode([
+            'id'     => $this->cmd_id++,
+            'method' => 'Page.addScriptToEvaluateOnNewDocument',
+            'params' => ['source' => '(function() { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); })();']
+        ], JSON_FORMAT);
+
+        $socketMgr->sendMessage($socketMgr->master_id, $socketMgr->wsEncode($script, false, true));
+
+        if (1 === (int)stream_select($socketMgr->master_sock, $write, $except, 10, 0)) {
+            $socketMgr->readMessage($socketMgr->master_id, true);
+        } else {
+            $agent_core->utils->debug('Browser: Script injection timeout for ' . $target_id, 'trace');
+        }
+
+        Factory::destroy($socketMgr);
+        $this->tab_list[$target_id]['injected'] = true;
+
+        $agent_core->utils->debug('Browser: Script injected for ' . $target_id, 'trace');
+        unset($target_id, $agent_core, $socketMgr, $write, $except, $script);
+    }
+
+    /**
+     * @param array      $payload_data
+     * @param agent_core $agent_core
+     *
+     * @return bool
+     * @throws \ReflectionException
+     */
+    public function isBrowserAlive(array $payload_data, agent_core $agent_core): bool
+    {
+        if (empty($this->browser_data)) {
+            return false;
+        }
+
+        $socketMgr = SocketMgr::new('checker');
+
+        try {
+            $socketMgr->createWSClient($this->browser_data['browser_addr'] ?? '');
+            $alive = true;
+        } catch (\Throwable) {
+            $this->close($payload_data, $agent_core);
+            $alive = false;
+        }
+
+        Factory::destroy($socketMgr);
+
+        unset($payload_data, $agent_core, $socketMgr);
+        return $alive;
     }
 
     /**
@@ -883,7 +958,8 @@ class handler extends Factory
      * @param array      $payload_data
      * @param string     $action
      *
-     * @return array
+     * @return array|string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function sendCommand(agent_core $agent_core, array $payload_data, string $action): array
@@ -927,6 +1003,12 @@ class handler extends Factory
         }
 
         $tab_info = $this->tab_list[$target_id];
+
+        try {
+            $this->injectScript($target_id, $agent_core);
+        } catch (\Throwable) {
+            return ['status' => 'error', 'error' => '标签页`' . $target_id . '`通信失败，请关闭并重建该标签页。'];
+        }
 
         if ('busy' === $tab_info['status']) {
             return ['status' => 'error', 'error' => '标签页`' . $target_id . '`正忙（操作: ' . $tab_info['action'] . '），请稍后重试。'];

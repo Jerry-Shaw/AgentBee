@@ -125,7 +125,7 @@ class handler extends Factory
                 ]
             );
 
-            return '[WorkerBee] `' . $worker_info['worker_name'] . '` 正忙（' . $worker_info['status'] . '）。消息已入队，请继续处理其他任务，回复将异步推送。';
+            return '[WorkerBee] 消息已发送，当前任务结束。`' . $worker_info['worker_name'] . '`正忙（' . $worker_info['status'] . '），回复将异步推送，无需等待，禁止重发，可继续处理其他任务。';
         }
 
         $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');

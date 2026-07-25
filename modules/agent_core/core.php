@@ -174,7 +174,7 @@ final class core extends Factory
      */
     public function sendMessage(string $socket_id, string $message): void
     {
-        if (isset($this->utils->socket_session[$socket_id])) {
+        if (isset($this->utils->socket_session[$socket_id]) && 'ready' === $this->utils->socket_session[$socket_id]) {
             $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
         } else {
             $this->utils->message_buffers[] = $message;

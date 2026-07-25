@@ -611,6 +611,7 @@ class go extends Factory
     public function onHandshake(string $socket_id, string $websocket_protocol): bool
     {
         $this->utils->debug('Socket: New client: ' . $socket_id, 'trace');
+        $this->utils->socket_session[$socket_id] = 'ready';
         unset($socket_id, $websocket_protocol);
         return true;
     }
@@ -702,14 +703,6 @@ class go extends Factory
             $this->utils->debug('System: Binary message is NOT supported yet', 'trace');
             return;
         }
-
-        $this->utils->socket_session[$socket_id] = $this->utils->getMessageMarker(
-            WORKER_MAIN,
-            WORKER_MAIN,
-            'Assistant',
-            AGENT_NAME,
-            0
-        );
 
         $end_data = [];
         $llm_data = [];

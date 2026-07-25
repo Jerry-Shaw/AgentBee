@@ -839,18 +839,18 @@ class go extends Factory
      */
     public function onSendString(string $socket_id): array
     {
+        if (!empty($this->utils->message_buffers)) {
+            while (!is_null($buffer = array_shift($this->utils->message_buffers))) {
+                $this->core->sendMessage($socket_id, $buffer);
+            }
+        }
+
         if (self::STATUS_IDLE !== $this->wait_status) {
             if ($this->wait_until > time()) {
                 return [];
             }
 
             $this->setStatus(self::STATUS_IDLE, true);
-        }
-
-        if (!empty($this->utils->message_buffers)) {
-            while (!is_null($buffer = array_shift($this->utils->message_buffers))) {
-                $this->core->sendMessage($socket_id, $buffer);
-            }
         }
 
         $current_count = $this->utils->countSessionHistory(WORKER_MAIN);

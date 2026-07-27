@@ -821,6 +821,14 @@ class utils extends Factory
                 continue;
             }
 
+            if (
+                isset($json_data['config'])
+                && '' !== $json_data['config']
+                && !is_file($this->config->config_dir . DIRECTORY_SEPARATOR . $json_data['config'])
+            ) {
+                continue;
+            }
+
             $namespace = '\\' . strtr($dirname, DIRECTORY_SEPARATOR, '\\') . '\\' . $json_data['name'];
 
             try {

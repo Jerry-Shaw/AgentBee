@@ -113,7 +113,7 @@ class handler extends Factory
         $result = $openai->editImage(
             $payload_data['image_path'],
             $payload_data['prompt'],
-            $config['default_model'],
+            $config['model_id'],
             $payload_data['mask_path'],
             [
                 'n'             => $payload_data['n'],

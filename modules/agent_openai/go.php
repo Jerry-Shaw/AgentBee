@@ -82,7 +82,8 @@ class go extends Factory
             'modules/agent_toolsets',
             'System',
             [
-                'getTime', 'readImage', 'readFile', 'writeFile',
+                'loadSkill', 'getTime',
+                'readImage', 'readFile', 'writeFile',
                 'copyFile', 'deleteFile', 'getFileSize', 'searchFiles',
                 'listDirectory', 'createDirectory', 'copyDirectory', 'deleteDirectory',
             ]

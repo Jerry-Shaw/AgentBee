@@ -1,0 +1,14 @@
+{
+  "name": "ImageMaker",
+  "version": "1.0.0",
+  "description": "ImageMaker - Generate images. Supports text-to-image, image-to-image, and automatic image saving.",
+  "author": "秋水之冰",
+  "email": "27206617@qq.com",
+  "entry": "go.php",
+  "config": "ImageMaker.json",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  }
+}

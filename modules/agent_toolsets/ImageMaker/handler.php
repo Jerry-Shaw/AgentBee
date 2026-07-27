@@ -146,7 +146,7 @@ class handler extends Factory
     {
         if (isset($response['data']) && true === $response['success']) {
             $message_id = hash('md5', uniqid(microtime(), true));
-            $save_path  = rtrim($agent_core->utils->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . $message_id . DIRECTORY_SEPARATOR;
+            $save_path  = rtrim($agent_core->utils->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . substr($message_id, 0, 8) . DIRECTORY_SEPARATOR;
 
             if (!is_dir($save_path)) {
                 try {
@@ -165,7 +165,7 @@ class handler extends Factory
                         $value['output_format'] = 'jpg';
                     }
 
-                    file_put_contents($save_path . hash('md5', $value['revised_prompt']) . '.' . $value['output_format'], $image_binary);
+                    file_put_contents($save_path . substr(hash('md5', uniqid(microtime(), true)), 0, 8) . '.' . $value['output_format'], $image_binary);
                 }
 
                 unset($image_binary);
@@ -173,7 +173,7 @@ class handler extends Factory
 
             $response = [
                 'status'  => 'success',
-                'message' => '图片生成成功，保存路径：' . $save_path
+                'message' => '图片已生成，保存路径：' . $save_path
             ];
 
             unset($message_id, $save_path, $value);

@@ -85,7 +85,6 @@ class handler extends Factory
                 'size'            => $payload_data['size'],
                 'quality'         => $payload_data['quality'],
                 'background'      => $payload_data['background'],
-                'style'           => $payload_data['style'],
                 'output_format'   => $payload_data['output_format'],
                 'moderation'      => $payload_data['moderation'],
                 'response_format' => 'b64_json'
@@ -116,7 +115,6 @@ class handler extends Factory
             'size'            => $payload_data['size'],
             'quality'         => $payload_data['quality'],
             'background'      => $payload_data['background'],
-            'style'           => $payload_data['style'],
             'output_format'   => $payload_data['output_format'],
             'moderation'      => $payload_data['moderation'],
             'response_format' => 'b64_json'

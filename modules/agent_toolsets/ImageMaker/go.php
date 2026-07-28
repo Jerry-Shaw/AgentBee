@@ -32,7 +32,6 @@ class go extends Factory
      * @param string $size
      * @param string $quality
      * @param string $background
-     * @param string $style
      * @param string $output_format
      * @param string $moderation
      *
@@ -44,7 +43,6 @@ class go extends Factory
         string $size = 'auto',
         string $quality = 'auto',
         string $background = 'auto',
-        string $style = '',
         string $output_format = 'png',
         string $moderation = 'low'
     ): array
@@ -57,7 +55,6 @@ class go extends Factory
             'size'          => $size,
             'quality'       => $quality,
             'background'    => $background,
-            'style'         => $style,
             'output_format' => $output_format,
             'moderation'    => $moderation,
             'handler'       => handler::class
@@ -74,7 +71,6 @@ class go extends Factory
      * @param string $size
      * @param string $quality
      * @param string $background
-     * @param string $style
      * @param string $output_format
      * @param string $moderation
      *
@@ -88,7 +84,6 @@ class go extends Factory
         string $size = 'auto',
         string $quality = 'auto',
         string $background = 'auto',
-        string $style = '',
         string $output_format = 'png',
         string $moderation = 'low'
     ): array
@@ -103,7 +98,6 @@ class go extends Factory
             'size'          => $size,
             'quality'       => $quality,
             'background'    => $background,
-            'style'         => $style,
             'output_format' => $output_format,
             'moderation'    => $moderation,
             'handler'       => handler::class

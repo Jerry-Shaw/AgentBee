@@ -109,28 +109,72 @@ class handler extends Factory
      */
     public function edit(array $payload_data, agent_core $agent_core): array
     {
-        $config = $this->loadConfig($agent_core);
-        $openai = libOpenAI::new($config['base_url'], $config['api_key'], '', '/ImageEditor');
-        $result = $openai->editImage(
-            $payload_data['images'],
-            $payload_data['prompt'],
-            $config['model_id'],
-            $payload_data['mask_path'],
-            [
-                'n'               => $payload_data['n'],
-                'size'            => $payload_data['size'],
-                'quality'         => $payload_data['quality'],
-                'background'      => $payload_data['background'],
-                'style'           => $payload_data['style'],
-                'output_format'   => $payload_data['output_format'],
-                'moderation'      => $payload_data['moderation'],
-                'response_format' => 'b64_json'
-            ]
-        );
+        $config  = $this->loadConfig($agent_core);
+        $openai  = libOpenAI::new($config['base_url'], $config['api_key'], '', '/ImageEditor');
+        $options = [
+            'n'               => $payload_data['n'],
+            'size'            => $payload_data['size'],
+            'quality'         => $payload_data['quality'],
+            'background'      => $payload_data['background'],
+            'style'           => $payload_data['style'],
+            'output_format'   => $payload_data['output_format'],
+            'moderation'      => $payload_data['moderation'],
+            'response_format' => 'b64_json'
+        ];
+
+        if (isset($config['type']) && 'file' === $config['type']) {
+            // File upload
+            $result = $openai->editImage(
+                $payload_data['images'],
+                $payload_data['prompt'],
+                $config['model_id'],
+                $payload_data['mask_path'],
+                $options
+            );
+        } else {
+            // Base64 URI
+            $files = [];
+
+            foreach ($payload_data['images'] as $image) {
+                if ('' === $image || !is_file($image) || !is_readable($image)) {
+                    throw new \RuntimeException('Image file does not exist or is not readable: ' . $image);
+                }
+
+                $image_binary = file_get_contents($image);
+                $image_type   = $agent_core->utils->getimagetype($image_binary);
+
+                if ('' === $image_type) {
+                    throw new \RuntimeException('Image type is not supported: ' . $image);
+                }
+
+                $files['images'][] = ['image_url' => $agent_core->utils->resizeImage($image_binary, 4096, 4096)];
+            }
+
+            if ('' !== $payload_data['mask_path'] && is_file($payload_data['mask_path']) && is_readable($payload_data['mask_path'])) {
+                $image_binary = file_get_contents($payload_data['mask_path']);
+                $image_type   = $agent_core->utils->getimagetype($image_binary);
+
+                if ('' === $image_type) {
+                    throw new \RuntimeException('Mask Image type is not supported: ' . $payload_data['mask_path']);
+                }
+
+                $files['mask'] = $agent_core->utils->resizeImage($image_binary, 4096, 4096);
+            }
+
+            if (empty($files)) {
+                throw new \RuntimeException('No image files uploaded.');
+            }
+
+            $payload = ['prompt' => $payload_data['prompt'], 'model' => $config['model_id']];
+            $payload = array_merge($payload, $options, $files);
+            $result  = $openai->sendRequest('/images/edits', $payload);
+
+            unset($files, $image, $image_binary, $image_type, $payload);
+        }
 
         $result = $this->handleResponse($agent_core, $payload_data['socket_id'], $payload_data['process_name'], $result);
 
-        unset($payload_data, $agent_core, $config, $openai);
+        unset($payload_data, $agent_core, $config, $openai, $options);
         return $result;
     }
 

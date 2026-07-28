@@ -1191,6 +1191,35 @@ class utils extends Factory
     }
 
     /**
+     * @param string $binary
+     *
+     * @return string
+     */
+    public function getImageType(string $binary): string
+    {
+        $result = '';
+        $header = bin2hex(substr($binary, 0, 12));
+
+        $magics = [
+            '424d'             => 'bmp',
+            'ffd8ff'           => 'jpeg',
+            '89504e470d0a1a0a' => 'png',
+            '47494638'         => 'gif',
+            '52494646'         => 'webp'
+        ];
+
+        foreach ($magics as $magic => $type) {
+            if (str_starts_with($header, $magic)) {
+                $result = $type;
+                break;
+            }
+        }
+
+        unset($binary, $header, $magics, $magic, $type);
+        return $result;
+    }
+
+    /**
      * @param string $string
      * @param string $level Debug level (none, trace, debug)
      *

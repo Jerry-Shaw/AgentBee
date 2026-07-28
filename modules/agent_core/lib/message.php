@@ -279,7 +279,7 @@ class message extends Factory
                 $binary = base64_decode($data['file']['content']);
 
                 // 2.1 Process images
-                if ($this->fileIsImage($binary)) {
+                if ('' !== $this->utils->getImageType($binary)) {
                     if (!$this->imageIsAllowed($data['file']['filename'])) {
                         $errors[] = $data['file']['filename'] . '：图片格式不支持';
                         continue;
@@ -347,35 +347,6 @@ class message extends Factory
         }
 
         unset($socket_id, $data_content, $content, $errors, $saves, $reset, $data, $text, $binary, $data_uri, $detected, $file_text);
-        return $result;
-    }
-
-    /**
-     * @param string $binary
-     *
-     * @return bool
-     */
-    public function fileIsImage(string $binary): bool
-    {
-        $result = false;
-        $header = bin2hex(substr($binary, 0, 12));
-
-        $magics = [
-            '424d'             => 'bmp',
-            'ffd8ff'           => 'jpg',
-            '89504e470d0a1a0a' => 'png',
-            '47494638'         => 'gif',
-            '52494646'         => 'webp'
-        ];
-
-        foreach ($magics as $magic => $type) {
-            if (str_starts_with($header, $magic)) {
-                $result = true;
-                break;
-            }
-        }
-
-        unset($binary, $header, $magics, $magic, $type);
         return $result;
     }
 

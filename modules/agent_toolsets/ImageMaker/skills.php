@@ -53,7 +53,7 @@ class skills
                     'type'       => 'object',
                     'properties' => [
                         'prompt'        => ['type' => 'string', 'description' => '描述如何修改图片的文本（必填）'],
-                        'image_path'    => ['type' => 'string', 'description' => '要编辑的本地图片绝对路径（必填）'],
+                        'images'        => ['type' => 'array', 'description' => '要编辑的本地图片绝对路径（必填，可多张，数量：1-16）'],
                         'mask_path'     => ['type' => 'string', 'default' => '', 'description' => '蒙版图片的绝对路径（可选，留空表示全图编辑），用于指定需要修改的区域'],
                         'n'             => ['type' => 'integer', 'default' => 1, 'description' => '生成图片张数，取值范围：1-10'],
                         'size'          => ['type' => 'string', 'default' => 'auto', 'description' => '生成图片尺寸，支持"auto"自动适配或指定格式如 "1024x1024"'],
@@ -63,7 +63,7 @@ class skills
                         'output_format' => ['type' => 'string', 'default' => 'png', 'description' => '输出图片格式，仅支持png/jpeg/webp'],
                         'moderation'    => ['type' => 'string', 'default' => 'low', 'description' => '安全审核级别：low（宽松）/ auto（自动）'],
                     ],
-                    'required'   => ['prompt', 'image_path'],
+                    'required'   => ['prompt', 'images'],
                 ],
             ],
         ],

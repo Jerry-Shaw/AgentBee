@@ -81,13 +81,14 @@ class handler extends Factory
             $payload_data['prompt'],
             $config['model_id'],
             [
-                'n'             => $payload_data['n'],
-                'size'          => $payload_data['size'],
-                'quality'       => $payload_data['quality'],
-                'background'    => $payload_data['background'],
-                'style'         => $payload_data['style'],
-                'output_format' => $payload_data['output_format'],
-                'moderation'    => $payload_data['moderation'],
+                'n'               => $payload_data['n'],
+                'size'            => $payload_data['size'],
+                'quality'         => $payload_data['quality'],
+                'background'      => $payload_data['background'],
+                'style'           => $payload_data['style'],
+                'output_format'   => $payload_data['output_format'],
+                'moderation'      => $payload_data['moderation'],
+                'response_format' => 'b64_json'
             ]
         );
 
@@ -111,18 +112,19 @@ class handler extends Factory
         $config = $this->loadConfig($agent_core);
         $openai = libOpenAI::new($config['base_url'], $config['api_key'], '', '/ImageEditor');
         $result = $openai->editImage(
-            $payload_data['image_path'],
+            $payload_data['images'],
             $payload_data['prompt'],
             $config['model_id'],
             $payload_data['mask_path'],
             [
-                'n'             => $payload_data['n'],
-                'size'          => $payload_data['size'],
-                'quality'       => $payload_data['quality'],
-                'background'    => $payload_data['background'],
-                'style'         => $payload_data['style'],
-                'output_format' => $payload_data['output_format'],
-                'moderation'    => $payload_data['moderation'],
+                'n'               => $payload_data['n'],
+                'size'            => $payload_data['size'],
+                'quality'         => $payload_data['quality'],
+                'background'      => $payload_data['background'],
+                'style'           => $payload_data['style'],
+                'output_format'   => $payload_data['output_format'],
+                'moderation'      => $payload_data['moderation'],
+                'response_format' => 'b64_json'
             ]
         );
 

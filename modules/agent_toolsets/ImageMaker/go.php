@@ -68,7 +68,7 @@ class go extends Factory
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $prompt
-     * @param string $image_path
+     * @param array  $images
      * @param string $mask_path
      * @param int    $n
      * @param string $size
@@ -82,7 +82,7 @@ class go extends Factory
      */
     public function edit(
         string $prompt,
-        string $image_path,
+        array  $images,
         string $mask_path = '',
         int    $n = 1,
         string $size = 'auto',
@@ -97,7 +97,7 @@ class go extends Factory
             'async'         => false,
             'action'        => __FUNCTION__,
             'prompt'        => $prompt,
-            'image_path'    => $image_path,
+            'images'        => $images,
             'mask_path'     => $mask_path,
             'n'             => $n,
             'size'          => $size,

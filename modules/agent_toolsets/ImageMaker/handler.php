@@ -192,7 +192,7 @@ class handler extends Factory
     {
         if (isset($response['data']) && true === $response['success']) {
             $message_id = hash('md5', uniqid(microtime(), true));
-            $save_path  = rtrim($agent_core->utils->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . substr($message_id, 0, 8) . DIRECTORY_SEPARATOR;
+            $save_path  = rtrim($agent_core->utils->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . 'ImageMaker' . DIRECTORY_SEPARATOR . date('Y-m-d') . DIRECTORY_SEPARATOR;
 
             if (!is_dir($save_path)) {
                 try {

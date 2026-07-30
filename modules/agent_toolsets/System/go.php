@@ -235,12 +235,19 @@ class go extends Factory
     }
 
     /**
+     * @param string $datetime
+     *
      * @return array
      */
-    public function getTime(): array
+    public function getTime(string $datetime = ''): array
     {
-        $timestamp = time();
-        $datetime  = date('Y-m-d H:i:s', $timestamp);
+        if ('' !== $datetime) {
+            $timestamp = strtotime($datetime) ?: time();
+        } else {
+            $timestamp = time();
+        }
+
+        $datetime = date('Y-m-d H:i:s', $timestamp);
 
         return ['datetime' => $datetime, 'timestamp' => $timestamp];
     }

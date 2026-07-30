@@ -77,7 +77,16 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'getTime',
-                'description' => '获取当前系统时间。返回：{datetime, timestamp}。'
+                'description' => '获取系统时间。传入datetime时，解析对应时间戳，不传则返回当前时间。返回：{datetime, timestamp}。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'datetime' => [
+                            'type'        => 'string',
+                            'description' => '日期时间字符串（如"2026-10-01 14:30:00"），不传则返回当前时间',
+                        ],
+                    ],
+                ],
             ],
         ],
         [

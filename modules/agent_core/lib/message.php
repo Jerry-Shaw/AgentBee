@@ -287,6 +287,7 @@ class message extends Factory
 
                     try {
                         $data_uri  = $this->utils->resizeImage($binary);
+                        $content[] = ['type' => 'text', 'text' => $data['file']['filename']];
                         $content[] = ['type' => 'image_url', 'image_url' => ['url' => $data_uri]];
                     } catch (\Throwable $throwable) {
                         $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();

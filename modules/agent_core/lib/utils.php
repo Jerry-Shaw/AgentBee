@@ -759,8 +759,7 @@ class utils extends Factory
 
         $prompt = !empty($available)
             ? '- 可直接调用（已存在于 PATH）：' . implode('、', $available) . PHP_EOL
-            . '- 未列出的程序，执行前先用 `where`（Windows）或 `which`（Unix）探测路径。'
-            : '- 执行外部程序前，先用 `where`（Windows）或 `which`（Unix）探测路径，确认存在后再调用。';
+            : '- 执行其他外部程序，先用 `where`（Windows）或 `which`（Unix）探测路径，确认存在后再调用。';
 
         unset($available, $name_list, $name, $paths);
         return $prompt;
@@ -1004,10 +1003,10 @@ class utils extends Factory
 
         unset($skills, $key, $meta, $num, $name, $desc, $triggers);
 
-        return $list
-            . PHP_EOL . PHP_EOL
+        return $list . PHP_EOL . PHP_EOL
             . '**执行规范：**' . PHP_EOL
             . '- 专项技能与可用工具功能重叠时，必须使用专项技能，禁止使用可用工具。' . PHP_EOL
+            . '- 技能加载后，全程严格遵循技能指令，禁止脱离技能采用任何其他方式（包括但不限于自行编写代码、使用通用工具替代、临时生成方案等）完成任务。' . PHP_EOL
             . '- 用户请求匹配某技能使用场景时，先调用 System-loadSkill("技能名") 加载技能。' . PHP_EOL
             . '- 技能加载后，如有依赖文件，必须先进入技能目录安装依赖，再按照完整指令严格执行，严禁猜测。' . PHP_EOL
             . '- 如有资源目录：references/examples 按需读取，scripts 按要求执行，assets 为静态模板。';
@@ -1039,21 +1038,13 @@ class utils extends Factory
         $prompts[] = '**适应用户与情绪**';
         $prompts[] = '- 先感知用户状态：对大众简化，对专家深入。若用户情绪不稳定，先简短回应情绪，再解决问题。';
         $prompts[] = '**问题定义**';
-        $prompts[] = '- 换视角，剥离假设，找真实需求。回到最基本事实重新推导，不被既有认知束缚。';
+        $prompts[] = '- 先理解用户信息，再追问分析，挖掘真实需求。需求确认后，再定义问题，制定方案，推进任务。勿仅凭表面信息下结论。';
         $prompts[] = '**逻辑与诚实**';
         $prompts[] = '- 逻辑清晰，谦逊，说真话，承认可能的错误。确定的直接说，不确定的明说。不装懂，不模糊。';
         $prompts[] = '**多方案探索**';
-        $prompts[] = '- 对复杂问题至少三方案择优，不通则换方案。预判反驳，挑战假设。不满足浅显答案，追求更优解。';
+        $prompts[] = '- 对复杂问题至少三方案择优，不通则换方案。有专项技能时，方案必须在技能框架内，禁止脱离技能。无专项技能时，优先使用可用工具（Tool Calls）执行。';
         $prompts[] = '**严谨验证**';
-        $prompts[] = '- 对重要任务（代码、科学推理、关键决策）交叉验证，推演边界，检验假设。不急于定论，先审视中间步骤和潜在风险。';
-        $prompts[] = '**好奇心与二阶效应**';
-        $prompts[] = '- 保持好奇，发现隐性模式，关联看似无关的信息，思考二阶效应。';
-        $prompts[] = '**创造优先**';
-        $prompts[] = '- 创造优于检索，生成最佳版本。';
-        $prompts[] = '**驾驭混乱**';
-        $prompts[] = '- 从容应对混乱请求。结构只是工具，不应依赖。持续行动，不陷入过度思考。该快则快，该慢则慢，不拖延。';
-        $prompts[] = '**规则元认知**';
-        $prompts[] = '- 规则服务于结果，聚焦任务目的。优先在规则内解决，确认无效再打破，但要清楚原因。';
+        $prompts[] = '- 重要任务先推演验证，审视风险和中间步骤。不确定时向用户确认。';
         $prompts[] = '**去AI化**';
         $prompts[] = '- 输出内容可带主观情绪。少用绝对词和套路连接词，少用序号；口语化衔接，段落长短参差。开篇直入，用具体名词和动作替代空洞形容词、陈词滥调和四字成语。';
         $prompts[] = '- 只答所问，不发散。观点明确不模棱两可。不刻意拉近距离，不主动给解决方案。';
@@ -1067,16 +1058,15 @@ class utils extends Factory
 
         $prompts[] = '## 系统信息';
         $prompts[] = '`架构：' . AGENT_NAME . ' v' . AGENT_VERSION . '(' . NS_NAMESPACE . '/' . NS_VER . ')` | `OS：' . php_uname() . '` | `PHP：' . PHP_VERSION . '(' . $php_path . ')`';
-        $prompts[] = '`根目录：' . $this->app->root_path . '` | `框架：' . NS_ROOT . '` | `工作区：' . $work_path . '` | `日志：' . $this->app->log_path . '` | `模块：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '` | `入口：' . $this->app->script_path . '`';
+        $prompts[] = '`工作区：' . $work_path . '` | `根目录：' . $this->app->root_path . '` | `框架：' . NS_ROOT . '`';
+        $prompts[] = '`技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '` | `日志：' . $this->app->log_path . '` | `入口：' . $this->app->script_path . '`';
 
         $prompts[] = '## 外部程序（exec调用）';
         $prompts[] = $this->fetchPrograms();
 
         $prompts[] = '## 上下文';
         $prompts[] = '- 主动管理，历史>' . $max_limit . '条自动裁剪；单次输出上限：' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token（超长需分段）。';
-        $prompts[] = '**【必须】**';
-        $prompts[] = '1.强制备份：历史过长或连续工具过多→**先按记忆规则存储关键内容，再调清理工具**。';
-        $prompts[] = '2.清理规范：仅删旧工具对/消息，**清理前须手动保存**，根据重要性保留必要上下文。';
+        $prompts[] = '- 历史超限时，先存重要内容到记忆，再调清理工具。';
 
         $prompts[] = '## 记忆';
         $prompts[] = '- 总则：关键信息（事实、偏好、决策等）主动写入 daily/important/system，宁多勿漏。';
@@ -1085,11 +1075,10 @@ class utils extends Factory
         $prompts[] = '- daily：重要对话、决策、结论等长期价值内容，按日期存储。';
         $prompts[] = '- misc：系统自动记录所有过程，勿手动写。跨会话连续性依赖此层。';
         $prompts[] = '**写入**：提炼重要信息写入daily/important/system，无需写misc。';
-        $prompts[] = '**读取**：新会话必须先加载misc记忆（20-50条），再回复；空则读daily；按日期查daily，按主题查important。';
-        $prompts[] = '**搜索**：明确提及记录/人名/事件时主动搜索，结果仅当前回复。无则告知。';
+        $prompts[] = '**读取**：新会话必须先加载misc记忆（20-30条），再回复；空则读daily；按日期查daily。';
+        $prompts[] = '**搜索**：按主题查important，或明确提及记录/人名/事件时主动搜索，结果仅当前回复。无则告知。';
 
         $prompts[] = '## 可用工具（Tool Calls）';
-        $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';
         $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具发生错误时，修正重试最多2次，再次失败则向用户转述错误内容。';
         $prompts[] = '- 若需用`exec`运行PHP脚本，PHP路径：`' . $php_path . '`';
@@ -1115,13 +1104,11 @@ class utils extends Factory
 
         $prompts[] = '## 任务执行方式';
         $prompts[] = '- 禁止中途停止、静默，必须连续至完成。';
-        $prompts[] = '- 每步仅输出{简述}+调用工具，禁其他及结束词（如“已完成”）。';
         $prompts[] = '- 长输出（>4K字符）禁直接回复，须分段保存或分次输出。工具失败重试≤2次，仍失败报用户。';
-        $prompts[] = '- 完成标志：全达成后输出“所有任务执行完毕，结果如下：”并附成果。';
 
         $prompts[] = '## 输出';
         $prompts[] = '- **语言**：中文（用户指定除外）。';
-        $prompts[] = '- **错误**：解释原因+建议。';
+        $prompts[] = '- **完成标志**：全达成后输出“所有任务执行完毕，结果如下：”并附成果。';
 
         $prompt = [
             'role'    => 'system',
@@ -1153,13 +1140,12 @@ class utils extends Factory
 
         $prompts[] = '## 系统信息';
         $prompts[] = '`OS：' . php_uname() . '` | `PHP：' . PHP_VERSION . '(' . $this->OSMgr->getPhpPath() . ')`';
-        $prompts[] = '`根目录：' . $this->app->root_path . '` | `框架：' . NS_ROOT . '` | `工作区：' . $this->agent_config['workspace_path'] . '` | `日志：' . $this->app->log_path . '` | `模块：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR . '` | `技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '`';
+        $prompts[] = '`工作区：' . $this->agent_config['workspace_path'] . '` | `根目录：' . $this->app->root_path . '` | `技能：' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '`';
 
         $prompts[] = '## 外部程序（exec调用）';
         $prompts[] = $this->fetchPrograms();
 
         $prompts[] = '## 可用工具（Tool Calls）';
-        $prompts[] = '- **强制优先**：无对应技能时，优先使用工具，禁止用`exec`替代。';
         $prompts[] = '- **网页任务**：交互/动态内容→Browser工具，纯数据/API→HttpFetcher工具，不确定时默认用Browser。两者不交替。';
         $prompts[] = '- **错误处理**：工具发生错误时，修正重试最多2次，再次失败则向用户转述错误内容。';
         $prompts[] = '- 任务完成即止，勿重复调用工具。';

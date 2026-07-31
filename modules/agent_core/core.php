@@ -166,16 +166,16 @@ final class core extends Factory
 
     /**
      * @param string $socket_id
-     * @param string $message
+     * @param array  $message
      *
      * @return void
      * @throws \Random\RandomException
      * @throws \ReflectionException
      */
-    public function sendMessage(string $socket_id, string $message): void
+    public function sendMessage(string $socket_id, array $message): void
     {
         if (isset($this->utils->socket_session[$socket_id]) && 'ready' === $this->utils->socket_session[$socket_id]) {
-            $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode($message));
+            $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode($message, JSON_FORMAT)));
         } else {
             $this->utils->message_buffers[] = $message;
         }

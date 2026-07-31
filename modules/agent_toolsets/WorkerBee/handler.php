@@ -228,8 +228,7 @@ class handler extends Factory
      */
     private function sendMessage(agent_core $agent_core, array $worker_info, array $payload_data): void
     {
-        $worker_message = json_encode(
-            $agent_core->utils->getMessageMarker(
+        $worker_message = $agent_core->utils->getMessageMarker(
                 WORKER_MAIN,
                 WORKER_MAIN,
                 'Assistant',
@@ -238,7 +237,7 @@ class handler extends Factory
             ) + [
                 'type' => 'content',
                 'data' => AGENT_NAME . ': ' . $payload_data['content']
-            ], JSON_FORMAT);
+            ];
 
         $agent_core->core->sendMessage($worker_info['socket_id'], $worker_message);
         unset($agent_core, $worker_info, $payload_data, $worker_message);

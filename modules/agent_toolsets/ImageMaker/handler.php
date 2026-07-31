@@ -245,8 +245,7 @@ class handler extends Factory
      */
     private function sendMessage(agent_core $agent_core, string $socket_id, string $message_id, string $process_name, array $image_data): void
     {
-        $message = json_encode(
-            $agent_core->utils->getMessageMarker(
+        $message = $agent_core->utils->getMessageMarker(
                 WORKER_MAIN,
                 WORKER_MAIN,
                 'Assistant',
@@ -257,7 +256,7 @@ class handler extends Factory
                 'type'   => 'image',
                 'data'   => 'data:image/' . $image_data['output_format'] . ';base64,' . $image_data['b64_json'],
                 'prompt' => $image_data['revised_prompt']
-            ], JSON_FORMAT);
+            ];
 
         $agent_core->core->sendMessage($socket_id, $message);
         unset($agent_core, $socket_id, $message_id, $process_name, $image_data, $message);

@@ -304,11 +304,11 @@ class go extends Factory
                             }
 
                             unset($this->utils->stream_buffers[$ext_id]);
-                            $this->core->sendMessage($message['socket_id'], json_encode(['type' => 'error'] + $payload['data'], JSON_FORMAT));
+                            $this->core->sendMessage($message['socket_id'], ['type' => 'error'] + $payload['data']);
                             break;
 
                         default:
-                            $this->core->sendMessage($message['socket_id'], json_encode($payload, JSON_FORMAT));
+                            $this->core->sendMessage($message['socket_id'], $payload);
                             break;
                     }
                     break;
@@ -421,10 +421,9 @@ class go extends Factory
                                 ]
                             ];
 
-                            $stream_msg = json_encode($metadata + $msg_data, JSON_FORMAT);
-                            $this->core->sendMessage($payload['socket_id'], $stream_msg);
+                            $this->core->sendMessage($payload['socket_id'], $metadata + $msg_data);
 
-                            unset($result, $result_text, $metadata, $msg_data, $stream_msg);
+                            unset($result, $result_text, $metadata, $msg_data);
                             break;
 
                         case 'ToolErrors':
@@ -740,7 +739,7 @@ class go extends Factory
                 $this->utils->debug('User: ' . $data['type'] . '->' . ($result['content']['act'] ?? 'Unsupported'), 'debug');
 
                 $response = ['type' => $result['type'] ?? $data['type']] + $result['content'];
-                $this->core->sendMessage($socket_id, json_encode($response, JSON_FORMAT));
+                $this->core->sendMessage($socket_id, $response);
 
                 switch ($result['content']['act']) {
                     // Reset session memory
@@ -766,7 +765,7 @@ class go extends Factory
             }
 
             if (isset($result['errors']) && !empty($result['errors'])) {
-                $this->core->sendMessage($socket_id, json_encode(['type' => 'error', 'error' => implode("\n", $result['errors'])], JSON_FORMAT));
+                $this->core->sendMessage($socket_id, ['type' => 'error', 'error' => implode("\n", $result['errors'])]);
             }
 
             if (self::STATUS_IDLE === $this->wait_status) {
@@ -798,7 +797,7 @@ class go extends Factory
         }
 
         foreach ($end_data as $end_packet) {
-            $this->core->sendMessage($socket_id, json_encode(['type' => 'close'] + $end_packet));
+            $this->core->sendMessage($socket_id, ['type' => 'close'] + $end_packet);
         }
 
         $count_llm_data = count($llm_data);

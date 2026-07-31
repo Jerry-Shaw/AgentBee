@@ -269,9 +269,6 @@ class go extends Factory
                         $this->libOpenAI
                     );
                     break;
-
-                case 'close':
-                    break 2;
             }
         }
     }

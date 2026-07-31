@@ -35,9 +35,13 @@ final class core extends Factory
     public Error     $error;
     public SocketMgr $socketMgr;
 
-    public array $llm_tools   = [];
-    public array $llm_params  = [];
-    public array $agent_tools = [];
+    public int $flush_time_at  = 0;
+    public int $flush_interval = 30;
+
+    public array $llm_tools     = [];
+    public array $llm_params    = [];
+    public array $agent_tools   = [];
+    public array $flush_buffers = [];
 
     /**
      * Initialize core components.
@@ -174,12 +178,54 @@ final class core extends Factory
      */
     public function sendMessage(string $socket_id, array $message): void
     {
-        if (isset($this->utils->socket_session[$socket_id]) && 'ready' === $this->utils->socket_session[$socket_id]) {
-            $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode($message, JSON_FORMAT)));
-        } else {
+        if (!isset($message['type'])) {
+            $this->utils->debug('Missing message type: ' . json_encode($message, JSON_FORMAT), 'trace');
+            return;
+        }
+
+        if (!isset($this->utils->socket_session[$socket_id]) || 'ready' !== $this->utils->socket_session[$socket_id]) {
+            $this->utils->message_buffers[] = $message;
+            return;
+        }
+
+        if (!empty($this->flush_buffers)) {
+            $microtime = (int)(microtime(true) * 1000);
+
+            if (
+                $microtime - $this->flush_time_at > $this->flush_interval
+                || !isset($message['messageId'])
+                || $message['type'] !== $this->flush_buffers['type']
+                || $message['messageId'] !== $this->flush_buffers['messageId']
+            ) {
+                $success = $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode($this->flush_buffers, JSON_FORMAT)));
+
+                if (!$success) {
+                    $this->utils->message_buffers[] = $this->flush_buffers;
+                }
+
+                $this->flush_time_at = $microtime;
+                $this->flush_buffers = [];
+            }
+
+            unset($microtime);
+        }
+
+        if (in_array($message['type'], ['content', 'think'], true)) {
+            if (!empty($this->flush_buffers)) {
+                $this->flush_buffers['data'] .= $message['data'];
+            } else {
+                $this->flush_buffers = $message;
+            }
+
+            return;
+        }
+
+        $success = $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode($message, JSON_FORMAT)));
+
+        if (!$success) {
             $this->utils->message_buffers[] = $message;
         }
 
-        unset($socket_id, $message);
+        unset($socket_id, $message, $success);
     }
 }

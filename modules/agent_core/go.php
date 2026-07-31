@@ -650,7 +650,7 @@ class go extends Factory
             'jobs' => $task_list
         ];
 
-        $task_content = '[定时任务] 任务：' . "\n" . json_encode($task_jobs, JSON_FORMAT) . "\n" . '步骤：①执行（提醒/工具/问答）；②重要存 daily，特别重要存 important，琐事不存；③完成后简要汇报结果、层级，语气自然。';
+        $task_content = '[定时任务] 任务：' . "\n" . json_encode($task_jobs, JSON_FORMAT) . "\n" . '步骤：①执行任务（提醒/工具/问答）；②重要结果存daily，特别重要存important，琐事不存；③完成后简要汇报结果、存储层级；④任务完成后主动删除。';
 
         $task_data = [[
             'type' => 'text',

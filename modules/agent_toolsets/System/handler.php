@@ -24,6 +24,19 @@ class handler extends Factory
             1
         );
 
+        if (isset($payload_data['history_summary']) && '' !== $payload_data['history_summary']) {
+            $agent_core->utils->addSessionHistory(
+                $payload_data['worker_name'],
+                [
+                    'role'    => 'user',
+                    'content' => [[
+                        'type' => 'text',
+                        'text' => "[上下文摘要]\n\n" . $payload_data['history_summary']
+                    ]]
+                ]
+            );
+        }
+
         unset($payload_data, $agent_core);
         return '[系统提醒] 上下文已清理，继续原有任务。';
     }

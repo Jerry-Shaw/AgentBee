@@ -39,18 +39,20 @@ class go extends Factory
     /**
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
-     * @param int  $keep_normal
-     * @param int  $keep_tool_pairs
-     * @param bool $aggressive_mode
+     * @param string $history_summary
+     * @param int    $keep_normal
+     * @param int    $keep_tool_pairs
+     * @param bool   $aggressive_mode
      *
      * @return array
      */
-    public function cleanContext(int $keep_normal = 6, int $keep_tool_pairs = 2, bool $aggressive_mode = false): array
+    public function cleanContext(string $history_summary, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $aggressive_mode = false): array
     {
         return [
             'async'           => false,
             'action'          => __FUNCTION__,
             'worker_name'     => WORKER_MAIN,
+            'history_summary' => $history_summary,
             'keep_normal'     => $keep_normal,
             'keep_tool_pairs' => $keep_tool_pairs,
             'aggressive_mode' => $aggressive_mode,

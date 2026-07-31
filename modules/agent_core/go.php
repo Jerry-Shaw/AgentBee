@@ -706,6 +706,7 @@ class go extends Factory
         $end_data = [];
         $llm_data = [];
         $messages = str_contains($message, "\n") ? explode("\n", $message) : [$message];
+        $messages = array_filter($messages, 'strlen');
 
         foreach ($messages as $line) {
             $data = json_decode($line, true);
@@ -796,8 +797,12 @@ class go extends Factory
             $end_data[] = $data;
         }
 
-        foreach ($end_data as $end_packet) {
-            $this->core->sendMessage($socket_id, ['type' => 'close'] + $end_packet);
+        $last_data = array_pop($end_data);
+
+        if (!empty($end_data)) {
+            foreach ($end_data as $end_packet) {
+                $this->core->sendMessage($socket_id, ['type' => 'close'] + $end_packet);
+            }
         }
 
         $count_llm_data = count($llm_data);
@@ -812,7 +817,8 @@ class go extends Factory
                 WORKER_MAIN,
                 'Assistant',
                 AGENT_NAME,
-                0
+                0,
+                $last_data['messageId'] ?? ''
             );
 
             $this->setStatus(self::STATUS_BUSY);

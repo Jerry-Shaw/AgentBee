@@ -26,7 +26,8 @@ use Nervsys\Ext\libOpenAI;
 
 class handler extends Factory
 {
-    private array $config = [];
+    private string $save_path;
+    private array  $config = [];
 
     /**
      * @param agent_core $agent_core
@@ -58,7 +59,15 @@ class handler extends Factory
             }
         }
 
-        $this->config = $config;
+        $this->config    = $config;
+        $this->save_path = rtrim($agent_core->utils->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . 'ImageMaker' . DIRECTORY_SEPARATOR;
+
+        if (!is_dir($this->save_path)) {
+            try {
+                mkdir($this->save_path, 0777, true);
+            } catch (\Throwable) {
+            }
+        }
 
         unset($agent_core, $config_path);
         return $config;
@@ -123,37 +132,33 @@ class handler extends Factory
         if (isset($config['type']) && 'file' === $config['type']) {
             // File upload
             $result = $openai->editImage(
-                $payload_data['images'],
+                $payload_data['edit_images'],
                 $payload_data['prompt'],
                 $config['model_id'],
-                $payload_data['mask_path'],
+                $payload_data['mask_image'],
                 $options
             );
         } else {
             // Base64 URI
             $files = [];
 
-            foreach ($payload_data['images'] as $image) {
-                if ('' === $image || !is_file($image) || !is_readable($image)) {
-                    throw new \RuntimeException('Image file does not exist or is not readable: ' . $image);
-                }
-
-                $image_binary = file_get_contents($image);
+            foreach ($payload_data['edit_images'] as $image_path) {
+                $image_binary = file_get_contents($image_path);
                 $image_type   = $agent_core->utils->getimagetype($image_binary);
 
                 if ('' === $image_type) {
-                    throw new \RuntimeException('Image type is not supported: ' . $image);
+                    throw new \RuntimeException('Image type is not supported: ' . $image_path);
                 }
 
                 $files['images'][] = ['image_url' => $agent_core->utils->resizeImage($image_binary, 4096, 4096)];
             }
 
-            if ('' !== $payload_data['mask_path'] && is_file($payload_data['mask_path']) && is_readable($payload_data['mask_path'])) {
-                $image_binary = file_get_contents($payload_data['mask_path']);
+            if ('' !== $payload_data['mask_image']) {
+                $image_binary = file_get_contents($payload_data['mask_image']);
                 $image_type   = $agent_core->utils->getimagetype($image_binary);
 
                 if ('' === $image_type) {
-                    throw new \RuntimeException('Mask Image type is not supported: ' . $payload_data['mask_path']);
+                    throw new \RuntimeException('Mask Image type is not supported: ' . $payload_data['mask_image']);
                 }
 
                 $files['mask'] = $agent_core->utils->resizeImage($image_binary, 4096, 4096);
@@ -167,7 +172,7 @@ class handler extends Factory
             $payload = array_merge($payload, $options, $files);
             $result  = $openai->sendRequest('/images/edits', $payload);
 
-            unset($files, $image, $image_binary, $image_type, $payload);
+            unset($files, $image_path, $image_binary, $image_type, $payload);
         }
 
         $result = $this->handleResponse($agent_core, $payload_data['socket_id'], $payload_data['process_name'], $result);
@@ -189,15 +194,8 @@ class handler extends Factory
     private function handleResponse(agent_core $agent_core, string $socket_id, string $process_name, array $response): array
     {
         if (isset($response['data']) && true === $response['success']) {
+            $save_files = [];
             $message_id = hash('md5', uniqid(microtime(), true));
-            $save_path  = rtrim($agent_core->utils->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . 'ImageMaker' . DIRECTORY_SEPARATOR . date('Y-m-d') . DIRECTORY_SEPARATOR;
-
-            if (!is_dir($save_path)) {
-                try {
-                    mkdir($save_path, 0777, true);
-                } catch (\Throwable) {
-                }
-            }
 
             foreach ($response['data'] as $value) {
                 $value['output_format'] = $response['output_format'];
@@ -209,18 +207,28 @@ class handler extends Factory
                         $value['output_format'] = 'jpg';
                     }
 
-                    file_put_contents($save_path . substr(hash('md5', uniqid(microtime(), true)), 0, 8) . '.' . $value['output_format'], $image_binary);
+                    $micro_sec   = substr(microtime(), 2, 8);
+                    $file_name   = date('Y-m-d') . '_' . $micro_sec . '.' . $value['output_format'];
+                    $file_path   = $this->save_path . $file_name;
+                    $save_result = file_put_contents($file_path, $image_binary);
+
+                    $save_files[] = [
+                        'file_name'  => $file_name,
+                        'file_path'  => $file_path,
+                        'save_bytes' => $save_result ?: 0,
+                    ];
                 }
 
-                unset($image_binary);
+                unset($image_binary, $micro_sec, $file_name, $file_path, $save_result);
             }
 
             $response = [
                 'status'  => 'success',
-                'message' => '图片已生成，保存路径：' . $save_path
+                'message' => '图片已生成，保存路径：' . $this->save_path,
+                'data'    => $save_files,
             ];
 
-            unset($message_id, $save_path, $value);
+            unset($save_files, $message_id, $value);
         } elseif (isset($response['error'])) {
             $response['status'] = 'error';
         } else {

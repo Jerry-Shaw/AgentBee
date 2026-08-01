@@ -20,6 +20,7 @@
 
 namespace modules\agent_toolsets\ImageMaker;
 
+use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 
 class go extends Factory
@@ -65,8 +66,8 @@ class go extends Factory
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $prompt
-     * @param array  $images
-     * @param string $mask_path
+     * @param array  $edit_images
+     * @param string $mask_image
      * @param int    $n
      * @param string $size
      * @param string $quality
@@ -75,11 +76,12 @@ class go extends Factory
      * @param string $moderation
      *
      * @return array
+     * @throws \ReflectionException
      */
     public function edit(
         string $prompt,
-        array  $images,
-        string $mask_path = '',
+        array  $edit_images,
+        string $mask_image = '',
         int    $n = 1,
         string $size = 'auto',
         string $quality = 'auto',
@@ -88,12 +90,48 @@ class go extends Factory
         string $moderation = 'low'
     ): array
     {
+        $utils = utils::new();
+
+        // Security image file path
+        foreach ($edit_images as $key => $path) {
+            if ('' === $path) {
+                unset($edit_images[$key]);
+                continue;
+            }
+
+            $path = $utils->securePath($path);
+
+            if (!is_file($path) || !is_readable($path)) {
+                unset($edit_images[$key]);
+                continue;
+            }
+
+            $edit_images[$key] = $path;
+        }
+
+        if (empty($edit_images)) {
+            return ['status' => 'error', 'error' => '未找到可编辑的图片。请检查沙箱限制和文件路径。'];
+        }
+
+        $edit_images = array_values($edit_images);
+
+        // Security mask-image file path
+        if ('' !== $mask_image) {
+            $mask_image = $utils->securePath($mask_image);
+
+            if (!is_file($mask_image) || !is_readable($mask_image)) {
+                return ['status' => 'error', 'error' => '未找到蒙版图片。请检查沙箱限制和文件路径。'];
+            }
+        }
+
+        unset($utils, $key, $path);
+
         return [
             'async'         => false,
             'action'        => __FUNCTION__,
             'prompt'        => $prompt,
-            'images'        => $images,
-            'mask_path'     => $mask_path,
+            'edit_images'   => $edit_images,
+            'mask_image'    => $mask_image,
             'n'             => $n,
             'size'          => $size,
             'quality'       => $quality,

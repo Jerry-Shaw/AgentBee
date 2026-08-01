@@ -1,6 +1,6 @@
 #!/bin/bash
 # mac: brew link --overwrite php@8.5
 # linux: sudo ln -s /path/to/php8.5/bin/php /usr/local/bin/php
-php "$(dirname "$(dirname "$0")")/modules/agent_bee.php" agent_core/start
+php "$(dirname "$(dirname "$0")")/modules/agent_bee.php" /modules/agent_core/go/start
 echo "Press any key to continue..."
 read -n 1

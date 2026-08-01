@@ -32,7 +32,7 @@ require __DIR__ . '/../Nervsys/NS.php';
 
 $root = dirname(__DIR__, 1);
 
-$ns = new Nervsys\NS($root, 'modules', App::MODE_MODULE);
+$ns = new Nervsys\NS($root, 'skills', App::MODE_MODULE);
 
 $ns->setDebugMode(false);
 $ns->go();

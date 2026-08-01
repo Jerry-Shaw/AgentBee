@@ -42,11 +42,10 @@ class go extends Factory
      * @param string $history_summary
      * @param int    $keep_normal
      * @param int    $keep_tool_pairs
-     * @param bool   $aggressive_mode
      *
      * @return array
      */
-    public function cleanContext(string $history_summary, int $keep_normal = 6, int $keep_tool_pairs = 2, bool $aggressive_mode = false): array
+    public function cleanContext(string $history_summary, int $keep_normal = 6, int $keep_tool_pairs = 2): array
     {
         return [
             'async'           => false,
@@ -55,7 +54,6 @@ class go extends Factory
             'history_summary' => $history_summary,
             'keep_normal'     => $keep_normal,
             'keep_tool_pairs' => $keep_tool_pairs,
-            'aggressive_mode' => $aggressive_mode,
             'skip_history'    => true,
             'handler'         => handler::class
         ];

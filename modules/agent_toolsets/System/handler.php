@@ -19,7 +19,7 @@ class handler extends Factory
             $payload_data['worker_name'],
             $payload_data['keep_normal'],
             $payload_data['keep_tool_pairs'],
-            $payload_data['aggressive_mode'],
+            false,
             $payload_data['tool_call_id'],
             1
         );

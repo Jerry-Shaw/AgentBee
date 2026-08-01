@@ -1,8 +1,8 @@
 {
   "name": "Calculator",
   "version": "1.0.0",
-  "description": "简单的加减乘除工具模块，演示基础结构。",
-  "author": "AgentBee",
+  "description": "基础整数加减乘除工具模块，演示 AgentBee 同步内部工具的标准结构。",
+  "author": "AgentBee self developed",
   "entry": "go.php",
   "dependencies": {},
   "requires": {

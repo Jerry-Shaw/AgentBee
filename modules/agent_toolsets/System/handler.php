@@ -73,6 +73,7 @@ class handler extends Factory
             return ['status' => 'error', 'error' => 'Unsupported image type: ' . $image_mime];
         }
 
+        $filename    = basename($file_path);
         $binary_data = file_get_contents($file_path);
 
         if (false === $binary_data) {
@@ -84,10 +85,8 @@ class handler extends Factory
             [
                 'role'    => 'user',
                 'content' => [
-                    [
-                        'type'      => 'image_url',
-                        'image_url' => ['url' => $agent_core->utils->resizeImage($binary_data)]
-                    ]
+                    ['type' => 'text', 'text' => $filename],
+                    ['type' => 'image_url', 'image_url' => ['url' => $agent_core->utils->resizeImage($binary_data)]]
                 ]
             ]
         );
@@ -95,11 +94,11 @@ class handler extends Factory
         $result = [
             'status'    => 'success',
             'message'   => '[系统提醒] 图片已加载，按需使用',
-            'filename'  => basename($file_path),
+            'filename'  => $filename,
             'mime_type' => $image_mime
         ];
 
-        unset($payload_data, $agent_core, $file_path, $image_info, $image_mime, $allowed, $binary_data);
+        unset($payload_data, $agent_core, $file_path, $image_info, $image_mime, $allowed, $filename, $binary_data);
         return $result;
     }
 }

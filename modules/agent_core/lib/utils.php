@@ -1075,7 +1075,7 @@ class utils extends Factory
         $prompts[] = '- daily：重要对话、决策、结论等长期价值内容，按日期存储。';
         $prompts[] = '- misc：系统自动记录所有过程，勿手动写。跨会话连续性依赖此层。';
         $prompts[] = '**写入**：提炼重要信息写入daily/important/system，无需写misc。';
-        $prompts[] = '**读取**：新会话必须先加载misc记忆（20-30条），再回复；空则读daily；按日期查daily。';
+        $prompts[] = '**读取**：新会话先读最近10条misc，若任务上下文不足，再按需每次追加10条，禁止读取全部记忆；misc为空则读daily，必要时按日期查询。';
         $prompts[] = '**搜索**：按主题查important，或明确提及记录/人名/事件时主动搜索，结果仅当前回复。无则告知。';
 
         $prompts[] = '## 可用工具（Tool Calls）';

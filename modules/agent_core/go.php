@@ -703,12 +703,13 @@ class go extends Factory
             return;
         }
 
-        $end_data = [];
-        $llm_data = [];
-        $messages = str_contains($message, "\n") ? explode("\n", $message) : [$message];
-        $messages = array_filter($messages, 'strlen');
+        $curr_id  = [];
+        $curr_msg = [];
+        $user_msg = str_contains($message, "\n") ? explode("\n", $message) : [$message];
+        $user_msg = array_filter($user_msg, 'strlen');
+        $last_key = array_key_last($user_msg);
 
-        foreach ($messages as $line) {
+        foreach ($user_msg as $key => $line) {
             $data = json_decode($line, true);
 
             if (!is_array($data) || !isset($data['type'])) {
@@ -757,7 +758,7 @@ class go extends Factory
                         break;
                 }
 
-                unset($socket_id, $message, $is_binary, $messages, $line, $data, $type_method, $result, $response);
+                unset($socket_id, $message, $is_binary, $user_msg, $line, $data, $type_method, $result, $response);
                 return;
             }
 
@@ -770,14 +771,20 @@ class go extends Factory
             }
 
             if (self::STATUS_IDLE === $this->wait_status) {
-                $llm_data = $result['content'];
+                $curr_msg = array_merge($curr_msg, $result['content']);
+
+                if ($key !== $last_key) {
+                    $this->core->sendMessage($socket_id, ['type' => 'close', 'sessionId' => $data['sessionId'], 'messageId' => $data['messageId']]);
+                } else {
+                    $curr_id = ['sessionId' => $data['sessionId'], 'messageId' => $data['messageId']];
+                }
 
                 if (empty($this->utils->getSessionHistory(WORKER_MAIN))) {
                     $system_prompt = $this->getSystemPrompt();
                     $this->utils->addSessionHistory(WORKER_MAIN, $system_prompt);
 
                     array_unshift(
-                        $llm_data, [
+                        $curr_msg, [
                             'type' => 'text',
                             'text' => '新会话：先加载`misc`记忆再回复，加载过程不汇报。'
                         ]
@@ -785,6 +792,7 @@ class go extends Factory
                 }
             } else {
                 $this->utils->debug('AgentBee: LLM is busy, new message queued.', 'trace');
+                $this->core->sendMessage($socket_id, ['type' => 'close', 'sessionId' => $data['sessionId'], 'messageId' => $data['messageId']]);
 
                 foreach ($result['content'] as $msg_line) {
                     $this->utils->addMessageQueue(WORKER_MAIN, $msg_line);
@@ -792,24 +800,13 @@ class go extends Factory
 
                 unset($msg_line);
             }
-
-            unset($data['content']);
-            $end_data[] = $data;
         }
 
-        $last_data = array_pop($end_data);
-
-        if (!empty($end_data)) {
-            foreach ($end_data as $end_packet) {
-                $this->core->sendMessage($socket_id, ['type' => 'close'] + $end_packet);
-            }
-        }
-
-        $count_llm_data = count($llm_data);
-        if (0 < $count_llm_data) {
-            $this->utils->debug('User: Sending ' . $count_llm_data . ' message(s) to ' . WORKER_MAIN, 'trace');
+        $count_msg = count($curr_msg);
+        if (0 < $count_msg) {
+            $this->utils->debug('User: Sending ' . $count_msg . ' message(s) to ' . WORKER_MAIN, 'trace');
             $this->utils->refreshSessionHistory(WORKER_MAIN);
-            $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $llm_data]);
+            $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $curr_msg]);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, [$this, 'streamWorkerHandler']);
 
             $message_metadata = $this->utils->getMessageMarker(
@@ -818,7 +815,7 @@ class go extends Factory
                 'Assistant',
                 AGENT_NAME,
                 0,
-                $last_data['messageId'] ?? ''
+                $curr_id['messageId'] ?? ''
             );
 
             $this->setStatus(self::STATUS_BUSY);
@@ -831,7 +828,7 @@ class go extends Factory
             );
         }
 
-        unset($socket_id, $message, $is_binary, $end_data, $llm_data, $messages, $line, $data, $type_method, $result, $message_metadata, $end_packet, $count_llm_data);
+        unset($socket_id, $message, $is_binary, $curr_id, $curr_msg, $user_msg, $last_key, $key, $line, $data, $type_method, $result, $message_metadata, $count_msg);
     }
 
     /**

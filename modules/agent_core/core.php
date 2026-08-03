@@ -38,10 +38,11 @@ final class core extends Factory
     public int $flush_time_at  = 0;
     public int $flush_interval = 30;
 
-    public array $llm_tools     = [];
-    public array $llm_params    = [];
-    public array $agent_tools   = [];
-    public array $flush_buffers = [];
+    public array $llm_tools       = [];
+    public array $llm_params      = [];
+    public array $agent_tools     = [];
+    public array $flush_buffers   = [];
+    public array $curr_message_id = [];
 
     /**
      * Initialize core components.
@@ -201,6 +202,11 @@ final class core extends Factory
 
                 if (!$success) {
                     $this->utils->message_buffers[] = $this->flush_buffers;
+                } elseif (
+                    isset($this->curr_message_id['messageId'])
+                    && $this->flush_buffers['messageId'] === $this->curr_message_id['messageId']
+                ) {
+                    $this->curr_message_id = [];
                 }
 
                 $this->flush_time_at = $microtime;

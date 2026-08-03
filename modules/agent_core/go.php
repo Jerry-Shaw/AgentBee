@@ -703,7 +703,6 @@ class go extends Factory
             return;
         }
 
-        $curr_id  = [];
         $curr_msg = [];
         $user_msg = str_contains($message, "\n") ? explode("\n", $message) : [$message];
         $user_msg = array_filter($user_msg, 'strlen');
@@ -773,15 +772,8 @@ class go extends Factory
             if (self::STATUS_IDLE === $this->wait_status) {
                 $curr_msg = array_merge($curr_msg, $result['content']);
 
-                if ($key !== $last_key) {
-                    $this->core->sendMessage($socket_id, ['type' => 'close', 'sessionId' => $data['sessionId'], 'messageId' => $data['messageId']]);
-                } else {
-                    $curr_id = ['sessionId' => $data['sessionId'], 'messageId' => $data['messageId']];
-                }
-
                 if (empty($this->utils->getSessionHistory(WORKER_MAIN))) {
-                    $system_prompt = $this->getSystemPrompt();
-                    $this->utils->addSessionHistory(WORKER_MAIN, $system_prompt);
+                    $this->utils->addSessionHistory(WORKER_MAIN, $this->getSystemPrompt());
 
                     array_unshift(
                         $curr_msg, [
@@ -792,7 +784,6 @@ class go extends Factory
                 }
             } else {
                 $this->utils->debug('AgentBee: LLM is busy, new message queued.', 'trace');
-                $this->core->sendMessage($socket_id, ['type' => 'close', 'sessionId' => $data['sessionId'], 'messageId' => $data['messageId']]);
 
                 foreach ($result['content'] as $msg_line) {
                     $this->utils->addMessageQueue(WORKER_MAIN, $msg_line);
@@ -800,6 +791,19 @@ class go extends Factory
 
                 unset($msg_line);
             }
+
+            if (isset($this->core->curr_message_id['messageId'])) {
+                $this->core->sendMessage(
+                    $socket_id,
+                    [
+                        'type'      => 'close',
+                        'sessionId' => $this->core->curr_message_id['sessionId'],
+                        'messageId' => $this->core->curr_message_id['messageId']
+                    ]
+                );
+            }
+
+            $this->core->curr_message_id = ['sessionId' => $data['sessionId'], 'messageId' => $data['messageId']];
         }
 
         $count_msg = count($curr_msg);
@@ -815,7 +819,7 @@ class go extends Factory
                 'Assistant',
                 AGENT_NAME,
                 0,
-                $curr_id['messageId'] ?? ''
+                $this->core->curr_message_id['messageId'] ?? ''
             );
 
             $this->setStatus(self::STATUS_BUSY);
@@ -828,7 +832,7 @@ class go extends Factory
             );
         }
 
-        unset($socket_id, $message, $is_binary, $curr_id, $curr_msg, $user_msg, $last_key, $key, $line, $data, $type_method, $result, $message_metadata, $count_msg);
+        unset($socket_id, $message, $is_binary, $curr_msg, $user_msg, $last_key, $key, $line, $data, $type_method, $result, $message_metadata, $count_msg);
     }
 
     /**

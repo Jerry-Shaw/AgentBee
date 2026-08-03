@@ -188,7 +188,6 @@ class procWorker extends Factory
                             ];
 
                             $this->sendMsg($socket_id, 'history', 'add', $metadata, $user_message);
-
                             $this->sendMsg($socket_id, 'stream', 'end', $metadata);
                             $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
 
@@ -223,8 +222,6 @@ class procWorker extends Factory
                                     'tool_call_id' => $result['tool_call_id'],
                                     'content'      => $result['content']
                                 ];
-
-                                $this->core->utils->addSessionHistory($metadata['workerName'], $tool_history);
 
                                 $this->sendMsg($socket_id, 'stream', 'tool_result', $metadata, $result);
                                 $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_history);

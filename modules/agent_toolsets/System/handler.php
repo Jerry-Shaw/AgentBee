@@ -11,34 +11,24 @@ class handler extends Factory
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
-     * @return string
+     * @return array
      */
-    public function cleanContext(array $payload_data, agent_core $agent_core): string
+    public function cleanContext(array $payload_data, agent_core $agent_core): array
     {
         $agent_core->utils->cleanSessionHistory(
             $payload_data['worker_name'],
             $payload_data['keep_normal'],
-            $payload_data['keep_tool_pairs'],
-            false,
-            $payload_data['tool_call_id'],
-            1
+            $payload_data['max_tool_pairs'],
         );
 
-        if (isset($payload_data['history_summary']) && '' !== $payload_data['history_summary']) {
-            $agent_core->utils->addSessionHistory(
-                $payload_data['worker_name'],
-                [
-                    'role'    => 'user',
-                    'content' => [[
-                        'type' => 'text',
-                        'text' => "[上下文摘要]\n\n" . $payload_data['history_summary']
-                    ]]
-                ]
-            );
-        }
+        $result = [
+            'status'  => 'success',
+            'message' => '[系统提醒] 上下文已清理，继续原有任务',
+            'history' => '[上下文摘要]' . "\n\n" . $payload_data['history_summary'] ?? '无重要摘要，可直接继续原有话题'
+        ];
 
         unset($payload_data, $agent_core);
-        return '[系统提醒] 上下文已清理，继续原有任务。';
+        return $result;
     }
 
     /**

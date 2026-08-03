@@ -381,27 +381,14 @@ class go extends Factory
 
                             $result_text = is_string($result) ? $result : json_encode($result, JSON_FORMAT);
 
-                            if (!isset($payload['data']['skip_history']) || !$payload['data']['skip_history']) {
-                                $this->utils->addSessionHistory(
-                                    $payload['workerName'],
-                                    [
-                                        'role'         => 'tool',
-                                        'tool_call_id' => $payload['data']['tool_call_id'],
-                                        'content'      => $result_text
-                                    ]
-                                );
-                            } else {
-                                $this->utils->addSessionHistory(
-                                    $payload['workerName'],
-                                    [
-                                        'role'    => 'user',
-                                        'content' => [[
-                                            'type' => 'text',
-                                            'text' => $result_text
-                                        ]]
-                                    ]
-                                );
-                            }
+                            $this->utils->addSessionHistory(
+                                $payload['workerName'],
+                                [
+                                    'role'         => 'tool',
+                                    'tool_call_id' => $payload['data']['tool_call_id'],
+                                    'content'      => $result_text
+                                ]
+                            );
 
                             $metadata = $this->utils->getMessageMarker(
                                 $payload['sender'],

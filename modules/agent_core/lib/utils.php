@@ -243,245 +243,159 @@ class utils extends Factory
     }
 
     /**
-     * Prune session history for a worker.
-     *
      * @param string $worker_name
-     * @param int    $keep_normal               Min normal units (user + assistant w/o tool_calls)
-     * @param int    $keep_tool_pairs           Min tool pairs (assistant with tool_calls + its tools)
-     * @param bool   $aggressive_mode           Allow zero limits
-     * @param string $remove_tool_call_id       Specify clean context tool_call_id, will be removed
-     * @param int    $remove_tool_call_id_limit Specify how many tool_call_ids will be removed, tool_calls and tool_result
+     * @param int    $keep_normal
+     * @param int    $max_tool_pairs
      *
-     * @return array{removed_normal:int, removed_tools:int, current_count:int}
+     * @return array
      */
-    public function cleanSessionHistory(
-        string $worker_name,
-        int    $keep_normal = 6,
-        int    $keep_tool_pairs = 2,
-        bool   $aggressive_mode = false,
-        string $remove_tool_call_id = '',
-        int    $remove_tool_call_id_limit = 2
-    ): array
+    public function cleanSessionHistory(string $worker_name, int $keep_normal = 6, int $max_tool_pairs = 2): array
     {
-        $history = $this->session_history[$worker_name];
+        $history = $this->session_history[$worker_name] ?? [];
 
-        // 1. enforce bounds
-        if (!$aggressive_mode) {
-            $keep_tool_pairs = max(2, $keep_tool_pairs);
-            $keep_normal     = max(6, $keep_normal);
-        } else {
-            $keep_tool_pairs = max(0, $keep_tool_pairs);
-            $keep_normal     = max(0, $keep_normal);
-        }
+        $keep_normal    = max(6, $keep_normal);
+        $max_tool_pairs = max(2, $max_tool_pairs);
 
-        // 2. Remove specified tool call pairs
-        if ('' !== $remove_tool_call_id) {
-            $removed  = 0;
-            $last_key = count($history) - 1;
+        $system       = '';
+        $messages     = [];
+        $total_normal = 0;
+        $total_tools  = 0;
 
-            for ($i = $last_key; $i >= 0; $i--) {
-                if ($removed >= $remove_tool_call_id_limit) {
-                    break;
+        // Extract the first system message.
+        foreach ($history as $message) {
+            $role = $message['role'];
+
+            if ('system' === $role) {
+                if ('' === $system) {
+                    $system = $message;
                 }
 
-                if (isset($history[$i]['tool_call_id']) && $history[$i]['tool_call_id'] === $remove_tool_call_id) {
-                    unset($history[$i]);
-                    ++$removed;
-                    continue;
-                }
-
-                if (isset($history[$i]['tool_calls'])) {
-                    $tool_calls = $history[$i]['tool_calls'];
-
-                    foreach ($tool_calls as $key => $values) {
-                        if ($remove_tool_call_id !== $values['id']) {
-                            continue;
-                        }
-
-                        unset($tool_calls[$key]);
-
-                        if (empty($tool_calls)) {
-                            unset($history[$i]);
-                        } else {
-                            $history[$i]['tool_calls'] = array_values($tool_calls);
-                        }
-
-                        ++$removed;
-                        break;
-                    }
-
-                    unset($tool_calls, $key, $values);
-                }
+                continue;
             }
 
-            unset($removed, $last_key);
+            if ('assistant' === $role && empty($message['tool_calls'])) {
+                unset($message['tool_calls']);
+            }
+
+            $is_tool_calls = 'assistant' === $role && isset($message['tool_calls']);
+            $total_normal  += (int)('user' === $role || ('assistant' === $role && !$is_tool_calls));
+            $total_tools   += (int)$is_tool_calls;
+            $messages[]    = $message;
         }
 
-        // 3. extract system message (first one)
-        $system = null;
-        foreach ($history as $idx => $msg) {
-            if ('system' === $msg['role']) {
-                $system = $msg;
-                unset($history[$idx]);
+        // Locate the first user independently.
+        $first_user = null;
+
+        foreach ($messages as $index => $message) {
+            if ('user' === $message['role']) {
+                $first_user = $index;
                 break;
             }
         }
 
-        $history = array_values($history);
-        $total   = count($history);
+        if (is_null($first_user)) {
+            $this->session_history[$worker_name] = '' === $system ? [] : [$system];
 
-        // 4. split into units (normal / tool) and count original totals
-        $units              = [];
-        $total_normal_units = 0;
-        $total_tool_units   = 0;
-        $i                  = 0;
-
-        while ($i < $total) {
-            $msg = $history[$i];
-            if ('assistant' === $msg['role'] && !empty($msg['tool_calls'])) {
-                $indices = [$i];
-                $j       = $i + 1;
-
-                while ($j < $total && 'tool' === $history[$j]['role']) {
-                    $indices[] = $j;
-                    $j++;
-                }
-
-                $units[] = ['type' => 'tool', 'indices' => $indices];
-                $total_tool_units++;
-                $i = $j;
-            } else {
-                $units[] = ['type' => 'normal', 'indices' => [$i], 'role' => $msg['role']];
-                $total_normal_units++;
-                $i++;
-            }
-        }
-
-        // 5. handle keep_normal == 0 : only system may survive
-        if (0 === $keep_normal || empty($history)) {
-            $this->session_history[$worker_name] = !is_null($system) ? [$system] : [];
-
-            return [
-                'removed_normal' => $total_normal_units,
-                'removed_tools'  => $total_tool_units,
-                'current_count'  => !is_null($system) ? 1 : 0
+            $clean_result = [
+                'removed_normal' => $total_normal,
+                'removed_tools'  => $total_tools,
+                'current_count'  => count($this->session_history[$worker_name]),
             ];
+
+            unset($worker_name, $keep_normal, $max_tool_pairs, $history, $system, $messages, $total_normal, $total_tools, $message, $role, $is_tool_calls, $first_user, $index);
+            return $clean_result;
         }
 
-        // 6. select units from end to front
-        $selected_normal = [];
-        $selected_tools  = [];
+        $messages = array_values(array_slice($messages, $first_user));
 
-        $need_normal = $keep_normal;
-        $need_tools  = $keep_tool_pairs;
-        $unit_count  = count($units);
+        $groups  = [];
+        $results = [];
 
-        for ($idx = $unit_count - 1; $idx >= 0; $idx--) {
-            $unit = $units[$idx];
-            if ('normal' === $unit['type']) {
-                if ($need_normal > 0) {
-                    array_unshift($selected_normal, $unit);
-                    $need_normal--;
+        $valid_groups   = [];
+        $normal_indices = [];
+
+        // Index normal messages, tool declarations and tool results.
+        foreach ($messages as $index => $message) {
+            if ('user' === $message['role'] || ('assistant' === $message['role'] && !isset($message['tool_calls']))) {
+                $normal_indices[] = $index;
+            } elseif ('tool' === $message['role']) {
+                $results[$message['tool_call_id']] = $index;
+            } elseif ('assistant' === $message['role']) {
+                $groups[$index] = array_column($message['tool_calls'], 'id');
+            }
+        }
+
+        // Keep groups whose calls all have later results.
+        foreach ($groups as $group_index => $call_ids) {
+            $group_results = [];
+
+            foreach ($call_ids as $call_id) {
+                $result = $results[$call_id] ?? -1;
+
+                if ($result <= $group_index) {
+                    continue 2;
                 }
-            } else {
-                if ($need_tools > 0) {
-                    array_unshift($selected_tools, $unit);
-                    $need_tools--;
-                }
+
+                $group_results[$result] = true;
             }
-            if ($need_normal <= 0 && $need_tools <= 0) {
-                break;
-            }
+
+            $valid_groups[$group_index] = $group_results;
         }
 
-        // 7. ensure first normal unit is 'user'
-        if (!empty($selected_normal) && 'user' !== $selected_normal[0]['role']) {
-            $first_idx = $selected_normal[0]['indices'][0];
-            for ($i = $first_idx - 1; $i >= 0; $i--) {
-                if ('user' === $history[$i]['role']) {
-                    $user_unit = ['type' => 'normal', 'indices' => [$i], 'role' => 'user'];
-                    array_unshift($selected_normal, $user_unit);
-                    break;
-                }
-            }
+        // Locate the oldest recent normal message.
+        $start = $normal_indices[max(0, count($normal_indices) - $keep_normal)];
+
+        // Align the retained suffix to a user boundary.
+        while ('user' !== $messages[$start]['role']) {
+            --$start;
         }
 
-        // 8. ensure each tool pair has a preceding user (add missing users)
-        $extra_user_indices = [];
-        foreach ($selected_tools as $tool_unit) {
-            $tool_start = $tool_unit['indices'][0];
-            for ($i = $tool_start - 1; $i >= 0; $i--) {
-                if ('user' === $history[$i]['role']) {
-                    $extra_user_indices[$i] = true;
-                    break;
-                }
-            }
-        }
-
-        $normal_idx_set = [];
-        foreach ($selected_normal as $nu) {
-            $normal_idx_set[$nu['indices'][0]] = true;
-        }
-
-        foreach ($extra_user_indices as $uidx => $_) {
-            if (!isset($normal_idx_set[$uidx])) {
-                $selected_normal[] = ['type' => 'normal', 'indices' => [$uidx], 'role' => 'user'];
-            }
-        }
-
-        // 9. merge and sort units by original order
-        $all_units = array_merge($selected_normal, $selected_tools);
-
-        usort(
-            $all_units,
-            function ($a, $b)
+        // Select the newest complete tool groups inside the retained suffix.
+        $selected_groups = array_filter(
+            $valid_groups,
+            function (int $group_index) use ($start): bool
             {
-                return $a['indices'][0] <=> $b['indices'][0];
-            }
+                return $group_index >= $start;
+            }, ARRAY_FILTER_USE_KEY
         );
 
-        // 10. count kept units and build new history
-        $kept_normal_units = 0;
-        $kept_tool_units   = 0;
-        $keep              = [];
+        $selected_groups = array_slice($selected_groups, -$max_tool_pairs, null, true);
 
-        foreach ($all_units as $unit) {
-            foreach ($unit['indices'] as $idx) {
-                $keep[$idx] = true;
-            }
-            if ('normal' === $unit['type']) {
-                $kept_normal_units++;
-            } else {
-                $kept_tool_units++;
-            }
+        // Index results belonging to selected tool groups.
+        $selected_results = [];
+        foreach ($selected_groups as $group_results) {
+            $selected_results += $group_results;
         }
 
-        $new_history = [];
+        $kept_normal = 0;
+        $new_history = '' === $system ? [] : [$system];
 
-        for ($i = 0; $i < $total; $i++) {
-            if (isset($keep[$i])) {
-                $new_history[] = $history[$i];
+        // Rebuild normal messages and selected complete tool groups.
+        foreach ($messages as $index => $message) {
+            if ($index < $start) {
+                continue;
             }
-        }
 
-        // 11. prepend system if exists
-        if (null !== $system) {
-            array_unshift($new_history, $system);
+            if ('user' === $message['role'] || ('assistant' === $message['role'] && !isset($message['tool_calls']))) {
+                $new_history[] = $message;
+                ++$kept_normal;
+            } elseif ('assistant' === $message['role'] && isset($selected_groups[$index])) {
+                $new_history[] = $message;
+            } elseif ('tool' === $message['role'] && isset($selected_results[$index])) {
+                $new_history[] = $message;
+            }
         }
 
         $this->session_history[$worker_name] = $new_history;
 
-        // 12. compute removed counts (non‑negative)
-        $removed_normal = max(0, $total_normal_units - $kept_normal_units);
-        $removed_tools  = max(0, $total_tool_units - $kept_tool_units);
-
-        unset($worker_name, $keep_normal, $keep_tool_pairs, $aggressive_mode, $remove_tool_call_id, $remove_tool_call_id_limit, $history, $system, $total, $units, $i, $msg, $indices, $j, $selected_normal, $selected_tools, $need_normal, $need_tools, $unit_count, $idx, $unit, $first_idx, $user_unit, $extra_user_indices, $normal_idx_set, $uidx, $tool_unit, $tool_start, $all_units, $keep, $total_normal_units, $total_tool_units, $kept_normal_units, $kept_tool_units);
-
-        return [
-            'removed_normal' => $removed_normal,
-            'removed_tools'  => $removed_tools,
-            'current_count'  => count($new_history)
+        $clean_result = [
+            'removed_normal' => $total_normal - $kept_normal,
+            'removed_tools'  => $total_tools - count($selected_groups),
+            'current_count'  => count($new_history),
         ];
+
+        unset($worker_name, $keep_normal, $max_tool_pairs, $history, $system, $messages, $total_normal, $total_tools, $message, $role, $is_tool_calls, $first_user, $index, $groups, $results, $valid_groups, $normal_indices, $group_index, $call_ids, $group_results, $call_id, $result, $start, $selected_groups, $selected_results, $kept_normal, $new_history);
+        return $clean_result;
     }
 
     /**

@@ -27,13 +27,13 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'cleanContext',
-                'description' => '清理上下文。调用前需详细总结上下文摘要（仅限用户与助手的对话、重要的工具结果，不包含系统设定），先保存重要内容到记忆，再传入摘要。清理后仅保留最近消息和工具对，继续原有任务，无需汇报。返回确认信息。',
+                'description' => '清理上下文。调用前总结当前会话中有价值的事实、偏好、决策、结果和待办，并主动写入记忆；不要包含系统设定、工具调用、记忆操作、清理过程等元信息。清理后仅保留最近消息和工具调用对。返回：{status, message, history}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'history_summary' => ['type' => 'string', 'description' => '对话摘要：核心需求、已执行步骤、关键决策、工具结果、待解决问题及重要背景（不含系统设定）'],
+                        'history_summary' => ['type' => 'string', 'description' => '当前会话的上下文衔接摘要。保留目标、背景、进展、结果、决策、问题、风险和下一步；内容完整，避免流水账。不要包含系统设定、工具调用、记忆操作、清理过程等元信息。'],
                         'keep_normal'     => ['type' => 'integer', 'default' => 6, 'description' => '保留普通消息数，最小值为6'],
-                        'keep_tool_pairs' => ['type' => 'integer', 'default' => 2, 'description' => '保留工具调用对组数，最小值为2']
+                        'max_tool_pairs'  => ['type' => 'integer', 'default' => 2, 'description' => '保留工具调用对数，最小值为2']
                     ],
                     'required'   => ['history_summary'],
                 ],

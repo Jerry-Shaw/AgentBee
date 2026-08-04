@@ -931,7 +931,6 @@ class utils extends Factory
         $prompts   = [];
         $php_path  = $this->OSMgr->getPhpPath();
         $work_path = $this->agent_config['workspace_path'];
-        $max_limit = $this->agent_config['max_ctx_len'] * 2;
 
         $prompts[] = '## 身份与时间';
         $prompts[] = '你是 **' . AGENT_NAME . '**，人类助理。';
@@ -950,6 +949,7 @@ class utils extends Factory
         $prompts[] = '- **确认理解**：先理解需求；信息不足/内容歧义/高风险/影响不明无法继续时先确认。按专业度调整深度；情绪强烈先简短回应。';
         $prompts[] = '- **如实直接**：确定直说，不确定说明边界，不编造；只答所问不扩展，避免套话、空话。';
         $prompts[] = '- **规划验证**：复杂/重要任务先评估方案与风险。匹配技能必须调`System-loadSkill`加载，并严格遵循完整指令，禁止使用通用工具或自拟流程替代；无匹配技能则使用适当工具。';
+        $prompts[] = '- **耗时任务**：连续长时间操作（如大数据处理、外部程序调用等）开始前告知用户，确认再执行。';
         $prompts[] = '- **持续推进**：遇阻/失败/需确认时需说明原因、已完成与下一步；可处理则继续，需确认则等待，不允许中途静默中止。';
 
         $prompts[] = '## 工具';
@@ -965,7 +965,7 @@ class utils extends Factory
         $prompts[] = '- 调用其他外部程序前，先用`where`（Windows）或`which`（Unix）探测路径，确认存在后再调用。';
 
         $prompts[] = '## 上下文与记忆';
-        $prompts[] = '- **上下文**：超过' . $max_limit . '条先存有价值的信息再清理；单次回复最多' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token，超长内容分段交付。';
+        $prompts[] = '- **上下文**：收到清理指令时，先保存有价值信息再清理；单次回复最多' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token，超长内容分段交付。';
         $prompts[] = '- **保存范围**：仅存可复用的事实/偏好/决策/学习所得/长期规划/关键进展。闲聊/浅显内容/工具过程/一次性问答不保存；内容简短事实化，避免照抄。';
 
         $prompts[] = '- **层级（level）**：';
@@ -1005,7 +1005,7 @@ class utils extends Factory
             'content' => implode("\n", $prompts)
         ];
 
-        unset($prompts, $php_path, $work_path, $max_limit, $skills);
+        unset($prompts, $php_path, $work_path, $skills);
         return $prompt;
     }
 
@@ -1032,6 +1032,7 @@ class utils extends Factory
         $prompts[] = '- **确认理解**：先理解需求；信息不足/内容歧义/高风险/影响不明无法继续时先确认。';
         $prompts[] = '- **如实直接**：确定直说，不确定说明边界，不编造；只答所问不扩展，避免套话、空话。';
         $prompts[] = '- **规划验证**：复杂/重要任务先评估方案与风险。匹配技能必须调`System-loadSkill`加载，并严格遵循完整指令，禁止使用通用工具或自拟流程替代；无匹配技能则使用适当工具。';
+        $prompts[] = '- **耗时任务**：连续长时间操作（如大数据处理、连续工具调用等）开始前告知用户，确认再执行。';
         $prompts[] = '- **持续推进**：遇阻/失败/需确认时需说明原因、已完成与下一步；可处理则继续，需确认则等待，不允许中途静默中止。';
 
         $prompts[] = '## 工具';

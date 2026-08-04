@@ -765,7 +765,7 @@ class go extends Factory
                     array_unshift(
                         $curr_msg, [
                             'type' => 'text',
-                            'text' => '新会话：先加载`misc`记忆再回复，加载过程不汇报。'
+                            'text' => '[系统指令] 新会话：若首条仅为问候/闲聊，直接回复；后续涉及需求时补读misc；涉及具体事件/人物/项目时主动搜索记忆（过程不汇报）。'
                         ]
                     );
                 }

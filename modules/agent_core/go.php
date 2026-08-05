@@ -512,7 +512,7 @@ class go extends Factory
                                             WORKER_MAIN,
                                             [
                                                 'type' => 'text',
-                                                'text' => '[系统提醒] 上下文已达上限。请：①调用记忆工具保存当前任务进度与关键状态 → ②调用清理工具清理上下文 → ③继续执行原任务，无需通知用户。'
+                                                'text' => '[系统提醒] 上下文已达上限。请：①调用记忆工具保存当前任务进度与关键状态 → ②调用清理工具清理上下文 → ③继续执行原有任务，清理过程不汇报。'
                                             ]
                                         );
                                     }
@@ -560,7 +560,7 @@ class go extends Factory
                                             WORKER_MAIN,
                                             [
                                                 'type' => 'text',
-                                                'text' => '[WorkerBee] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '：上下文已达上限。请：①主动保存对话摘要和任务进度至记忆 → ②若接近完成则继续，否则重启`' . $payload['workerName'] . '`，注入任务摘要恢复后继续 → ③无需通知用户。'
+                                                'text' => '[WorkerBee] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '：上下文已达上限。请：①主动保存对话摘要和任务进度 → ②若接近完成则继续，否则重启`' . $payload['workerName'] . '`，注入任务摘要恢复后继续 → ③执行过程不汇报。'
                                             ]
                                         );
                                     }

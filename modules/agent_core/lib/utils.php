@@ -847,6 +847,10 @@ class utils extends Factory
             }
 
             if (' ' !== $line[0]) {
+                if (!str_contains($line, ':')) {
+                    continue;
+                }
+
                 [$curr_key, $value] = explode(':', $line, 2);
 
                 $value = trim($value);

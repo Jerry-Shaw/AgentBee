@@ -556,6 +556,7 @@ class utils extends Factory
 
         ob_start();
         switch ($image_mime) {
+            case 'image/bmp':
             case 'image/webp':
                 $image_mime = 'image/png';
             case 'image/png':
@@ -566,7 +567,7 @@ class utils extends Factory
                 break;
             default:
                 $image_mime = 'image/jpeg';
-                imagejpeg($new_image, null, 90);
+                imagejpeg($new_image, null, 100);
                 break;
         }
         $image_bin = ob_get_clean();

@@ -115,7 +115,7 @@ class skills
                     'properties' => [
                         'level'  => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级(含all)'],
                         'offset' => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length' => ['type' => 'integer', 'default' => 20, 'description' => '条数(0=全部)'],
+                        'length' => ['type' => 'integer', 'default' => 10, 'description' => '条数（0为全部，建议5-20）'],
                         'date'   => ['type' => 'integer', 'default' => 0, 'description' => 'YYYYMMDD(0=不限)']
                     ],
                     'required'   => ['level']
@@ -134,7 +134,7 @@ class skills
                         'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组'],
                         'mode'       => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or', 'description' => '匹配模式'],
                         'offset'     => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length'     => ['type' => 'integer', 'default' => 100, 'description' => '条数(0=全部)'],
+                        'length'     => ['type' => 'integer', 'default' => 10, 'description' => '条数（0为全部，建议5-20）'],
                         'start_date' => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '起始日期'],
                         'end_date'   => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '结束日期']
                     ],

@@ -1,18 +1,25 @@
 ---
 name: SkillGenerator
-description: 将业务目标沉淀为可执行、可验证的 AgentBee 任务技能；需要时整合现有工具或创建内部工具模块。
+description: 将业务目标沉淀为可执行、可验证的 AgentBee 任务技能；需要时整合现有工具或创建内部工具模块，也可用于修正技能文档和检查内部工具是否合规。
 triggers:
   - 创建技能
+  - 检查技能
+  - 修正技能
   - 生成技能文档
+  - 校验技能文档
   - 编写 SKILL.md
+  - 校验 SKILL.md
   - 创建新技能
+  - 检查已有技能
   - 帮我写一个技能
+  - 帮我修复一个技能
   - 生成工具模块
   - 创建 AgentBee 工具
   - 创建工具模块
   - create skill
   - generate skill
   - write SKILL.md
+  - check SKILL.md
   - create tool module
   - generate AgentBee tool
 version: 2.1.10

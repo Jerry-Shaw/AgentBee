@@ -565,14 +565,14 @@ class utils extends Factory
                 imagegif($new_image);
                 break;
             default:
+                $image_mime = 'image/jpeg';
                 imagejpeg($new_image, null, 90);
                 break;
         }
-        $image_binary = ob_get_clean();
+        $image_bin = ob_get_clean();
+        $data_uri  = 'data:' . $image_mime . ';base64,' . base64_encode($image_bin);
 
-        $data_uri = 'data:' . $image_mime . ';base64,' . base64_encode($image_binary);
-
-        unset($binary, $width, $height, $src_image, $new_image, $image_info, $image_mime, $image_binary);
+        unset($binary, $width, $height, $src_image, $new_image, $image_info, $image_mime, $image_bin);
         return $data_uri;
     }
 

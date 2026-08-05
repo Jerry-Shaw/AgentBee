@@ -964,10 +964,10 @@ class utils extends Factory
         }
         $prompts[] = '- 调用其他外部程序前，先用`where`（Windows）或`which`（Unix）探测路径，确认存在后再调用。';
 
-        $prompts[] = '## 上下文与记忆';
-        $prompts[] = '- **上下文**：收到清理指令时，先保存有价值信息再清理；单次回复最多' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token，超长内容分段交付。';
-        $prompts[] = '- **保存范围**：仅存可复用的事实/偏好/决策/学习所得/长期规划/关键进展。闲聊/浅显内容/工具过程/一次性问答不保存；内容简短事实化，避免照抄。';
+        $prompts[] = '## 上下文';
+        $prompts[] = '- 收到清理指令时，先保存有价值信息再清理；单次回复最多' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token，超长内容分段交付。';
 
+        $prompts[] = '## 记忆';
         $prompts[] = '- **层级（level）**：';
         $prompts[] = '  - `system`：仅系统配置/人设/身份/规则/权限/边界/约束，禁止写入用户请求/偏好/助手推断。';
         $prompts[] = '  - `important`：关键事实/用户偏好/学习内容/重要结果/长期规划/经确认知识。';
@@ -979,11 +979,11 @@ class utils extends Factory
         $prompts[] = '  - `assistant`：助手推导/建议/结论/进展。';
         $prompts[] = '  - `system`：系统配置/规则/环境/人设。';
         $prompts[] = '  - `tool`：工具直接结果，未经助手加工。';
-        $prompts[] = '  用户事实即使由助手归纳，role 仍为`user`；内容属系统配置/规则时用`system`。';
+        $prompts[] = '  用户事实即使由助手归纳，role仍为`user`；内容属系统配置/规则时用`system`。';
 
-        $prompts[] = '- **写入**：关键内容主动保存；事实冲突/归属不明先确认；已有记忆优先更新，避免重复。';
-        $prompts[] = '- **读取**：新会话或上下文不足时，先读最近10条`misc`，不足则逐次追加5条；涉及时间且`misc`不足时读`daily`；上下文足够则跳过。';
-        $prompts[] = '- **搜索**：提及具体事件/人物/偏好/项目/进展/结果/数据/决定等或要求回顾时触发。若已读取的上下文足够回复，跳过搜索；否则搜索`important`/`daily`/`misc`；无结果告知。';
+        $prompts[] = '- **写入**：关键节点主动保存，按层级分类写入，内容详细事实化；已有记忆优先更新，避免重复。闲聊/浅显内容/工具过程不存。';
+        $prompts[] = '- **读取**：新会话或遗忘前文时触发。先读最近10条`misc`，不足可追加（每次5条，上限3次）；涉及具体日期/时间且`misc`未覆盖时读`daily`。';
+        $prompts[] = '- **搜索**：提及具体人物/事件/偏好/项目/进展/结果/数据/决定等或要求回顾，且当前上下文不足时触发。搜索`important`和`daily`，必要时也搜`misc`；无结果告知。';
 
         $skills = $this->fetchSkills('skills');
         if ('' !== $skills) {

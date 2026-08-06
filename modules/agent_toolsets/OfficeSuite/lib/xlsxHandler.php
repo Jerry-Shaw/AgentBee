@@ -149,12 +149,12 @@ class xlsxHandler extends Factory
             unset($cells);
 
             // fill missing cells with null
-            if (!empty($grid)) {
+            if ([] !== $grid) {
                 $max_row = max(array_keys($grid));
                 $max_col = 0;
                 foreach ($grid as $row_cells) {
                     $cols = array_keys($row_cells);
-                    if (!empty($cols)) {
+                    if ([] !== $cols) {
                         $max_col = max($max_col, max($cols));
                     }
                 }
@@ -204,7 +204,7 @@ class xlsxHandler extends Factory
         $temp_dir = null;
         try {
             $sheets = $this->normalizeSheets($data);
-            if (empty($sheets)) {
+            if ([] === $sheets) {
                 return ['error' => 'No data to write.'];
             }
 
@@ -257,8 +257,8 @@ class xlsxHandler extends Factory
             }
 
             $this->writeWorkbook($temp_dir, $sheet_files);
-            $this->writeWorkbookRels($temp_dir, $sheet_files, !empty($shared_strings));
-            $this->writeContentTypes($temp_dir, $sheet_files, !empty($shared_strings));
+            $this->writeWorkbookRels($temp_dir, $sheet_files, [] !== $shared_strings);
+            $this->writeContentTypes($temp_dir, $sheet_files, [] !== $shared_strings);
             $this->writeRootRels($temp_dir);
 
             if (!is_dir(dirname($path))) {
@@ -395,7 +395,7 @@ class xlsxHandler extends Factory
 
     private function normalizeRows(array $rows): array
     {
-        if (empty($rows)) {
+        if ([] === $rows) {
             return [];
         }
         $max_cols = 0;

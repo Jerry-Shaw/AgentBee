@@ -65,11 +65,11 @@ class go extends Factory
 
         $this->setDefaultHeaders();
 
-        if (!empty($headers)) {
+        if ([] !== $headers) {
             $this->http->addHeader($headers);
         }
 
-        if (!empty($params)) {
+        if ([] !== $params) {
             $this->http->addData($params);
         }
 
@@ -300,7 +300,7 @@ class go extends Factory
 
         preg_match_all('/<a\s+[^>]*href=["\']([^"\']+)["\']/i', $body, $matches);
 
-        if (empty($matches[1])) {
+        if ([] === $matches[1]) {
             return [];
         }
 
@@ -378,7 +378,7 @@ class go extends Factory
         preg_match_all('/<img\s+[^>]*src=["\']([^"\']+)["\']/i', $body, $img_matches);
         preg_match_all('/<a\s+[^>]*href=["\']([^"\']+\.(?:pdf|zip|rar|docx|xlsx|pptx|exe|jpg|png|webp))["\']/i', $body, $file_matches);
 
-        if (empty($img_matches[1]) && empty($file_matches[1])) {
+        if ([] === $img_matches[1] && [] === $file_matches[1]) {
             return [
                 'http_url' => $url,
                 'images'   => [],
@@ -451,7 +451,7 @@ class go extends Factory
      */
     public function fetchJson(string $url, array $params = [], int $timeout = 30): array
     {
-        $method = empty($params) ? 'GET' : 'POST';
+        $method = [] === $params ? 'GET' : 'POST';
         $res    = $this->request($url, $method, $params, $timeout, [], libHttp::CONTENT_TYPE_JSON);
 
         if ('' !== $res['http_error']) {
@@ -463,7 +463,7 @@ class go extends Factory
 
         $data = json_decode($res['http_body'], true);
 
-        if (is_null($data)) {
+        if (null === $data) {
             return [
                 'status'   => 'error',
                 'error'    => 'Invalid JSON response',

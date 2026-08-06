@@ -53,7 +53,7 @@ class handler extends Factory
 
         $image_info = getimagesize($file_path);
 
-        if (false === $image_info || empty($image_info['mime'])) {
+        if (false === $image_info) {
             return ['status' => 'error', 'error' => 'Cannot identify image type or unsupported format'];
         }
 

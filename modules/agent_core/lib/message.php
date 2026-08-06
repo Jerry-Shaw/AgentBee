@@ -329,7 +329,7 @@ class message extends Factory
             }
         }
 
-        if (!empty($content)) {
+        if ([] !== $content) {
             $result = [
                 'need_llm' => true,
                 'content'  => $content,

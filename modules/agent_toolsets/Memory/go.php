@@ -189,7 +189,7 @@ class go extends Factory
             ->where(['create_id', '=', $create_id])
             ->fetch();
 
-        if (empty($record)) {
+        if ([] === $record) {
             return ['status' => 'error', 'error' => 'Record not found: ' . $create_id];
         }
 
@@ -280,7 +280,7 @@ class go extends Factory
             }
         );
 
-        if (empty($keywords)) {
+        if ([] === $keywords) {
             return ['status' => 'success', 'data' => [], 'total' => 0];
         }
 
@@ -340,7 +340,7 @@ class go extends Factory
             return $result;
         }
 
-        if (!empty($create_ids)) {
+        if ([] !== $create_ids) {
             $valid_ids = array_filter(
                 $create_ids,
                 function (int $id): bool
@@ -351,7 +351,7 @@ class go extends Factory
 
             $valid_ids = array_map('intval', $valid_ids);
 
-            if (empty($valid_ids)) {
+            if ([] === $valid_ids) {
                 $result = ['status' => 'error', 'error' => 'Invalid create_ids (must be positive integers)'];
             } else {
                 $query = $this->libSQLite->table('agent_memory');
@@ -368,7 +368,7 @@ class go extends Factory
             }
 
             unset($valid_ids);
-        } elseif (0 < $start_time || 0 < $end_time || !empty($keywords)) {
+        } elseif (0 < $start_time || 0 < $end_time || [] !== $keywords) {
             if (0 < $start_time && 0 < $end_time && $start_time > $end_time) {
                 $result = ['status' => 'error', 'error' => 'start_time cannot be greater than end_time'];
             } else {
@@ -386,7 +386,7 @@ class go extends Factory
                     $query->where(['create_id', '<=', $end_time * 1000000]);
                 }
 
-                if (!empty($keywords)) {
+                if ([] !== $keywords) {
                     if ('and' === $mode) {
                         foreach ($keywords as $word) {
                             $query->where(['content', 'LIKE', '%' . $word . '%']);
@@ -616,7 +616,7 @@ class go extends Factory
         $this->libSQLite->table('agent_memory');
         $this->libSQLite->where(['level', 'misc']);
 
-        if (!empty($keep_ids)) {
+        if ([] !== $keep_ids) {
             $this->libSQLite->and(['create_id', '<', min($keep_ids)], ['or', 'expire_at', '<', time()]);
         } else {
             $this->libSQLite->and(['expire_at', '<', time()]);
@@ -641,7 +641,7 @@ class go extends Factory
             ->where(['create_id', '=', $ts])
             ->fetch();
 
-        while (!empty($exists)) {
+        while ([] !== $exists) {
             ++$ts;
             $exists = $this->libSQLite->table($table)
                 ->select('create_id')
@@ -733,7 +733,7 @@ class go extends Factory
         $keywords = array_map([$this, 'buildTokens'], $keywords);
         $keywords = array_filter($keywords, 'strlen');
 
-        if (empty($keywords)) {
+        if ([] === $keywords) {
             return ['data' => [], 'total' => 0];
         }
 
@@ -824,7 +824,7 @@ class go extends Factory
             $query->where(['date_key', '<=', $end_date_int]);
         }
 
-        if (!empty($keywords)) {
+        if ([] !== $keywords) {
             if ('and' === $mode) {
                 foreach ($keywords as $kw) {
                     $query->where(['content', 'LIKE', '%' . $kw . '%']);

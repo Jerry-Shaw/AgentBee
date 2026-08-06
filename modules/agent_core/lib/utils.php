@@ -221,13 +221,13 @@ class utils extends Factory
      */
     public function refreshSessionHistory(string $worker_name): int
     {
-        if (!isset($this->message_queue[$worker_name]) || empty($this->message_queue[$worker_name])) {
+        if (!isset($this->message_queue[$worker_name]) || [] === $this->message_queue[$worker_name]) {
             return 0;
         }
 
         $messages = [];
 
-        while (!is_null($message = array_shift($this->message_queue[$worker_name]))) {
+        while (null !== ($message = array_shift($this->message_queue[$worker_name]))) {
             $messages[] = $message;
         }
 
@@ -273,7 +273,7 @@ class utils extends Factory
                 continue;
             }
 
-            if ('assistant' === $role && empty($message['tool_calls'])) {
+            if ('assistant' === $role && [] === $message['tool_calls']) {
                 unset($message['tool_calls']);
             }
 
@@ -293,7 +293,7 @@ class utils extends Factory
             }
         }
 
-        if (is_null($first_user)) {
+        if (null === $first_user) {
             $this->session_history[$worker_name] = '' === $system ? [] : [$system];
 
             $clean_result = [
@@ -515,7 +515,7 @@ class utils extends Factory
     {
         unset($this->child_workers[$type][$name]);
 
-        if (empty($this->child_workers[$type])) {
+        if ([] === $this->child_workers[$type]) {
             unset($this->child_workers[$type]);
         }
     }
@@ -663,7 +663,7 @@ class utils extends Factory
         foreach ($name_list as $name) {
             $paths = $this->OSMgr->findPath($name);
 
-            if (!empty($paths)) {
+            if ([] !== $paths) {
                 $available[] = $name;
             }
         }
@@ -740,7 +740,7 @@ class utils extends Factory
             try {
                 $metadata = ($namespace . '\\skills')::META;
 
-                if (!empty($tool_names)) {
+                if ([] !== $tool_names) {
                     $metadata = array_filter(
                         $metadata,
                         function (array $item) use ($tool_names): bool
@@ -792,7 +792,7 @@ class utils extends Factory
 
             $md_meta = $this->getSkillMeta($md_file);
 
-            if (empty($md_meta['skill_name']) || $md_meta['skill_name'] !== $item['name']) {
+            if ([] === $md_meta['skill_name'] || $md_meta['skill_name'] !== $item['name']) {
                 continue;
             }
 
@@ -887,7 +887,7 @@ class utils extends Factory
      */
     public function getSkillPrompt(array $skills): string
     {
-        if (empty($skills)) {
+        if ([] === $skills) {
             return '';
         }
 
@@ -897,15 +897,15 @@ class utils extends Factory
             $num      = $key + 1;
             $name     = $meta['skill_name'];
             $desc     = $meta['description'];
-            $triggers = !empty($meta['triggers']) ? implode('、', $meta['triggers']) : '';
+            $triggers = [] !== $meta['triggers'] ? implode('、', $meta['triggers']) : '';
 
             $list .= $num . '. **' . $name . '**：' . $desc;
 
-            if (!empty($triggers)) {
-                $list .= ' [场景：' . $triggers . ']';
+            if ('' !== $triggers) {
+                $list .= ' [适用场景：' . $triggers . ']';
             }
 
-            if (!empty($meta['resource'])) {
+            if ([] !== $meta['resource']) {
                 $list .= ' [依赖及资源：' . implode('、', $meta['resource']) . ']';
             }
 
@@ -960,7 +960,7 @@ class utils extends Factory
 
         $prompts[] = '## 外部程序（exec调用）';
         $programs  = $this->fetchPrograms();
-        if (!empty($programs)) {
+        if ([] !== $programs) {
             $prompts[] = '- 可直接调用（已存在于 PATH）：' . implode('、', $programs);
         }
         $prompts[] = '- 调用其他外部程序前，先用`where`（Windows）或`which`（Unix）探测路径，确认存在后再调用。';

@@ -92,7 +92,7 @@ final class core extends Factory
             }
         }
 
-        if (!empty($skill_metadata)) {
+        if ([] !== $skill_metadata) {
             $this->llm_tools['tools']               = array_merge($this->llm_tools['tools'] ?? [], $skill_metadata);
             $this->llm_tools['tool_choice']         = 'auto';
             $this->llm_tools['parallel_tool_calls'] = true;
@@ -189,7 +189,7 @@ final class core extends Factory
             return;
         }
 
-        if (!empty($this->flush_buffers)) {
+        if ([] !== $this->flush_buffers) {
             $microtime = (int)(microtime(true) * 1000);
 
             if (
@@ -217,7 +217,7 @@ final class core extends Factory
         }
 
         if (in_array($message['type'], ['content', 'think'], true)) {
-            if (!empty($this->flush_buffers)) {
+            if ([] !== $this->flush_buffers) {
                 $this->flush_buffers['data'] .= $message['data'];
             } else {
                 $this->flush_buffers = $message;

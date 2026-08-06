@@ -60,18 +60,12 @@ class config extends Factory
      */
     public function get(bool $decrypt = true, bool $reload = false): array
     {
-        if (!$reload && !empty($this->config)) {
+        if (!$reload && [] !== $this->config) {
             $config_data = $this->config;
         } else {
-            if (is_file($this->conf_system)) {
-                // Read from file
-                $config_data = json_decode(file_get_contents($this->conf_system), true) ?? [];
-            }
-
-            if (empty($config_data)) {
-                // Read from default
-                $config_data = $this->getDefault();
-            }
+            $config_data = is_file($this->conf_system)
+                ? json_decode(file_get_contents($this->conf_system), true) ?? $this->getDefault()
+                : $this->getDefault();
 
             $config_data['agent_llm']['hw_hash'] ??= '';
 

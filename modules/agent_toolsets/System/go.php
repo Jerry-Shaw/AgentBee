@@ -109,11 +109,11 @@ class go extends Factory
 
         $result = ['status' => 'success', 'skill_path' => $skill_path];
 
-        if (!empty($resources)) {
+        if ([] !== $resources) {
             $result['resources'] = $resources;
         }
 
-        if (!empty($dependencies)) {
+        if ([] !== $dependencies) {
             $result['dependencies']  = $dependencies;
             $result['install_guide'] = '本技能有依赖，请先进入技能目录，安装依赖后再执行，详情查看dependencies字段。';
         }
@@ -150,7 +150,7 @@ class go extends Factory
             ? $this->utils->agent_config['workspace_path']
             : $this->utils->securePath($work_path);
 
-        if (empty($argv) && str_contains($program, ' ')) {
+        if ([] === $argv && str_contains($program, ' ')) {
             [$program, $args] = explode(' ', $program, 2);
             $argv = explode(' ', $args);
         }

@@ -149,7 +149,7 @@ class go extends Factory
 
         $occupied_pids = $this->core->OSMgr->findPidsByPortState($this->utils->agent_config['agent_server']['port'], 'LISTEN');
 
-        if (!empty($occupied_pids)) {
+        if ([] !== $occupied_pids) {
             $this->utils->debug('AgentBee failed to start. Port ' . $this->utils->agent_config['agent_server']['port'] . ' is occupied.', 'trace');
             return;
         }
@@ -194,7 +194,7 @@ class go extends Factory
         $system_default = $this->utils->getMainPrompt();
         $system_memory  = $this->memory->read('system', 0, 0);
 
-        if (!empty($system_memory['data'])) {
+        if ([] !== $system_memory['data']) {
             $memory = ['## 角色与行为设定'];
 
             foreach ($system_memory['data'] as $content) {
@@ -448,7 +448,7 @@ class go extends Factory
                             } else {
                                 $worker_info = $this->utils->getChildWorker('WorkerBee', $payload['workerName']);
 
-                                if (empty($worker_info)) {
+                                if ([] === $worker_info) {
                                     $this->utils->debug($payload['workerName'] . ': Worker already closed.', 'trace');
                                     break;
                                 }
@@ -623,11 +623,11 @@ class go extends Factory
         $task_list    = $this->memory->runTask();
         $new_messages = $this->utils->refreshSessionHistory(WORKER_MAIN);
 
-        if (empty($task_list) && 0 === $new_messages) {
+        if ([] === $task_list && 0 === $new_messages) {
             return '';
         }
 
-        if (!empty($task_list)) {
+        if ([] !== $task_list) {
             $this->utils->debug('ScheduledTask: Running task jobs (' . count($task_list) . ')', 'trace');
         }
 
@@ -748,18 +748,18 @@ class go extends Factory
                 return;
             }
 
-            if (isset($result['saves']) && !empty($result['saves'])) {
+            if (isset($result['saves']) && [] !== $result['saves']) {
                 $this->memory->save('misc', 'user', implode(' ', $result['saves']));
             }
 
-            if (isset($result['errors']) && !empty($result['errors'])) {
+            if (isset($result['errors']) && [] !== $result['errors']) {
                 $this->core->sendMessage($socket_id, ['type' => 'error', 'error' => implode("\n", $result['errors'])]);
             }
 
             if (self::STATUS_IDLE === $this->wait_status) {
                 $curr_msg = array_merge($curr_msg, $result['content']);
 
-                if (empty($this->utils->getSessionHistory(WORKER_MAIN))) {
+                if ([] === $this->utils->getSessionHistory(WORKER_MAIN)) {
                     $this->utils->addSessionHistory(WORKER_MAIN, $this->getSystemPrompt());
 
                     array_unshift(
@@ -832,8 +832,8 @@ class go extends Factory
      */
     public function onSendString(string $socket_id): array
     {
-        if (!empty($this->utils->message_buffers)) {
-            while (!is_null($buffer = array_shift($this->utils->message_buffers))) {
+        if ([] !== $this->utils->message_buffers) {
+            while (null !== ($buffer = array_shift($this->utils->message_buffers))) {
                 $this->core->sendMessage($socket_id, $buffer);
             }
         }

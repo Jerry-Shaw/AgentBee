@@ -173,7 +173,7 @@ class procWorker extends Factory
 
                         $tool_calls_buffer = array_values($tool_calls_buffer);
 
-                        if (empty($tool_calls_buffer)) {
+                        if ([] === $tool_calls_buffer) {
                             if ('' !== $assistant_content || '' !== $reasons_content) {
                                 $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
                                 $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
@@ -294,7 +294,7 @@ class procWorker extends Factory
                     case 'undefined':
                         $user_message = '[系统提示] 生成异常中断。';
 
-                        if (!empty($tool_calls_buffer)) {
+                        if ([] !== $tool_calls_buffer) {
                             // Alert LLM: tool calls blocked due to missing finish_reason.
                             $user_message = '[系统提示] 生成异常中断，已自动拦截无效工具调用。';
 
@@ -419,7 +419,7 @@ class procWorker extends Factory
         }
 
         // Tool calls
-        if (isset($delta['tool_calls']) && !empty($delta['tool_calls'])) {
+        if (isset($delta['tool_calls']) && [] !== $delta['tool_calls']) {
             foreach ($delta['tool_calls'] as $tool_call_chunk) {
                 $tool_index = $tool_call_chunk['index'];
 

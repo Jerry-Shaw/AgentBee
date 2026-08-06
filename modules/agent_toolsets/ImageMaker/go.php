@@ -109,7 +109,7 @@ class go extends Factory
             $edit_images[$key] = $path;
         }
 
-        if (empty($edit_images)) {
+        if ([] === $edit_images) {
             return ['status' => 'error', 'error' => '未找到可编辑的图片。请检查沙箱限制和文件路径。'];
         }
 

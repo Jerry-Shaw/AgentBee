@@ -37,7 +37,7 @@ class handler extends Factory
      */
     private function loadConfig(agent_core $agent_core): array
     {
-        if (!empty($this->config)) {
+        if ([] !== $this->config) {
             return $this->config;
         }
 
@@ -164,7 +164,7 @@ class handler extends Factory
                 $files['mask'] = $agent_core->utils->resizeImage($image_binary, 4096, 4096);
             }
 
-            if (empty($files)) {
+            if ([] === $files) {
                 throw new \RuntimeException('No image files uploaded.');
             }
 

@@ -119,7 +119,7 @@ class docxHandler extends Factory
         $temp_dir        = null;
         $append_temp_dir = null;
         try {
-            if (empty($structured_items)) {
+            if ([] === $structured_items) {
                 return ['error' => 'No content to write.'];
             }
 
@@ -510,7 +510,7 @@ class docxHandler extends Factory
         $rel_reader->close();
         unset($rels_content, $rel_reader);
 
-        if (empty($rel_map)) {
+        if ([] === $rel_map) {
             return $images;
         }
 

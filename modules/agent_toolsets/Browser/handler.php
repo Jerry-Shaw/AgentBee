@@ -141,7 +141,7 @@ class handler extends Factory
             }
         }
 
-        if (empty($tab_list)) {
+        if ([] === $tab_list) {
             $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
             $agent_core->utils->removePid($browser_pid);
@@ -174,7 +174,7 @@ class handler extends Factory
      */
     public function close(array $payload_data, agent_core $agent_core): string
     {
-        if (empty($this->browser_data)) {
+        if ([] === $this->browser_data) {
             return '浏览器实例未启动，无需关闭。';
         }
 
@@ -228,7 +228,7 @@ class handler extends Factory
      */
     public function listTabs(array $payload_data, agent_core $agent_core): array
     {
-        if (empty($this->browser_data)) {
+        if ([] === $this->browser_data) {
             return ['status' => 'error', 'error' => '浏览器实例未启动，请先启动浏览器。'];
         }
 
@@ -617,7 +617,7 @@ class handler extends Factory
      */
     public function isBrowserAlive(array $payload_data, agent_core $agent_core): bool
     {
-        if (empty($this->browser_data)) {
+        if ([] === $this->browser_data) {
             return false;
         }
 
@@ -698,7 +698,7 @@ class handler extends Factory
         $debugger  = $this->fetchDebugger($this->browser_data['debug_port']);
         $target_id = $msg_data['result']['targetId'];
 
-        if (!empty($debugger)) {
+        if ([] !== $debugger) {
             foreach ($debugger as $item) {
                 if (isset($item['id']) && $item['id'] === $target_id && $item['type'] === 'page') {
                     $ws_addr = $item['webSocketDebuggerUrl'] ?? '';
@@ -749,7 +749,7 @@ class handler extends Factory
 
         if ($this->curr_id === $target_id) {
             $tab_ids       = array_keys($this->tab_list);
-            $this->curr_id = !empty($tab_ids) ? $tab_ids[0] : '';
+            $this->curr_id = [] !== $tab_ids ? $tab_ids[0] : '';
             unset($tab_ids);
         }
 
@@ -964,7 +964,7 @@ class handler extends Factory
      */
     public function sendCommand(agent_core $agent_core, array $payload_data, string $action): array
     {
-        if (empty($this->browser_data)) {
+        if ([] === $this->browser_data) {
             return ['status' => 'error', 'error' => '浏览器实例未启动，请先启动浏览器。'];
         }
 
@@ -982,7 +982,7 @@ class handler extends Factory
         if (!isset($this->tab_list[$target_id])) {
             $debugger = $this->fetchDebugger($this->browser_data['debug_port']);
 
-            if (!empty($debugger)) {
+            if ([] !== $debugger) {
                 foreach ($debugger as $item) {
                     if (isset($item['id']) && $item['id'] === $target_id && $item['type'] === 'page') {
                         $this->tab_list[$target_id] = [
@@ -1024,7 +1024,7 @@ class handler extends Factory
 
             if ($this->curr_id === $target_id) {
                 $tab_ids       = array_keys($this->tab_list);
-                $this->curr_id = !empty($tab_ids) ? $tab_ids[0] : '';
+                $this->curr_id = [] !== $tab_ids ? $tab_ids[0] : '';
                 unset($tab_ids);
             }
 
@@ -1060,7 +1060,7 @@ class handler extends Factory
                 $this->tab_list[$target_id]['status'] = 'ready';
                 $this->tab_list[$target_id]['action'] = 'idle';
 
-                if (is_null($msg_data)) {
+                if (null === $msg_data) {
                     return [
                         'status'  => 'error',
                         'error'   => '执行"' . $action . '"失败，响应格式异常，请重试或重启实例。',

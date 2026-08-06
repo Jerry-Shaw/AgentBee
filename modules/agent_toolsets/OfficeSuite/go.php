@@ -223,7 +223,7 @@ class go extends Factory
     {
         $path = $this->utils->securePath($path);
 
-        if (empty($items)) {
+        if ([] === $items) {
             return ['error' => 'No content to append.'];
         }
 
@@ -240,7 +240,7 @@ class go extends Factory
      */
     public function saveDocx(string $path): array
     {
-        if (empty($this->docx_buffer)) {
+        if ([] === $this->docx_buffer) {
             return ['error' => 'No content to save. Call initDocx() first.'];
         }
 
@@ -286,7 +286,7 @@ class go extends Factory
         if (null !== $sheet_name) {
             $is_multi_sheet = false;
 
-            if (!empty($data) && is_array($data[0]) && isset($data[0]['name']) && isset($data[0]['rows'])) {
+            if (is_array($data[0]) && isset($data[0]['name']) && isset($data[0]['rows'])) {
                 $is_multi_sheet = true;
             }
 

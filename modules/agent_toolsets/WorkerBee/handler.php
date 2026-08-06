@@ -19,7 +19,7 @@ class handler extends Factory
     {
         $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
-        if (!empty($worker_info)) {
+        if ([] !== $worker_info) {
             // WorkerBee already exists, change name or talk
             $agent_core->utils->debug('WorkerBee already exists: ' . $payload_data['worker_name'] . ' | ' . $worker_info['worker_role'] . ' already exists!', 'trace');
 
@@ -99,7 +99,7 @@ class handler extends Factory
     {
         $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
-        if (empty($worker_info) || 0 === $agent_core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
+        if ([] === $worker_info || 0 === $agent_core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             // WorkerBee died, notice main worker
             $agent_core->utils->addMessageQueue(
                 WORKER_MAIN,
@@ -173,7 +173,7 @@ class handler extends Factory
     {
         $worker_info = $agent_core->utils->getChildWorker('WorkerBee', $payload_data['worker_name']);
 
-        if (!empty($worker_info) && 0 < $agent_core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
+        if ([] !== $worker_info && 0 < $agent_core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             $agent_core->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
 
             $agent_core->utils->procMgr->close($worker_info['proc_idx']);

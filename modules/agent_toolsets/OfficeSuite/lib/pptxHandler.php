@@ -100,7 +100,7 @@ class pptxHandler extends Factory
         }
 
         // Fallback: scan all slide*.xml files
-        if (empty($slide_rels)) {
+        if ([] === $slide_rels) {
             for ($i = 1; $i <= 100; $i++) {
                 $file = "ppt/slides/slide{$i}.xml";
                 if (false !== $zip->locateName($file)) {
@@ -199,7 +199,7 @@ class pptxHandler extends Factory
                     }
                 }
 
-                if (!empty($image_target_map)) {
+                if ([] !== $image_target_map) {
                     foreach ($pic_nodes as $pic) {
                         $blip_nodes = $xp_s->query('.//a:blip/@r:embed', $pic);
                         if (false === $blip_nodes || 0 === $blip_nodes->length) {

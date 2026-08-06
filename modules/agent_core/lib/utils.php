@@ -543,20 +543,16 @@ class utils extends Factory
             unset($base64_pos);
         }
 
-        $src_image = imagecreatefromstring($binary);
-
-        if (false === $src_image) {
-            throw new \RuntimeException('图片文件损坏，加载失败');
-        }
-
-        $new_image = libImage::new()->gd_resize($src_image, $width, $height);
-
+        $libImage   = libImage::new();
+        $src_image  = $libImage->createImageFromBinary($binary);
+        $new_image  = $libImage->gd_resize($src_image, $width, $height);
         $image_info = getimagesizefromstring($binary);
-        $image_mime = $image_info['mime'] ?? 'image/jpeg';
+        $image_mime = $image_info['mime'];
 
         ob_start();
         switch ($image_mime) {
             case 'image/bmp':
+            case 'image/tiff':
             case 'image/webp':
                 $image_mime = 'image/png';
             case 'image/png':
@@ -1081,11 +1077,13 @@ class utils extends Factory
         $header = bin2hex(substr($binary, 0, 12));
 
         $magics = [
-            '424d'             => 'bmp',
-            'ffd8ff'           => 'jpeg',
-            '89504e470d0a1a0a' => 'png',
-            '47494638'         => 'gif',
-            '52494646'         => 'webp'
+            'ffd8ff'           => 'jpeg',   // JPEG
+            '52494646'         => 'webp',   // WebP (RIFF container)
+            '4949'             => 'tiff',   // TIFF (little-endian)
+            '4d4d'             => 'tiff',   // TIFF (big-endian)
+            '89504e470d0a1a0a' => 'png',    // PNG
+            '424d'             => 'bmp',    // BMP
+            '47494638'         => 'gif',    // GIF
         ];
 
         foreach ($magics as $magic => $type) {

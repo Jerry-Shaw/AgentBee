@@ -57,7 +57,7 @@ class handler extends Factory
             return ['status' => 'error', 'error' => 'Cannot identify image type or unsupported format'];
         }
 
-        if (!in_array($image_info['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'], true)) {
+        if (!in_array($image_info['mime'], ['image/jpeg', 'image/tiff', 'image/webp', 'image/png', 'image/bmp', 'image/gif'], true)) {
             return ['status' => 'error', 'error' => 'Unsupported image type: ' . $image_info['mime']];
         }
 

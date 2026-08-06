@@ -358,7 +358,7 @@ class message extends Factory
      */
     private function imageIsAllowed(string $filename): bool
     {
-        $whitelist = ['jpg', 'jpeg', 'bmp', 'png', 'gif', 'webp'];
+        $whitelist = ['jpg', 'jpeg', 'tif', 'tiff', 'webp', 'png', 'bmp', 'gif'];
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
         $allowed   = in_array($extension, $whitelist, true);
 

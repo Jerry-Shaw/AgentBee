@@ -255,15 +255,17 @@ class go extends Factory
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $file_path
+     * @param bool   $rendering
      *
      * @return array
      */
-    public function readImage(string $file_path): array
+    public function readImage(string $file_path, bool $rendering = false): array
     {
         return [
             'async'     => false,
             'action'    => __FUNCTION__,
             'file_path' => $file_path,
+            'rendering' => $rendering,
             'handler'   => handler::class
         ];
     }

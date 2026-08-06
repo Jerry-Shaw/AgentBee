@@ -36,6 +36,7 @@ class handler extends Factory
      * @param agent_core $agent_core
      *
      * @return array|string[]
+     * @throws \Random\RandomException
      * @throws \ReflectionException
      */
     public function readImage(array $payload_data, agent_core $agent_core): array
@@ -56,11 +57,8 @@ class handler extends Factory
             return ['status' => 'error', 'error' => 'Cannot identify image type or unsupported format'];
         }
 
-        $image_mime = $image_info['mime'];
-        $allowed    = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
-
-        if (!in_array($image_mime, $allowed, true)) {
-            return ['status' => 'error', 'error' => 'Unsupported image type: ' . $image_mime];
+        if (!in_array($image_info['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'], true)) {
+            return ['status' => 'error', 'error' => 'Unsupported image type: ' . $image_info['mime']];
         }
 
         $filename    = basename($file_path);
@@ -70,25 +68,47 @@ class handler extends Factory
             return ['status' => 'error', 'error' => 'Failed to read image data: ' . $file_path];
         }
 
+        $data_url = $agent_core->utils->resizeImage($binary_data);
+
         $agent_core->utils->addSessionHistory(
             $payload_data['process_name'],
             [
                 'role'    => 'user',
                 'content' => [
                     ['type' => 'text', 'text' => $filename],
-                    ['type' => 'image_url', 'image_url' => ['url' => $agent_core->utils->resizeImage($binary_data)]]
+                    ['type' => 'image_url', 'image_url' => ['url' => $data_url]]
                 ]
             ]
         );
 
+        if ($payload_data['rendering']) {
+            $message = $agent_core->utils->getMessageMarker(
+                WORKER_MAIN,
+                WORKER_MAIN,
+                'Assistant',
+                $payload_data['process_name'],
+                0,
+                hash('md5', uniqid(microtime(), true))
+            );
+
+            $agent_core->core->sendImageMessage(
+                $payload_data['socket_id'],
+                $message,
+                $data_url,
+                $filename
+            );
+        }
+
         $result = [
             'status'    => 'success',
             'message'   => '[系统提醒] 图片已加载，按需使用',
+            'width'     => $image_info[0],
+            'height'    => $image_info[1],
             'filename'  => $filename,
-            'mime_type' => $image_mime
+            'mime_type' => $image_info['mime']
         ];
 
-        unset($payload_data, $agent_core, $file_path, $image_info, $image_mime, $allowed, $filename, $binary_data);
+        unset($payload_data, $agent_core, $file_path, $image_info, $filename, $binary_data);
         return $result;
     }
 }

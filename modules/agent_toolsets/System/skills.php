@@ -94,10 +94,13 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'readImage',
-                'description' => '读取图片文件，返回图片的元信息，并将图片 Data URL 附于上下文。返回：{status, message, filename, mime_type}。',
+                'description' => '读取图片，返回元信息，并将图片Data-URL附于上下文。rendering设为true时，图片会展示在前端。返回：{status, message, width, height, filename, mime_type}。',
                 'parameters'  => [
                     'type'       => 'object',
-                    'properties' => ['file_path' => ['type' => 'string', 'description' => '图片文件路径']],
+                    'properties' => [
+                        'file_path' => ['type' => 'string', 'description' => '图片路径'],
+                        'rendering' => ['type' => 'boolean', 'default' => false, 'description' => '是否渲染到前端。默认：false；为true时，同步渲染']
+                    ],
                     'required'   => ['file_path']
                 ],
             ],

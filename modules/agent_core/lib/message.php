@@ -286,9 +286,9 @@ class message extends Factory
                     }
 
                     try {
-                        $data_uri  = $this->utils->resizeImage($binary);
+                        $data_url  = $this->utils->resizeImage($binary);
                         $content[] = ['type' => 'text', 'text' => $data['file']['filename']];
-                        $content[] = ['type' => 'image_url', 'image_url' => ['url' => $data_uri]];
+                        $content[] = ['type' => 'image_url', 'image_url' => ['url' => $data_url]];
                     } catch (\Throwable $throwable) {
                         $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();
                         unset($throwable);
@@ -347,7 +347,7 @@ class message extends Factory
             ];
         }
 
-        unset($socket_id, $data_content, $content, $errors, $saves, $reset, $data, $text, $binary, $data_uri, $detected, $file_text);
+        unset($socket_id, $data_content, $content, $errors, $saves, $reset, $data, $text, $binary, $data_url, $detected, $file_text);
         return $result;
     }
 

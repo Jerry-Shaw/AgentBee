@@ -194,25 +194,36 @@ class handler extends Factory
     private function handleResponse(agent_core $agent_core, string $socket_id, string $process_name, array $response): array
     {
         if (isset($response['data']) && true === $response['success']) {
-            $save_files = [];
-            $message_id = hash('md5', uniqid(microtime(), true));
+            $saved_files = [];
+            $message     = $agent_core->utils->getMessageMarker(
+                WORKER_MAIN,
+                WORKER_MAIN,
+                'Assistant',
+                $process_name,
+                0,
+                hash('md5', uniqid(microtime(), true))
+            );
 
             foreach ($response['data'] as $value) {
-                $value['output_format'] = $response['output_format'];
-                $this->sendMessage($agent_core, $socket_id, $message_id, $process_name, $value);
+                $agent_core->core->sendImageMessage(
+                    $socket_id,
+                    $message,
+                    'data:image/' . $response['output_format'] . ';base64,' . $value['b64_json'],
+                    $value['revised_prompt']
+                );
 
                 $image_binary = base64_decode($value['b64_json']);
                 if (false !== $image_binary) {
-                    if ('jpeg' === $value['output_format']) {
-                        $value['output_format'] = 'jpg';
+                    if ('jpeg' === $response['output_format']) {
+                        $response['output_format'] = 'jpg';
                     }
 
                     $micro_sec   = substr(microtime(), 2, 8);
-                    $file_name   = date('Y-m-d') . '_' . $micro_sec . '.' . $value['output_format'];
+                    $file_name   = date('Y-m-d') . '_' . $micro_sec . '.' . $response['output_format'];
                     $file_path   = $this->save_path . $file_name;
                     $save_result = file_put_contents($file_path, $image_binary);
 
-                    $save_files[] = [
+                    $saved_files[] = [
                         'file_name'  => $file_name,
                         'file_path'  => $file_path,
                         'save_bytes' => $save_result ?: 0,
@@ -223,12 +234,12 @@ class handler extends Factory
             }
 
             $response = [
-                'status'  => 'success',
-                'message' => '图片已生成，保存路径：' . $this->save_path,
-                'data'    => $save_files,
+                'status'      => 'success',
+                'message'     => '图片已生成，保存路径：' . $this->save_path,
+                'saved_files' => $saved_files,
             ];
 
-            unset($save_files, $message_id, $value);
+            unset($saved_files, $message, $value);
         } elseif (isset($response['error'])) {
             $response['status'] = 'error';
         } else {
@@ -238,35 +249,5 @@ class handler extends Factory
 
         unset($agent_core, $socket_id, $process_name);
         return $response;
-    }
-
-    /**
-     * @param agent_core $agent_core
-     * @param string     $socket_id
-     * @param string     $message_id
-     * @param string     $process_name
-     * @param array      $image_data
-     *
-     * @return void
-     * @throws \Random\RandomException
-     * @throws \ReflectionException
-     */
-    private function sendMessage(agent_core $agent_core, string $socket_id, string $message_id, string $process_name, array $image_data): void
-    {
-        $message = $agent_core->utils->getMessageMarker(
-                WORKER_MAIN,
-                WORKER_MAIN,
-                'Assistant',
-                $process_name,
-                0,
-                $message_id
-            ) + [
-                'type'   => 'image',
-                'data'   => 'data:image/' . $image_data['output_format'] . ';base64,' . $image_data['b64_json'],
-                'prompt' => $image_data['revised_prompt']
-            ];
-
-        $agent_core->core->sendMessage($socket_id, $message);
-        unset($agent_core, $socket_id, $message_id, $process_name, $image_data, $message);
     }
 }

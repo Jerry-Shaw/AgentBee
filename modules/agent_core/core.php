@@ -234,4 +234,24 @@ final class core extends Factory
 
         unset($socket_id, $message, $success);
     }
+
+    /**
+     * @param string $socket_id
+     * @param array  $message
+     * @param string $data_url
+     * @param string $image_prompt
+     *
+     * @return void
+     * @throws \Random\RandomException
+     * @throws \ReflectionException
+     */
+    public function sendImageMessage(string $socket_id, array $message, string $data_url, string $image_prompt = ''): void
+    {
+        $message['type']   = 'image';
+        $message['data']   = $data_url;
+        $message['prompt'] = $image_prompt;
+
+        $this->sendMessage($socket_id, $message);
+        unset($socket_id, $message, $data_url, $image_prompt);
+    }
 }

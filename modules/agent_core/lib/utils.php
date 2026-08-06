@@ -571,10 +571,10 @@ class utils extends Factory
                 break;
         }
         $image_bin = ob_get_clean();
-        $data_uri  = 'data:' . $image_mime . ';base64,' . base64_encode($image_bin);
+        $data_url  = 'data:' . $image_mime . ';base64,' . base64_encode($image_bin);
 
         unset($binary, $width, $height, $src_image, $new_image, $image_info, $image_mime, $image_bin);
-        return $data_uri;
+        return $data_url;
     }
 
     /**

@@ -121,7 +121,6 @@ class procWorker extends Factory
                     // Normal completion (hit stop token or finished naturally)
                     case 'stop':
                         if ('' !== $assistant_content || '' !== $reasons_content) {
-                            $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
                             $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
                         }
 
@@ -175,7 +174,6 @@ class procWorker extends Factory
 
                         if ([] === $tool_calls_buffer) {
                             if ('' !== $assistant_content || '' !== $reasons_content) {
-                                $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
                                 $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
                             }
 
@@ -206,7 +204,6 @@ class procWorker extends Factory
                             ], $tool_calls_buffer
                         );
 
-                        $this->core->utils->addSessionHistory($metadata['workerName'], $assistant_message);
                         $this->sendMsg($socket_id, 'stream', 'tool_calls', $metadata, $assistant_message['tool_calls']);
                         $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
 

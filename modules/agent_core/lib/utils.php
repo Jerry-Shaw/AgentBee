@@ -273,7 +273,7 @@ class utils extends Factory
                 continue;
             }
 
-            if ('assistant' === $role && [] === $message['tool_calls']) {
+            if (isset($message['tool_calls']) && [] === $message['tool_calls']) {
                 unset($message['tool_calls']);
             }
 

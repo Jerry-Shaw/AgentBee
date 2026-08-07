@@ -160,72 +160,79 @@ class procWorker extends Factory
 
                     // Model requested tool calls (common in non-streaming)
                     case 'tool_calls':
-                        $tool_count = count($tool_calls_buffer);
+                        $error_args    = 0;
+                        $error_names   = 0;
+                        $error_calls   = 0;
+                        $tool_results  = [];
+                        $correct_calls = [];
+                        $handler_calls = [];
 
-                        $tool_calls_buffer = array_filter(
-                            $tool_calls_buffer,
-                            function (array $tool): bool
-                            {
-                                return '' !== trim($tool['function']['arguments'] ?? '');
-                            }
-                        );
-
-                        $tool_calls_buffer = array_values($tool_calls_buffer);
-
-                        if ([] === $tool_calls_buffer) {
-                            if ('' !== $assistant_content || '' !== $reasons_content) {
-                                $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
+                        foreach ($tool_calls_buffer as $fn_call) {
+                            if (!str_contains($fn_call['function']['name'], '-')) {
+                                ++$error_names;
+                                continue;
                             }
 
-                            $user_message = [
-                                'role'    => 'user',
-                                'content' => [[
-                                    'type' => 'text',
-                                    'text' => '[系统提示] 工具调用参数缺失，已全部过滤。请补全参数后重新调用。'
-                                ]]
+                            if ('' === $fn_call['function']['arguments']) {
+                                ++$error_args;
+                                continue;
+                            }
+
+                            $tool_args = json_decode($fn_call['function']['arguments'], true);
+
+                            if (!is_array($tool_args)) {
+                                ++$error_args;
+                                continue;
+                            }
+
+                            $tool_call = [
+                                'id'       => $fn_call['id'],
+                                'type'     => $fn_call['type'],
+                                'function' => [
+                                    'name'      => $fn_call['function']['name'],
+                                    'arguments' => $fn_call['function']['arguments']
+                                ]
                             ];
 
-                            $this->sendMsg($socket_id, 'history', 'add', $metadata, $user_message);
-                            $this->sendMsg($socket_id, 'stream', 'end', $metadata);
-                            $this->sendMsg($socket_id, 'end', 'end', $metadata, $assistant_content);
+                            $this->sendMsg($socket_id, 'stream', 'tool_calls', $metadata, $tool_call);
 
-                            unset($user_message);
-                            break;
-                        }
+                            try {
+                                $exec_result = $this->core->execTools($fn_call['id'], $fn_call['function']['name'], $tool_args);
+                            } catch (\Throwable $throwable) {
+                                $this->sendMsg(
+                                    $socket_id,
+                                    'stream',
+                                    'tool_result',
+                                    $metadata,
+                                    [
+                                        'tool_call_id'  => $fn_call['id'],
+                                        'function_name' => $fn_call['function']['name'],
+                                        'error'         => $throwable->getMessage()
+                                    ]
+                                );
 
-                        $assistant_message['tool_calls'] = array_map(
-                            fn($tool) => [
-                                'id'       => $tool['id'],
-                                'type'     => 'function',
-                                'function' => [
-                                    'name'      => $tool['function']['name'],
-                                    'arguments' => $tool['function']['arguments']
-                                ]
-                            ], $tool_calls_buffer
-                        );
+                                $this->core->error->exceptionHandler($throwable, false, false);
+                                unset($throwable);
+                                ++$error_calls;
+                                continue;
+                            }
 
-                        $this->sendMsg($socket_id, 'stream', 'tool_calls', $metadata, $assistant_message['tool_calls']);
-                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
-
-                        $tool_results = $this->core->execTools($tool_calls_buffer);
-
-                        foreach ($tool_results as $result) {
-                            $result_data = json_decode($result['content'], true);
+                            $result_data = json_decode($exec_result['content'], true);
 
                             if (!isset($result_data['handler'])) {
                                 // Sync tools
-                                $tool_history = [
-                                    'role'         => 'tool',
-                                    'tool_call_id' => $result['tool_call_id'],
-                                    'content'      => $result['content']
-                                ];
+                                $this->sendMsg($socket_id, 'stream', 'tool_result', $metadata, $exec_result);
 
-                                $this->sendMsg($socket_id, 'stream', 'tool_result', $metadata, $result);
-                                $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_history);
+                                $correct_calls[] = $tool_call;
+                                $tool_results[]  = [
+                                    'role'         => 'tool',
+                                    'tool_call_id' => $exec_result['tool_call_id'],
+                                    'content'      => $exec_result['content']
+                                ];
 
                                 // Handle tool call errors
                                 if (isset($result_data['status']) && 'error' === $result_data['status']) {
-                                    $error_message = $result['function_name'] . '->' . ($result_data['message'] ?? 'UncaughtErrors');
+                                    $error_message = $exec_result['function_name'] . '->' . ($result_data['message'] ?? 'UncaughtErrors');
 
                                     if ($error_message === $this->tool_error_last) {
                                         if (2 <= ++$this->tool_error_count) {
@@ -234,7 +241,7 @@ class procWorker extends Factory
                                                 'context',
                                                 'ToolErrors',
                                                 $metadata,
-                                                ['function_name' => $result['function_name']]
+                                                ['error' => $error_message]
                                             );
                                         }
                                     } else {
@@ -246,32 +253,59 @@ class procWorker extends Factory
                                 }
                             } else {
                                 // Async tools
-                                $result_data['socket_id']     = $socket_id;
-                                $result_data['process_name']  = $metadata['workerName'];
-                                $result_data['tool_call_id']  = $result['tool_call_id'];
-                                $result_data['function_name'] = $result['function_name'];
-
-                                $this->sendMsg($socket_id, 'context', 'callHandler', $metadata, $result_data);
+                                $handler_calls[] = [
+                                    'socket_id'    => $socket_id,
+                                    'process_name' => $metadata['workerName'],
+                                    'tool_calls'   => $tool_call,
+                                    'handler_args' => $result_data
+                                ];
                             }
                         }
 
-                        if (count($tool_calls_buffer) < $tool_count) {
+                        if ([] !== $correct_calls) {
+                            $assistant_message['tool_calls'] = $correct_calls;
+                        }
+
+                        $this->sendMsg($socket_id, 'history', 'add', $metadata, $assistant_message);
+
+                        foreach ($tool_results as $tool_result) {
+                            $this->sendMsg($socket_id, 'history', 'add', $metadata, $tool_result);
+                        }
+
+                        if ([] !== $handler_calls) {
+                            $this->sendMsg($socket_id, 'context', 'callHandler', $metadata, $handler_calls);
+                        }
+
+                        $error_types = [];
+
+                        if (0 < $error_args) {
+                            $error_types['argv'] = '部分工具调用参数缺失';
+                        }
+
+                        if (0 < $error_names) {
+                            $error_types['name'] = '部分工具调用名称错误';
+                        }
+
+                        if (0 < $error_calls) {
+                            $error_types['error'] = '部分工具调用失败';
+                        }
+
+                        if ([] !== $error_types) {
                             $user_message = [
                                 'role'    => 'user',
                                 'content' => [[
                                     'type' => 'text',
-                                    'text' => '[系统提示] 部分工具调用参数缺失，已自动过滤。请补全参数后重新调用。'
+                                    'text' => '[系统提示] ' . implode('，', $error_types) . '，已自动过滤。请核对工具并补全参数后重新调用。'
                                 ]]
                             ];
 
                             $this->sendMsg($socket_id, 'history', 'add', $metadata, $user_message);
-                            unset($user_message);
                         }
 
                         $this->sendMsg($socket_id, 'stream', 'end', $metadata);
                         $this->sendMsg($socket_id, 'end', 'tools', $metadata, $tool_calls_buffer);
 
-                        unset($tool_count, $tool_results, $result, $result_data, $tool_history);
+                        unset($error_args, $error_names, $error_calls, $tool_results, $correct_calls, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $tool_result, $error_types, $user_message);
                         break;
 
                     // Content filtered by safety policy (optional, e.g., Azure)

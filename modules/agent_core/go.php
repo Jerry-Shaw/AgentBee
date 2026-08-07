@@ -315,15 +315,7 @@ class go extends Factory
 
                 case 'history':
                     if (isset($payload['data'])) {
-                        switch ($payload_type) {
-                            case 'add':
-                                $this->utils->addSessionHistory($payload['workerName'], $payload['data']);
-                                break;
-
-                            case 'sync':
-                                $this->utils->setSessionHistory($payload['workerName'], $payload['data']);
-                                break;
-                        }
+                        $this->utils->addSessionHistory($payload['workerName'], $payload['data']);
                     }
                     break;
 
@@ -380,6 +372,21 @@ class go extends Factory
                             }
 
                             $result_text = is_string($result) ? $result : json_encode($result, JSON_FORMAT);
+
+
+
+
+                            $assistant_message = [
+                                'role'              => 'assistant',
+                                'content'           => $assistant_content,
+                                'reasoning_content' => $reasons_content
+                            ];
+                            if ([] !== $correct_calls) {
+                                $assistant_message['tool_calls'] = $correct_calls;
+                            }
+
+                            $this->utils->addSessionHistory($payload['workerName'], $payload['data']);
+
 
                             $this->utils->addSessionHistory(
                                 $payload['workerName'],

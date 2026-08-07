@@ -23,6 +23,7 @@ namespace modules\agent_core;
 use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Lib\Error;
+use Nervsys\Core\Lib\IOData;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\Reflect;
 use Nervsys\Core\System;
@@ -33,6 +34,7 @@ final class core extends Factory
 
     public utils     $utils;
     public Error     $error;
+    public IOData    $IOData;
     public SocketMgr $socketMgr;
 
     public int $flush_time_at  = 0;
@@ -58,6 +60,7 @@ final class core extends Factory
 
         $this->utils     = utils::new();
         $this->error     = Error::new();
+        $this->IOData    = IOData::new();
         $this->socketMgr = SocketMgr::new(WORKER_MAIN);
 
         $this->utils->agent_config = $this->utils->config->get(true, $reload);
@@ -102,60 +105,36 @@ final class core extends Factory
     }
 
     /**
-     * Execute tool calls.
-     *
-     * @param array $tool_calls
+     * @param string $tool_call_id
+     * @param string $tool_call_name
+     * @param array  $tool_call_args
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function execTools(array $tool_calls): array
+    public function execTools(string $tool_call_id, string $tool_call_name, array $tool_call_args): array
     {
-        $results = [];
+        $this->IOData->src_cmd   = $tool_call_name;
+        $this->IOData->src_input = $tool_call_args;
 
-        foreach ($tool_calls as $tool_call) {
-            $fn_name = $tool_call['function']['name'];
-            $fn_args = json_decode($tool_call['function']['arguments'], true) ?? [];
+        [$module_name, $method_name] = explode('-', $tool_call_name);
 
-            if (!str_contains($fn_name, '-')) {
-                $results[] = [
-                    'tool_call_id'  => $tool_call['id'],
-                    'function_name' => $fn_name,
-                    'content'       => json_encode(['status' => 'error', 'message' => 'Invalid tool format: ' . $fn_name], JSON_FORMAT)
-                ];
-                continue;
-            }
+        $fn_params      = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();
+        $fn_args        = Factory::buildArgs($fn_params, $tool_call_args);
+        $tool_result    = $this->agent_tools[$module_name]->$method_name(...$fn_args);
+        $result_content = json_encode($tool_result, JSON_FORMAT);
 
-            [$module_name, $method_name] = explode('-', $fn_name);
-
-            try {
-                $params         = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();
-                $args           = Factory::buildArgs($params, (array)$fn_args);
-                $tool_result    = $this->agent_tools[$module_name]->$method_name(...$args);
-                $result_content = json_encode($tool_result, JSON_FORMAT);
-
-                if (false === $result_content) {
-                    $result_content = json_encode(['status' => 'error', 'message' => json_last_error_msg()], JSON_FORMAT);
-                }
-            } catch (\Throwable $throwable) {
-                $this->error->exceptionHandler(
-                    new \InvalidArgumentException($fn_name . ': ' . $throwable->getMessage(), $throwable->getCode(), $throwable),
-                    false,
-                    false
-                );
-
-                $result_content = json_encode(['status' => 'error', 'message' => mb_substr($throwable->getMessage(), 0, 256, 'UTF-8')], JSON_FORMAT);
-                unset($throwable);
-            }
-
-            $results[] = [
-                'tool_call_id'  => $tool_call['id'],
-                'function_name' => $fn_name,
-                'content'       => $result_content
-            ];
+        if (false === $result_content) {
+            throw new \RuntimeException(json_last_error_msg());
         }
 
-        unset($tool_calls, $tool_call, $fn_name, $fn_args, $module_name, $method_name, $params, $args, $tool_result, $result_content);
+        $results = [
+            'tool_call_id'  => $tool_call_id,
+            'function_name' => $tool_call_name,
+            'content'       => $result_content
+        ];
+
+        unset($tool_call_id, $tool_call_name, $tool_call_args, $module_name, $method_name, $fn_params, $fn_args, $tool_result, $result_content);
         return $results;
     }
 

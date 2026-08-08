@@ -114,8 +114,8 @@ final class core extends Factory
      */
     public function execTools(string $tool_call_id, string $tool_call_name, array $tool_call_args): array
     {
-        $this->IOData->src_cmd   = $tool_call_name;
-        $this->IOData->src_input = $tool_call_args;
+        $this->IOData->src_cmd  = $tool_call_name;
+        $this->IOData->src_argv = $tool_call_args;
 
         [$module_name, $method_name] = explode('-', $tool_call_name);
 
@@ -127,6 +127,9 @@ final class core extends Factory
         if (false === $result_content) {
             throw new \RuntimeException(json_last_error_msg());
         }
+
+        $this->IOData->src_cmd  = '';
+        $this->IOData->src_argv = [];
 
         $results = [
             'tool_call_id'  => $tool_call_id,

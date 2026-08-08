@@ -346,56 +346,58 @@ class go extends Factory
 
                     switch ($payload_type) {
                         case 'callHandler':
-                            if (!isset($payload['data']['handler']) || !isset($payload['data']['action'])) {
-                                $this->utils->debug('Handler: handler or action NOT found!', 'trace');
+                            $tool_calls   = [];
+                            $tool_results = [];
+
+                            foreach ($payload['data'] as $data) {
+                                if (!isset($data['handler_args']['action'])) {
+                                    $this->utils->debug('Handler: handler or action NOT found!', 'trace');
+                                    continue;
+                                }
+
+                                $this->utils->debug('Handler: Calling ' . $data['tool_calls']['function']['name'], 'trace');
+
+                                try {
+                                    $this->core->IOData->src_cmd  = $data['tool_calls']['function']['name'];
+                                    $this->core->IOData->src_argv = $data['handler_args'];
+
+                                    $data['handler_args']['ext_id'] = $context['ext_id'];
+
+                                    $handler = $data['handler_args']['handler']::new();
+                                    $result  = $handler->{$data['handler_args']['action']}($data['handler_args'], $this) ?? '工具执行完成，但未返回数据。';
+                                } catch (\Throwable $throwable) {
+                                    $result = [
+                                        'status' => 'error',
+                                        'error'  => $throwable->getMessage(),
+                                    ];
+
+                                    $this->utils->debug('Handler ERROR: ' . $data['tool_calls']['function']['name'] . ' => ' . $throwable->getMessage(), 'trace');
+                                    $this->core->error->exceptionHandler($throwable, false, false);
+                                    unset($throwable);
+                                }
+
+                                $this->core->IOData->src_cmd  = '';
+                                $this->core->IOData->src_argv = [];
+
+                                if (!is_string($result)) {
+                                    $result = json_encode($result, JSON_FORMAT);
+
+                                    if (false === $result) {
+                                        $result = 'Handler ERROR: ' . $data['tool_calls']['function']['name'] . ' -> ' . json_last_error_msg();
+                                    }
+                                }
+
+                                $tool_calls[]   = $data['tool_calls'];
+                                $tool_results[] = [
+                                    'tool_call_id'  => $data['tool_calls']['id'],
+                                    'function_name' => $data['tool_calls']['function']['name'],
+                                    'content'       => $result
+                                ];
+                            }
+
+                            if ([] === $tool_calls) {
                                 break;
                             }
-
-                            $this->utils->debug('Handler: Calling ' . $payload['data']['function_name'], 'trace');
-
-                            try {
-                                $payload['data']['ext_id'] = $context['ext_id'];
-
-                                $handler = $payload['data']['handler']::new();
-                                $result  = $handler->{$payload['data']['action']}($payload['data'], $this) ?? $payload['data']['function_name'] . ': 工具执行完成，但未返回数据';
-
-                                unset($handler);
-                            } catch (\Throwable $throwable) {
-                                $result = [
-                                    'status' => 'error',
-                                    'error'  => $throwable->getMessage(),
-                                ];
-
-                                $this->utils->debug('Handler ERROR: ' . $payload['data']['function_name'] . ' (' . $throwable->getMessage() . ')', 'trace');
-                                $this->core->error->exceptionHandler($throwable, false, false);
-                                unset($throwable);
-                            }
-
-                            $result_text = is_string($result) ? $result : json_encode($result, JSON_FORMAT);
-
-
-
-
-                            $assistant_message = [
-                                'role'              => 'assistant',
-                                'content'           => $assistant_content,
-                                'reasoning_content' => $reasons_content
-                            ];
-                            if ([] !== $correct_calls) {
-                                $assistant_message['tool_calls'] = $correct_calls;
-                            }
-
-                            $this->utils->addSessionHistory($payload['workerName'], $payload['data']);
-
-
-                            $this->utils->addSessionHistory(
-                                $payload['workerName'],
-                                [
-                                    'role'         => 'tool',
-                                    'tool_call_id' => $payload['data']['tool_call_id'],
-                                    'content'      => $result_text
-                                ]
-                            );
 
                             $metadata = $this->utils->getMessageMarker(
                                 $payload['sender'],
@@ -406,18 +408,37 @@ class go extends Factory
                                 $payload['messageId']
                             );
 
-                            $msg_data = [
-                                'type' => 'tool_result',
-                                'data' => [
-                                    'tool_call_id'  => $payload['data']['tool_call_id'],
-                                    'function_name' => $payload['data']['function_name'],
-                                    'content'       => $result
-                                ]
+                            $assistant_message = [
+                                'role'       => 'assistant',
+                                'content'    => '',
+                                'tool_calls' => $tool_calls
                             ];
 
-                            $this->core->sendMessage($payload['socket_id'], $metadata + $msg_data);
+                            $this->utils->addSessionHistory($payload['workerName'], $assistant_message);
 
-                            unset($result, $result_text, $metadata, $msg_data);
+                            foreach ($tool_results as $tool_result) {
+                                $this->utils->addSessionHistory(
+                                    $payload['workerName'],
+                                    [
+                                        'role'         => 'tool',
+                                        'tool_call_id' => $tool_result['tool_call_id'],
+                                        'content'      => $tool_result['content']
+                                    ]
+                                );
+
+                                $msg_data = [
+                                    'type' => 'tool_result',
+                                    'data' => [
+                                        'tool_call_id'  => $tool_result['tool_call_id'],
+                                        'function_name' => $tool_result['function_name'],
+                                        'content'       => $tool_result['content'],
+                                    ]
+                                ];
+
+                                $this->core->sendMessage($payload['socket_id'], $metadata + $msg_data);
+                            }
+
+                            unset($tool_calls, $tool_results, $data, $handler, $result, $metadata, $assistant_message, $tool_result, $msg_data);
                             break;
 
                         case 'ToolErrors':

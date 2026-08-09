@@ -253,9 +253,10 @@ class procWorker extends Factory
                                 }
                             } else {
                                 // Async tools
+                                $result_data['socket_id']    = $socket_id;
+                                $result_data['process_name'] = $metadata['workerName'];
+
                                 $handler_calls[] = [
-                                    'socket_id'    => $socket_id,
-                                    'process_name' => $metadata['workerName'],
                                     'tool_calls'   => $tool_call,
                                     'handler_args' => $result_data
                                 ];

@@ -251,6 +251,7 @@ class handler extends Factory
                     'title'     => $item['title'] ?? '',
                     'status'    => $this->tab_list[$tab_id]['status'] ?? 'ready',
                     'action'    => $this->tab_list[$tab_id]['action'] ?? 'idle',
+                    'injected'  => $this->tab_list[$tab_id]['injected'] ?? false,
                 ];
             }
         }
@@ -548,7 +549,55 @@ class handler extends Factory
      */
     public function hover(array $payload_data, agent_core $agent_core): array
     {
-        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
+        $selector = json_encode($payload_data['params']['selector'], JSON_FORMAT);
+
+        $position_data                              = $payload_data;
+        $position_data['params']['script']          = '(function() {'
+            . ' const el = document.querySelector(' . $selector . ');'
+            . ' if (!el) throw new Error("Element not found: " + ' . $selector . ');'
+            . ' el.scrollIntoView({ behavior: "auto", block: "center", inline: "center" });'
+            . ' const rect = el.getBoundingClientRect();'
+            . ' if (rect.width <= 0 || rect.height <= 0 || el.getClientRects().length === 0)'
+            . '     throw new Error("Element is not visible: " + ' . $selector . ');'
+            . ' return {'
+            . '     x: rect.left + rect.width / 2,'
+            . '     y: rect.top + rect.height / 2'
+            . ' };'
+            . '})()';
+        $position_data['params']['return_by_value'] = true;
+
+        $result = $this->sendCommand($agent_core, $position_data, 'evaluate');
+
+        if ('success' !== ($result['status'] ?? 'error')) {
+            return $result;
+        }
+
+        $position = $result['data'] ?? [];
+
+        if (
+            !is_array($position)
+            || !isset($position['x'], $position['y'])
+            || !is_numeric($position['x'])
+            || !is_numeric($position['y'])
+        ) {
+            return [
+                'status' => 'error',
+                'error'  => '无法获取目标元素的有效坐标。',
+            ];
+        }
+
+        $hover_data = [
+            'params' => [
+                'x' => (float)$position['x'],
+                'y' => (float)$position['y'],
+            ],
+        ];
+
+        if (isset($payload_data['params']['target_id'])) {
+            $hover_data['params']['target_id'] = $payload_data['params']['target_id'];
+        }
+
+        return $this->sendCommand($agent_core, $hover_data, __FUNCTION__);
     }
 
     /**
@@ -561,7 +610,23 @@ class handler extends Factory
      */
     public function pressKey(array $payload_data, agent_core $agent_core): array
     {
-        return $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
+        $payload_data['params']['event_type'] = 'keyDown';
+
+        $result = $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
+
+        if ('success' !== ($result['status'] ?? 'error')) {
+            return $result;
+        }
+
+        $payload_data['params']['event_type'] = 'keyUp';
+
+        $result = $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
+
+        if ('success' === ($result['status'] ?? 'error')) {
+            $result['message'] = $this->getMessage(__FUNCTION__);
+        }
+
+        return $result;
     }
 
     /**
@@ -793,8 +858,9 @@ class handler extends Factory
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); el.click(); return true; })()',
-                    'returnByValue' => true
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); if (typeof el.click !== "function") throw new Error("Element is not clickable: " + ' . $selector . '); if (el.disabled) throw new Error("Element is disabled: " + ' . $selector . '); el.click(); return true; })()',
+                    'returnByValue' => true,
+                    'userGesture'   => true
                 ];
                 break;
 
@@ -803,8 +869,9 @@ class handler extends Factory
                 $text       = json_encode($params['text'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); el.value = ' . $text . '; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); return true; })()',
-                    'returnByValue' => true
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); let proto; if (el instanceof HTMLInputElement) proto = HTMLInputElement.prototype; else if (el instanceof HTMLTextAreaElement) proto = HTMLTextAreaElement.prototype; else throw new Error("Element does not support text input: " + ' . $selector . '); if (el.disabled) throw new Error("Element is disabled: " + ' . $selector . '); if (el.readOnly) throw new Error("Element is read-only: " + ' . $selector . '); const setter = Object.getOwnPropertyDescriptor(proto, "value").set; el.focus(); setter.call(el, ' . $text . '); el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: ' . $text . ' })); el.dispatchEvent(new Event("change", { bubbles: true })); return true; })()',
+                    'returnByValue' => true,
+                    'userGesture'   => true
                 ];
                 break;
 
@@ -812,8 +879,9 @@ class handler extends Factory
                 $selector   = json_encode($params['selector'] ?? 'form', JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Form not found: " + ' . $selector . '); el.submit(); return true; })()',
-                    'returnByValue' => true
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Form not found: " + ' . $selector . '); if (!(el instanceof HTMLFormElement)) throw new Error("Element is not a form: " + ' . $selector . '); HTMLFormElement.prototype.requestSubmit.call(el); return true; })()',
+                    'returnByValue' => true,
+                    'userGesture'   => true
                 ];
                 break;
 
@@ -829,22 +897,33 @@ class handler extends Factory
 
             case 'getContent':
                 $html       = $params['html'] ?? false;
-                $expr       = (true === $html) ? 'document.documentElement.outerHTML' : 'document.body.innerText';
+                $expr       = (true === $html)
+                    ? 'document.documentElement ? document.documentElement.outerHTML : ""'
+                    : 'document.body ? document.body.innerText : ""';
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => $expr, 'returnByValue' => true];
+                $cdp_params = [
+                    'expression'    => $expr,
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'getValue':
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').value', 'returnByValue' => true];
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); if (!("value" in el)) throw new Error("Element has no value property: " + ' . $selector . '); return el.value; })()',
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'getAttribute':
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $attribute  = json_encode($params['attribute'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').getAttribute(' . $attribute . ')', 'returnByValue' => true];
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); return el.getAttribute(' . $attribute . '); })()',
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'setAttribute':
@@ -852,20 +931,29 @@ class handler extends Factory
                 $attribute  = json_encode($params['attribute'], JSON_FORMAT);
                 $value      = json_encode($params['value'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').setAttribute(' . $attribute . ', ' . $value . ');', 'returnByValue' => false];
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); el.setAttribute(' . $attribute . ', ' . $value . '); return true; })()',
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'scrollIntoView':
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').scrollIntoView();', 'returnByValue' => false];
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); el.scrollIntoView({ behavior: "auto", block: "center", inline: "nearest" }); return true; })()',
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'selectOption':
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $value      = json_encode($params['value'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').value = ' . $value . ';', 'returnByValue' => false];
+                $cdp_params = [
+                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); if (!(el instanceof HTMLSelectElement)) throw new Error("Element is not a select: " + ' . $selector . '); const value = ' . $value . '; const exists = Array.from(el.options).some(option => option.value === value); if (!exists) throw new Error("Option value not found: " + value); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set; setter.call(el, value); el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); return true; })()',
+                    'returnByValue' => true
+                ];
                 break;
 
             case 'evaluate':
@@ -874,24 +962,31 @@ class handler extends Factory
                 break;
 
             case 'screenshot':
+                $format     = $params['format'] ?? 'jpeg';
                 $method     = 'Page.captureScreenshot';
-                $cdp_params = ['format' => $params['format'] ?? 'jpeg', 'quality' => $params['quality'] ?? 80];
+                $cdp_params = ['format' => $format];
+
+                if ('jpeg' === $format) {
+                    $cdp_params['quality'] = $params['quality'] ?? 80;
+                }
                 break;
 
             case 'waitForSelector':
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.querySelector(' . $selector . ')) resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
-                    'returnByValue' => true
+                    'expression'    => 'new Promise(resolve => { const s = Date.now(); const c = () => { if (document.querySelector(' . $selector . ')) resolve(true); else if (Date.now() - s >= ' . $timeout_ms . ') resolve(false); else setTimeout(c, 100); }; c(); })',
+                    'returnByValue' => true,
+                    'awaitPromise'  => true
                 ];
                 break;
 
             case 'waitForPageLoad':
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.readyState==="complete") resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
-                    'returnByValue' => true
+                    'expression'    => 'new Promise(resolve => { const s = Date.now(); const c = () => { if (document.readyState === "complete") resolve(true); else if (Date.now() - s >= ' . $timeout_ms . ') resolve(false); else setTimeout(c, 100); }; c(); })',
+                    'returnByValue' => true,
+                    'awaitPromise'  => true
                 ];
                 break;
 
@@ -899,8 +994,9 @@ class handler extends Factory
                 $text       = json_encode($params['text'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(document.body.innerText.includes(' . $text . ')) resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
-                    'returnByValue' => true
+                    'expression'    => 'new Promise(resolve => { const s = Date.now(); const c = () => { const body = document.body; if (body && body.innerText.includes(' . $text . ')) resolve(true); else if (Date.now() - s >= ' . $timeout_ms . ') resolve(false); else setTimeout(c, 100); }; c(); })',
+                    'returnByValue' => true,
+                    'awaitPromise'  => true
                 ];
                 break;
 
@@ -908,8 +1004,9 @@ class handler extends Factory
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ const el=document.querySelector(' . $selector . '); if(el && getComputedStyle(el).display!=="none" && getComputedStyle(el).visibility!=="hidden") resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
-                    'returnByValue' => true
+                    'expression'    => 'new Promise(resolve => { const s = Date.now(); const c = () => { const el = document.querySelector(' . $selector . '); if (el) { const style = getComputedStyle(el); const visible = !el.hidden && style.display !== "none" && style.visibility !== "hidden" && style.visibility !== "collapse" && style.opacity !== "0" && el.getClientRects().length > 0; if (visible) { resolve(true); return; } } if (Date.now() - s >= ' . $timeout_ms . ') resolve(false); else setTimeout(c, 100); }; c(); })',
+                    'returnByValue' => true,
+                    'awaitPromise'  => true
                 ];
                 break;
 
@@ -917,29 +1014,117 @@ class handler extends Factory
                 $url_pattern = json_encode($params['url_pattern'], JSON_FORMAT);
                 $method      = 'Runtime.evaluate';
                 $cdp_params  = [
-                    'expression'    => 'new Promise(resolve => { let s=Date.now(); const c=()=>{ if(window.location.href.includes(' . $url_pattern . ')) resolve(true); else if(Date.now()-s> ' . $timeout_ms . ') resolve(false); else setTimeout(c,100); }; c(); })',
-                    'returnByValue' => true
+                    'expression'    => 'new Promise(resolve => { const s = Date.now(); const c = () => { if (window.location.href.includes(' . $url_pattern . ')) resolve(true); else if (Date.now() - s >= ' . $timeout_ms . ') resolve(false); else setTimeout(c, 100); }; c(); })',
+                    'returnByValue' => true,
+                    'awaitPromise'  => true
                 ];
                 break;
 
             case 'hover':
-                $selector   = json_encode($params['selector'], JSON_FORMAT);
-                $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => 'document.querySelector(' . $selector . ').dispatchEvent(new MouseEvent("mouseover", {bubbles:true}));', 'returnByValue' => false];
+                $method     = 'Input.dispatchMouseEvent';
+                $cdp_params = [
+                    'type' => 'mouseMoved',
+                    'x'    => (float)$params['x'],
+                    'y'    => (float)$params['y'],
+                ];
                 break;
 
             case 'pressKey':
-                $mod_props = [];
-                $modifiers = $params['modifiers'] ?? [];
-                foreach ($modifiers as $mod) {
-                    $mod_props[] = strtolower($mod) . 'Key: true';
+                $key        = (string)$params['key'];
+                $mod_bits   = 0;
+                $modifiers  = $params['modifiers'] ?? [];
+                $event_type = 'keyUp' === ($params['event_type'] ?? 'keyDown')
+                    ? 'keyUp'
+                    : 'keyDown';
+
+                // CDP modifiers：Alt=1、Control=2、Meta=4、Shift=8
+                if (in_array('Alt', $modifiers, true)) {
+                    $mod_bits |= 1;
                 }
-                $mod_str    = implode(',', $mod_props);
-                $key        = json_encode($params['key'], JSON_FORMAT);
-                $method     = 'Runtime.evaluate';
+
+                if (in_array('Control', $modifiers, true)) {
+                    $mod_bits |= 2;
+                }
+
+                if (in_array('Meta', $modifiers, true)) {
+                    $mod_bits |= 4;
+                }
+
+                if (in_array('Shift', $modifiers, true)) {
+                    $mod_bits |= 8;
+                }
+
+                $key_aliases = [
+                    'Esc'   => 'Escape',
+                    'Space' => ' ',
+                    'Left'  => 'ArrowLeft',
+                    'Right' => 'ArrowRight',
+                    'Up'    => 'ArrowUp',
+                    'Down'  => 'ArrowDown',
+                    'Del'   => 'Delete',
+                ];
+
+                $key = $key_aliases[$key] ?? $key;
+
+                $key_map = [
+                    'Enter'      => ['Enter', 13],
+                    'Tab'        => ['Tab', 9],
+                    'Backspace'  => ['Backspace', 8],
+                    'Escape'     => ['Escape', 27],
+                    ' '          => ['Space', 32],
+                    'PageUp'     => ['PageUp', 33],
+                    'PageDown'   => ['PageDown', 34],
+                    'End'        => ['End', 35],
+                    'Home'       => ['Home', 36],
+                    'ArrowLeft'  => ['ArrowLeft', 37],
+                    'ArrowUp'    => ['ArrowUp', 38],
+                    'ArrowRight' => ['ArrowRight', 39],
+                    'ArrowDown'  => ['ArrowDown', 40],
+                    'Insert'     => ['Insert', 45],
+                    'Delete'     => ['Delete', 46],
+                    'F1'         => ['F1', 112],
+                    'F2'         => ['F2', 113],
+                    'F3'         => ['F3', 114],
+                    'F4'         => ['F4', 115],
+                    'F5'         => ['F5', 116],
+                    'F6'         => ['F6', 117],
+                    'F7'         => ['F7', 118],
+                    'F8'         => ['F8', 119],
+                    'F9'         => ['F9', 120],
+                    'F10'        => ['F10', 121],
+                    'F11'        => ['F11', 122],
+                    'F12'        => ['F12', 123],
+                ];
+
+                $code = '';
+                $vk   = 0;
+
+                if (isset($key_map[$key])) {
+                    [$code, $vk] = $key_map[$key];
+                } elseif (1 === preg_match('/^[a-zA-Z]$/', $key)) {
+                    $upper = strtoupper($key);
+                    $code  = 'Key' . $upper;
+                    $vk    = ord($upper);
+                    $key   = in_array('Shift', $modifiers, true)
+                        ? $upper
+                        : strtolower($key);
+                } elseif (1 === preg_match('/^[0-9]$/', $key)) {
+                    $code = 'Digit' . $key;
+                    $vk   = ord($key);
+                }
+
+                $method     = 'Input.dispatchKeyEvent';
                 $cdp_params = [
-                    'expression'    => '(function() { const el = document.activeElement; if (!el) return false; const event = new KeyboardEvent("keydown", { key: ' . $key . ', bubbles: true, ' . $mod_str . ' }); el.dispatchEvent(event); return true; })()',
-                    'returnByValue' => true
+                    'type'                  => $event_type,
+                    'modifiers'             => $mod_bits,
+                    'key'                   => $key,
+                    'code'                  => $code,
+                    'windowsVirtualKeyCode' => $vk,
+                    'nativeVirtualKeyCode'  => $vk,
+                    'autoRepeat'            => false,
+                    'isKeypad'              => false,
+                    'isSystemKey'           => in_array('Alt', $modifiers, true),
+                    'location'              => 0,
                 ];
                 break;
 
@@ -1111,9 +1296,7 @@ class handler extends Factory
 
                 if (
                     in_array($action, ['waitForSelector', 'waitForPageLoad', 'waitForText', 'waitForElementVisible', 'waitForUrl'], true)
-                    && is_array($data)
-                    && isset($data['value'])
-                    && false === $data['value']
+                    && false === $data
                 ) {
                     return [
                         'status' => 'error',

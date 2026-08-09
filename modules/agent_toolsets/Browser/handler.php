@@ -38,7 +38,6 @@ class handler extends Factory
     public const START_ARGS = [
         '--lang=zh-CN',
         '--window-size=1366,768',
-        '--excludeSwitches=enable-automation',
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
         '--disable-component-update',
@@ -46,6 +45,7 @@ class handler extends Factory
         '--disable-default-apps',
         '--disable-dev-shm-usage',
         '--disable-domain-reliability',
+        '--disable-blink-features=AutomationControlled',
         '--disable-features=ChromeWhatsNewUI,TranslateUI,AutofillServerCommunication,PrivacySandboxSettings4,PrivacySandboxPromptTrigger',
         '--disable-ipc-flooding-protection',
         '--disable-prompt-on-repost',
@@ -95,7 +95,7 @@ class handler extends Factory
         $agent_core->utils->savePid($browser_pid);
         $agent_core->utils->debug('Browser started (PID: ' . $browser_pid . ')', 'trace');
 
-        for ($i = 0; $i < 10; ++$i) {
+        for ($i = 0; $i < 100; ++$i) {
             $err_msg = trim($agent_core->utils->procMgr->readProc($browser_idx, 'stderr'));
 
             if ('' !== $err_msg && str_starts_with($err_msg, 'DevTools listening on')) {
@@ -131,11 +131,12 @@ class handler extends Factory
                     }
 
                     $tab_list[$tab_id] = [
-                        'ws_addr' => $tab_ws,
-                        'url'     => $item['url'] ?? '',
-                        'title'   => $item['title'] ?? '',
-                        'status'  => 'ready',
-                        'action'  => 'idle',
+                        'ws_addr'  => $tab_ws,
+                        'url'      => $item['url'] ?? '',
+                        'title'    => $item['title'] ?? '',
+                        'status'   => 'ready',
+                        'action'   => 'idle',
+                        'injected' => false
                     ];
                 }
             }
@@ -552,18 +553,8 @@ class handler extends Factory
         $position_data = $payload_data;
         $selector      = json_encode($payload_data['params']['selector'], JSON_FORMAT);
 
-        $position_data['params']['script']          = '(function() {'
-            . ' const el = document.querySelector(' . $selector . ');'
-            . ' if (!el) throw new Error("Element not found: " + ' . $selector . ');'
-            . ' el.scrollIntoView({ behavior: "auto", block: "center", inline: "center" });'
-            . ' const rect = el.getBoundingClientRect();'
-            . ' if (rect.width <= 0 || rect.height <= 0 || el.getClientRects().length === 0)'
-            . '     throw new Error("Element is not visible: " + ' . $selector . ');'
-            . ' return {'
-            . '     x: rect.left + rect.width / 2,'
-            . '     y: rect.top + rect.height / 2'
-            . ' };'
-            . '})()';
+        $position_data['params']['script'] = '(function(){const el=document.querySelector(' . $selector . ');if(!el)throw new Error("Element not found: "+' . $selector . ');el.scrollIntoView({behavior:"auto",block:"center",inline:"center"});const rect=el.getBoundingClientRect();if(rect.width<=0||rect.height<=0||el.getClientRects().length===0)throw new Error("Element is not visible: "+' . $selector . ');return{x:rect.left+rect.width/2,y:rect.top+rect.height/2};})()';
+
         $position_data['params']['return_by_value'] = true;
 
         $result = $this->sendCommand($agent_core, $position_data, 'evaluate');
@@ -642,37 +633,68 @@ class handler extends Factory
      */
     public function injectScript(string $target_id, agent_core $agent_core): void
     {
-        if (isset($this->tab_list[$target_id]['injected']) && true === $this->tab_list[$target_id]['injected']) {
+        if (true === ($this->tab_list[$target_id]['injected'] ?? false)) {
             return;
         }
 
-        if (!isset($this->tab_list[$target_id]['ws_addr']) || '' === $this->tab_list[$target_id]['ws_addr']) {
-            return;
+        $ws_addr = $this->tab_list[$target_id]['ws_addr'] ?? '';
+
+        if ('' === $ws_addr) {
+            throw new \RuntimeException('无法注入脚本：标签页WebSocket地址无效。');
         }
+
+        $source = '(function(){try{Object.defineProperty(Navigator.prototype,"webdriver",{configurable:true,enumerable:true,get:function(){return undefined;}});}catch(error){try{Object.defineProperty(navigator,"webdriver",{configurable:true,enumerable:true,get:function(){return undefined;}});}catch(ignored){}}})();';
 
         $socketMgr = SocketMgr::new('injector');
-        $socketMgr->createWSClient($this->tab_list[$target_id]['ws_addr']);
+        $socketMgr->createWSClient($ws_addr);
 
-        $write  = $except = [];
-        $script = json_encode([
-            'id'     => $this->cmd_id++,
-            'method' => 'Page.addScriptToEvaluateOnNewDocument',
-            'params' => ['source' => '(function() { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); })();']
-        ], JSON_FORMAT);
+        $commands = [
+            [
+                'method' => 'Page.addScriptToEvaluateOnNewDocument',
+                'params' => [
+                    'source' => $source,
+                ],
+            ],
+            [
+                'method' => 'Runtime.evaluate',
+                'params' => [
+                    'expression'    => $source,
+                    'returnByValue' => true,
+                ],
+            ],
+        ];
 
-        $socketMgr->sendMessage($socketMgr->master_id, $socketMgr->wsEncode($script, false, true));
+        foreach ($commands as $command) {
+            $cmd_id  = $this->cmd_id++;
+            $message = json_encode(
+                [
+                    'id'     => $cmd_id,
+                    'method' => $command['method'],
+                    'params' => $command['params'],
+                ],
+                JSON_FORMAT
+            );
 
-        if (1 === (int)stream_select($socketMgr->master_sock, $write, $except, 10, 0)) {
+            $socketMgr->sendMessage($socketMgr->master_id, $socketMgr->wsEncode($message, false, true));
+
+            $read     = $socketMgr->master_sock;
+            $write    = [];
+            $except   = [];
+            $selected = stream_select($read, $write, $except, 10);
+
+            if (in_array($selected, [0, false], true)) {
+                continue;
+            }
+
             $socketMgr->readMessage($socketMgr->master_id, true);
-        } else {
-            $agent_core->utils->debug('Browser: Script injection timeout for ' . $target_id, 'trace');
         }
 
         Factory::destroy($socketMgr);
-        $this->tab_list[$target_id]['injected'] = true;
 
-        $agent_core->utils->debug('Browser: Script injected for ' . $target_id, 'trace');
-        unset($target_id, $agent_core, $socketMgr, $write, $except, $script);
+        $this->tab_list[$target_id]['injected'] = true;
+        $agent_core->utils->debug('Browser: Injection commands sent to ' . $target_id, 'trace');
+
+        unset($target_id, $agent_core, $ws_addr, $source, $socketMgr, $commands, $command, $cmd_id, $message, $read, $write, $except, $selected);
     }
 
     /**
@@ -721,13 +743,13 @@ class handler extends Factory
     }
 
     /**
-     * @param agent_core $agent_core
      * @param string     $img_base64
      * @param string     $file_path
+     * @param agent_core $agent_core
      *
      * @return string
      */
-    public function saveScreenshot(agent_core $agent_core, string $img_base64, string $file_path): string
+    public function saveScreenshot(string $img_base64, string $file_path, agent_core $agent_core): string
     {
         $image_data = base64_decode($img_base64);
 
@@ -744,18 +766,19 @@ class handler extends Factory
 
         $save = file_put_contents($file_path, $image_data);
 
-        unset($agent_core, $img_base64, $image_data, $dir_path);
+        unset($img_base64, $agent_core, $image_data, $dir_path);
         return false !== $save ? $file_path : '';
     }
 
     /**
-     * @param array $payload_data
-     * @param array $msg_data
+     * @param array      $payload_data
+     * @param array      $msg_data
+     * @param agent_core $agent_core
      *
      * @return array|string[]
      * @throws \ReflectionException
      */
-    public function handleCreateTab(array $payload_data, array $msg_data): array
+    public function handleCreateTab(array $payload_data, array $msg_data, agent_core $agent_core): array
     {
         if (!isset($msg_data['result']['targetId'])) {
             return ['status' => 'error', 'error' => '创建标签页失败：未返回targetId。'];
@@ -779,16 +802,24 @@ class handler extends Factory
         }
 
         $this->tab_list[$target_id] = [
-            'ws_addr' => $ws_addr,
-            'url'     => $payload_data['params']['url'] ?? 'about:blank',
-            'title'   => '',
-            'status'  => 'ready',
-            'action'  => 'idle',
+            'ws_addr'  => $ws_addr,
+            'url'      => $payload_data['params']['url'] ?? 'about:blank',
+            'title'    => '',
+            'status'   => 'ready',
+            'action'   => 'idle',
+            'injected' => false
         ];
 
         $this->curr_id = $target_id;
 
-        unset($payload_data, $msg_data, $ws_addr, $debugger, $item);
+        try {
+            $this->injectScript($target_id, $agent_core);
+        } catch (\Throwable $throwable) {
+            $agent_core->utils->debug('Browser: Failed to inject to ' . $target_id, 'trace');
+            unset($throwable);
+        }
+
+        unset($payload_data, $msg_data, $agent_core, $ws_addr, $debugger, $item);
         return [
             'status'  => 'success',
             'data'    => ['target_id' => $target_id],
@@ -824,6 +855,11 @@ class handler extends Factory
         if ($this->curr_id === $target_id) {
             $tab_ids       = array_keys($this->tab_list);
             $this->curr_id = [] !== $tab_ids ? $tab_ids[0] : '';
+
+            if ('' !== $this->curr_id) {
+                $this->browser_data['debug_addr'] = $this->tab_list[$this->curr_id]['ws_addr'];
+            }
+
             unset($tab_ids);
         }
 
@@ -867,9 +903,9 @@ class handler extends Factory
                 $selector   = json_encode($params['selector'], JSON_FORMAT);
                 $method     = 'Runtime.evaluate';
                 $cdp_params = [
-                    'expression'    => '(function() { const el = document.querySelector(' . $selector . '); if (!el) throw new Error("Element not found: " + ' . $selector . '); if (typeof el.click !== "function") throw new Error("Element is not clickable: " + ' . $selector . '); if (el.disabled) throw new Error("Element is disabled: " + ' . $selector . '); el.click(); return true; })()',
+                    'expression'    => '(function(){const el=document.querySelector(' . $selector . ');if(!el)throw new Error("Element not found: "+' . $selector . ');if(typeof el.click!=="function")throw new Error("Element is not clickable: "+' . $selector . ');if(el.disabled)throw new Error("Element is disabled: "+' . $selector . ');el.scrollIntoView({behavior:"auto",block:"center",inline:"center"});if(typeof el.focus==="function")el.focus({preventScroll:true});el.click();return true;})()',
                     'returnByValue' => true,
-                    'userGesture'   => true
+                    'userGesture'   => true,
                 ];
                 break;
 
@@ -1180,11 +1216,12 @@ class handler extends Factory
                 foreach ($debugger as $item) {
                     if (isset($item['id']) && $item['id'] === $target_id && $item['type'] === 'page') {
                         $this->tab_list[$target_id] = [
-                            'ws_addr' => $item['webSocketDebuggerUrl'] ?? '',
-                            'url'     => $item['url'] ?? '',
-                            'title'   => $item['title'] ?? '',
-                            'status'  => 'ready',
-                            'action'  => 'idle',
+                            'ws_addr'  => $item['webSocketDebuggerUrl'] ?? '',
+                            'url'      => $item['url'] ?? '',
+                            'title'    => $item['title'] ?? '',
+                            'status'   => 'ready',
+                            'action'   => 'idle',
+                            'injected' => false
                         ];
                         break;
                     }
@@ -1200,14 +1237,17 @@ class handler extends Factory
 
         $tab_info = $this->tab_list[$target_id];
 
-        try {
-            $this->injectScript($target_id, $agent_core);
-        } catch (\Throwable) {
-            return ['status' => 'error', 'error' => '标签页`' . $target_id . '`通信失败，请关闭并重建该标签页。'];
-        }
-
         if ('busy' === $tab_info['status']) {
             return ['status' => 'error', 'error' => '标签页`' . $target_id . '`正忙（操作: ' . $tab_info['action'] . '），请稍后重试。'];
+        }
+
+        try {
+            if (!in_array($action, ['createTab', 'closeTab'], true)) {
+                $this->injectScript($target_id, $agent_core);
+            }
+        } catch (\Throwable $throwable) {
+            $agent_core->utils->debug('Browser: Failed to inject to ' . $target_id, 'trace');
+            unset($throwable);
         }
 
         $this->tab_list[$target_id]['status'] = 'busy';
@@ -1240,7 +1280,8 @@ class handler extends Factory
 
             $raw_msg  = '';
             $msg_data = [];
-            $deadline = microtime(true) + $this->timeout;
+            $timeout  = $payload_data['params']['timeout'] ?? $this->timeout;
+            $deadline = microtime(true) + $timeout + 1;
 
             $socketMgr->sendMessage(
                 $master_id,
@@ -1313,7 +1354,7 @@ class handler extends Factory
 
                 return [
                     'status' => 'error',
-                    'error'  => '执行"' . $action . '"超时未响应（' . $this->timeout . '秒），请增加超时时间或重启实例。',
+                    'error'  => '执行"' . $action . '"超时未响应（' . $timeout . '秒），请增加超时时间或重启实例。',
                 ];
             }
 
@@ -1332,12 +1373,6 @@ class handler extends Factory
                     ?? '脚本异常';
             } elseif (isset($msg_data['result']['result']['subtype']) && 'error' === $msg_data['result']['result']['subtype']) {
                 $runtime_error = $msg_data['result']['result']['description'] ?? '脚本执行错误';
-            } elseif (
-                isset($msg_data['result']['result']['value'])
-                && is_string($msg_data['result']['result']['value'])
-                && str_starts_with($msg_data['result']['result']['value'], 'Error:')
-            ) {
-                $runtime_error = $msg_data['result']['result']['value'];
             }
 
             if ('' !== $runtime_error) {
@@ -1355,7 +1390,7 @@ class handler extends Factory
                     ];
                 }
 
-                $saved_path = $this->saveScreenshot($agent_core, $msg_data['result']['data'], $payload_data['params']['save_path']);
+                $saved_path = $this->saveScreenshot($msg_data['result']['data'], $payload_data['params']['save_path'], $agent_core);
 
                 if ('' === $saved_path) {
                     return [
@@ -1380,7 +1415,7 @@ class handler extends Factory
             }
 
             if ('createTab' === $action) {
-                return $this->handleCreateTab($payload_data, $msg_data);
+                return $this->handleCreateTab($payload_data, $msg_data, $agent_core);
             }
 
             if ('closeTab' === $action) {
@@ -1420,7 +1455,7 @@ class handler extends Factory
             ];
         } finally {
             Factory::destroy($socketMgr);
-            unset($agent_core, $payload_data, $action, $target_id, $tab_info, $ws_addr, $socketMgr, $cmd_id, $master_id, $raw_msg, $msg_data, $deadline, $remaining, $seconds, $microseconds, $read, $write, $except, $selected, $response_msg, $response_data, $runtime_error, $saved_path, $data);
+            unset($agent_core, $payload_data, $action, $target_id, $tab_info, $ws_addr, $socketMgr, $cmd_id, $master_id, $raw_msg, $msg_data, $timeout, $deadline, $remaining, $seconds, $microseconds, $read, $write, $except, $selected, $response_msg, $response_data, $runtime_error, $saved_path, $data);
         }
     }
 

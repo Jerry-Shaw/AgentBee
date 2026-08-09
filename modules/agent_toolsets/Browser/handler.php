@@ -601,6 +601,61 @@ class handler extends Factory
      */
     public function pressKey(array $payload_data, agent_core $agent_core): array
     {
+        $key = $payload_data['params']['key'] ?? null;
+
+        if (!is_string($key) || '' === $key) {
+            return [
+                'status' => 'error',
+                'error'  => '按键名称不能为空。',
+            ];
+        }
+
+        $modifiers = $payload_data['params']['modifiers'] ?? [];
+
+        if (!is_array($modifiers)) {
+            return [
+                'status' => 'error',
+                'error'  => '修饰键参数必须是数组。',
+            ];
+        }
+
+        $allowed_modifiers = ['Control', 'Shift', 'Alt', 'Meta'];
+        $invalid_modifiers = array_values(array_diff($modifiers, $allowed_modifiers));
+
+        if ([] !== $invalid_modifiers) {
+            return [
+                'status' => 'error',
+                'error'  => '不支持的修饰键：' . implode('、', $invalid_modifiers) . '。'
+            ];
+        }
+
+        $key_aliases = [
+            'Esc'   => 'Escape',
+            'Space' => ' ',
+            'Left'  => 'ArrowLeft',
+            'Right' => 'ArrowRight',
+            'Up'    => 'ArrowUp',
+            'Down'  => 'ArrowDown',
+            'Del'   => 'Delete',
+        ];
+
+        $key = $key_aliases[$key] ?? $key;
+
+        $supported_keys = [
+            'Enter', 'Tab', 'Backspace', 'Escape', ' ', 'PageUp', 'PageDown',
+            'End', 'Home', 'ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown', 'Insert', 'Delete',
+            'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+        ];
+
+        if (!in_array($key, $supported_keys, true) && 1 !== preg_match('/^[a-zA-Z0-9]$/', $key)) {
+            return [
+                'status' => 'error',
+                'error'  => '不支持的按键名称：' . $key . '。',
+            ];
+        }
+
+        $payload_data['params']['key']        = $key;
+        $payload_data['params']['modifiers']  = array_values(array_unique($modifiers));
         $payload_data['params']['event_type'] = 'keyDown';
 
         $result = $this->sendCommand($agent_core, $payload_data, __FUNCTION__);
@@ -617,7 +672,7 @@ class handler extends Factory
             $result['message'] = $this->getMessage(__FUNCTION__);
         }
 
-        unset($payload_data, $agent_core);
+        unset($payload_data, $agent_core, $key, $modifiers, $allowed_modifiers, $invalid_modifiers, $key_aliases, $supported_keys);
         return $result;
     }
 
@@ -1281,19 +1336,19 @@ class handler extends Factory
             $msg_data = [];
             $timeout  = $payload_data['params']['timeout'] ?? $this->timeout;
             $deadline = microtime(true) + $timeout + 1;
+            $command  = $this->buildCommand($action, $payload_data['params'] ?? [], $cmd_id);
 
-            $socketMgr->sendMessage(
-                $master_id,
-                $socketMgr->wsEncode(
-                    $this->buildCommand(
-                        $action,
-                        $payload_data['params'] ?? [],
-                        $cmd_id
-                    ),
-                    false,
-                    true
-                )
-            );
+            if ('' === $command) {
+                $this->tab_list[$target_id]['status'] = 'ready';
+                $this->tab_list[$target_id]['action'] = 'idle';
+
+                return [
+                    'status' => 'error',
+                    'error'  => '不支持的浏览器操作：' . $action . '。',
+                ];
+            }
+
+            $socketMgr->sendMessage($master_id, $socketMgr->wsEncode($command, false, true));
 
             while (microtime(true) < $deadline) {
                 $remaining = $deadline - microtime(true);
@@ -1399,8 +1454,14 @@ class handler extends Factory
                 }
 
                 $data = ['saved_path' => $saved_path];
+            } elseif (
+                isset($msg_data['result']['result'])
+                && is_array($msg_data['result']['result'])
+                && array_key_exists('value', $msg_data['result']['result'])
+            ) {
+                $data = $msg_data['result']['result']['value'];
             } else {
-                $data = $msg_data['result']['result']['value'] ?? $msg_data['result'] ?? [];
+                $data = $msg_data['result'] ?? [];
             }
 
             if (
@@ -1454,7 +1515,7 @@ class handler extends Factory
             ];
         } finally {
             Factory::destroy($socketMgr);
-            unset($agent_core, $payload_data, $action, $target_id, $tab_info, $ws_addr, $socketMgr, $cmd_id, $master_id, $raw_msg, $msg_data, $timeout, $deadline, $remaining, $seconds, $microseconds, $read, $write, $except, $selected, $response_msg, $response_data, $runtime_error, $saved_path, $data);
+            unset($agent_core, $payload_data, $action, $target_id, $tab_info, $ws_addr, $socketMgr, $cmd_id, $master_id, $raw_msg, $msg_data, $timeout, $deadline, $command, $remaining, $seconds, $microseconds, $read, $write, $except, $selected, $response_msg, $response_data, $runtime_error, $saved_path, $data);
         }
     }
 

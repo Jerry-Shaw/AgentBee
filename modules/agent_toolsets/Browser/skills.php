@@ -385,16 +385,16 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'pressKey',
-                'description' => '模拟键盘按键（含修饰键）。返回：{status, data, message}。',
+                'description' => '模拟键盘按键事件，支持普通按键、功能键、方向键及组合键；仅模拟按键，不用于输入文字，文字输入请使用type。返回：{status, data, message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'key'       => ['type' => 'string', 'description' => '键名（如 Enter）'],
-                        'modifiers' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['Control', 'Shift', 'Alt', 'Meta']], 'description' => '修饰键列表'],
+                        'key'       => ['type' => 'string', 'description' => '按键名称，如 Enter、Escape、Tab、ArrowUp、ArrowDown、Backspace、Delete、A、1 等。'],
+                        'modifiers' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['Control', 'Shift', 'Alt', 'Meta']], 'default' => [], 'description' => '可选修饰键列表；无修饰键时可省略或传空数组。'],
                     ],
                     'required'   => ['key'],
                 ],
             ],
-        ],
+        ]
     ];
 }

@@ -797,12 +797,13 @@ class handler extends Factory
     }
 
     /**
-     * @param array $payload_data
-     * @param array $msg_data
+     * @param array      $payload_data
+     * @param array      $msg_data
+     * @param agent_core $agent_core
      *
      * @return string[]
      */
-    public function handleCloseTab(array $payload_data, array $msg_data): array
+    public function handleCloseTab(array $payload_data, array $msg_data, agent_core $agent_core): array
     {
         if (isset($msg_data['result']['success']) && false === $msg_data['result']['success']) {
             return ['status' => 'error', 'error' => '标签页关闭失败。'];
@@ -814,13 +815,19 @@ class handler extends Factory
             unset($this->tab_list[$target_id]);
         }
 
+        if ([] === $this->tab_list) {
+            $this->close($payload_data, $agent_core);
+            unset($payload_data, $msg_data, $agent_core, $target_id);
+            return ['status' => 'success', 'message' => '最后一个标签页已关闭，浏览器实例已退出。'];
+        }
+
         if ($this->curr_id === $target_id) {
             $tab_ids       = array_keys($this->tab_list);
             $this->curr_id = [] !== $tab_ids ? $tab_ids[0] : '';
             unset($tab_ids);
         }
 
-        unset($payload_data, $msg_data, $target_id);
+        unset($payload_data, $msg_data, $agent_core, $target_id);
         return ['status' => 'success', 'message' => '标签页已关闭。'];
     }
 
@@ -1377,7 +1384,7 @@ class handler extends Factory
             }
 
             if ('closeTab' === $action) {
-                return $this->handleCloseTab($payload_data, $msg_data);
+                return $this->handleCloseTab($payload_data, $msg_data, $agent_core);
             }
 
             if ('switchTab' === $action) {

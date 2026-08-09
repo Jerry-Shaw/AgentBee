@@ -45,7 +45,6 @@ class handler extends Factory
         '--disable-default-apps',
         '--disable-dev-shm-usage',
         '--disable-domain-reliability',
-        '--disable-blink-features=AutomationControlled',
         '--disable-features=ChromeWhatsNewUI,TranslateUI,AutofillServerCommunication,PrivacySandboxSettings4,PrivacySandboxPromptTrigger',
         '--disable-ipc-flooding-protection',
         '--disable-prompt-on-repost',

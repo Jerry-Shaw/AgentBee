@@ -549,9 +549,9 @@ class handler extends Factory
      */
     public function hover(array $payload_data, agent_core $agent_core): array
     {
-        $selector = json_encode($payload_data['params']['selector'], JSON_FORMAT);
+        $position_data = $payload_data;
+        $selector      = json_encode($payload_data['params']['selector'], JSON_FORMAT);
 
-        $position_data                              = $payload_data;
         $position_data['params']['script']          = '(function() {'
             . ' const el = document.querySelector(' . $selector . ');'
             . ' if (!el) throw new Error("Element not found: " + ' . $selector . ');'
@@ -597,6 +597,7 @@ class handler extends Factory
             $hover_data['params']['target_id'] = $payload_data['params']['target_id'];
         }
 
+        unset($payload_data, $position_data, $selector, $result, $position);
         return $this->sendCommand($agent_core, $hover_data, __FUNCTION__);
     }
 
@@ -626,6 +627,7 @@ class handler extends Factory
             $result['message'] = $this->getMessage(__FUNCTION__);
         }
 
+        unset($payload_data, $agent_core);
         return $result;
     }
 
@@ -1185,6 +1187,8 @@ class handler extends Factory
             if (!isset($this->tab_list[$target_id])) {
                 return ['status' => 'error', 'error' => '标签页`' . $target_id . '`不存在或已关闭。'];
             }
+
+            unset($debugger, $item);
         }
 
         $tab_info = $this->tab_list[$target_id];
@@ -1224,122 +1228,180 @@ class handler extends Factory
 
             $socketMgr->createWSClient($ws_addr);
 
-            $write       = $except = [];
-            $cmd_id      = $this->cmd_id++;
-            $master_id   = $socketMgr->master_id;
-            $master_sock = $socketMgr->master_sock;
+            $cmd_id    = $this->cmd_id++;
+            $master_id = $socketMgr->master_id;
+
+            $raw_msg  = '';
+            $msg_data = [];
+            $deadline = microtime(true) + $this->timeout;
 
             $socketMgr->sendMessage(
                 $master_id,
                 $socketMgr->wsEncode(
-                    $this->buildCommand($action, $payload_data['params'] ?? [], $cmd_id),
+                    $this->buildCommand(
+                        $action,
+                        $payload_data['params'] ?? [],
+                        $cmd_id
+                    ),
                     false,
                     true
                 )
             );
 
-            if (1 === (int)stream_select($master_sock, $write, $except, $this->timeout, 0)) {
-                $message  = $socketMgr->readMessage($master_id, true);
-                $msg_data = json_decode($message, true);
+            while (microtime(true) < $deadline) {
+                $remaining = $deadline - microtime(true);
 
-                $this->tab_list[$target_id]['status'] = 'ready';
-                $this->tab_list[$target_id]['action'] = 'idle';
+                if ($remaining <= 0) {
+                    break;
+                }
 
-                if (null === $msg_data) {
+                $seconds      = (int)$remaining;
+                $microseconds = (int)(($remaining - $seconds) * 1000000);
+
+                $read   = $socketMgr->master_sock;
+                $write  = [];
+                $except = [];
+
+                $selected = stream_select($read, $write, $except, $seconds, $microseconds);
+
+                if (false === $selected) {
+                    throw new \RuntimeException('等待CDP响应失败。');
+                }
+
+                if (0 === $selected) {
+                    break;
+                }
+
+                $response_msg  = $socketMgr->readMessage($master_id, true);
+                $response_data = json_decode($response_msg, true);
+
+                if (!is_array($response_data)) {
+                    $raw_msg = $response_msg;
+                    break;
+                }
+
+                if (!array_key_exists('id', $response_data)) {
+                    continue;
+                }
+
+                if ((int)$response_data['id'] !== $cmd_id) {
+                    continue;
+                }
+
+                $msg_data = $response_data;
+                break;
+            }
+
+            $this->tab_list[$target_id]['status'] = 'ready';
+            $this->tab_list[$target_id]['action'] = 'idle';
+
+            if ([] === $msg_data) {
+                if ('' !== $raw_msg) {
                     return [
                         'status'  => 'error',
                         'error'   => '执行"' . $action . '"失败，响应格式异常，请重试或重启实例。',
-                        'content' => $message
+                        'content' => $raw_msg,
                     ];
                 }
-
-                if (isset($msg_data['error'])) {
-                    return [
-                        'status' => 'error',
-                        'error'  => 'CDP协议错误，请重启浏览器实例。错误详情: ' . ($msg_data['error']['message'] ?? '未知错误'),
-                    ];
-                }
-
-                $runtime_error = '';
-
-                if (isset($msg_data['result']['exceptionDetails'])) {
-                    $runtime_error = $msg_data['result']['exceptionDetails']['exception']['description'] ?? $msg_data['result']['exceptionDetails']['text'] ?? '脚本异常';
-                } elseif (isset($msg_data['result']['result']['subtype']) && 'error' === $msg_data['result']['result']['subtype']) {
-                    $runtime_error = $msg_data['result']['result']['description'] ?? '脚本执行错误';
-                } elseif (isset($msg_data['result']['result']['value']) && is_string($msg_data['result']['result']['value']) && str_starts_with($msg_data['result']['result']['value'], 'Error:')) {
-                    $runtime_error = $msg_data['result']['result']['value'];
-                }
-
-                if ('' !== $runtime_error) {
-                    return [
-                        'status' => 'error',
-                        'error'  => '脚本执行错误，请检查选择器或页面状态: ' . $runtime_error,
-                    ];
-                }
-
-                if ('screenshot' === $action) {
-                    if (!isset($msg_data['result']['data'])) {
-                        return ['status' => 'error', 'error' => '截图数据缺失，请重试截图操作。'];
-                    }
-
-                    $saved_path = $this->saveScreenshot($agent_core, $msg_data['result']['data'], $payload_data['params']['save_path']);
-
-                    if ('' === $saved_path) {
-                        return ['status' => 'error', 'error' => '截图保存失败，请检查保存路径和磁盘空间。'];
-                    }
-
-                    $data = ['saved_path' => $saved_path];
-                    unset($saved_path);
-                } else {
-                    $data = $msg_data['result']['result']['value'] ?? $msg_data['result'] ?? [];
-                }
-
-                if (
-                    in_array($action, ['waitForSelector', 'waitForPageLoad', 'waitForText', 'waitForElementVisible', 'waitForUrl'], true)
-                    && false === $data
-                ) {
-                    return [
-                        'status' => 'error',
-                        'error'  => '执行"' . $action . '"等待超时，条件未满足，请检查页面是否正常加载或增加超时时间。',
-                    ];
-                }
-
-                if ('createTab' === $action) {
-                    return $this->handleCreateTab($payload_data, $msg_data);
-                }
-
-                if ('closeTab' === $action) {
-                    return $this->handleCloseTab($payload_data, $msg_data);
-                }
-
-                if ('switchTab' === $action) {
-                    $this->curr_id = $target_id;
-
-                    if (isset($this->tab_list[$target_id]['ws_addr'])) {
-                        $this->browser_data['debug_addr'] = $this->tab_list[$target_id]['ws_addr'];
-                    }
-
-                    return ['status' => 'success', 'message' => '当前标签页已切换至`' . $target_id . '`，可继续操作。'];
-                }
-
-                if ('navigate' === $action && isset($data['url'])) {
-                    $this->tab_list[$target_id]['url'] = $data['url'];
-                }
-
-                return [
-                    'status'  => 'success',
-                    'data'    => $data,
-                    'message' => $this->getMessage($action),
-                ];
-            } else {
-                $this->tab_list[$target_id]['status'] = 'ready';
-                $this->tab_list[$target_id]['action'] = 'idle';
 
                 return [
                     'status' => 'error',
                     'error'  => '执行"' . $action . '"超时未响应（' . $this->timeout . '秒），请增加超时时间或重启实例。',
                 ];
             }
+
+            if (isset($msg_data['error'])) {
+                return [
+                    'status' => 'error',
+                    'error'  => 'CDP协议错误，请重启浏览器实例。错误详情: ' . ($msg_data['error']['message'] ?? '未知错误'),
+                ];
+            }
+
+            $runtime_error = '';
+
+            if (isset($msg_data['result']['exceptionDetails'])) {
+                $runtime_error = $msg_data['result']['exceptionDetails']['exception']['description']
+                    ?? $msg_data['result']['exceptionDetails']['text']
+                    ?? '脚本异常';
+            } elseif (isset($msg_data['result']['result']['subtype']) && 'error' === $msg_data['result']['result']['subtype']) {
+                $runtime_error = $msg_data['result']['result']['description'] ?? '脚本执行错误';
+            } elseif (
+                isset($msg_data['result']['result']['value'])
+                && is_string($msg_data['result']['result']['value'])
+                && str_starts_with($msg_data['result']['result']['value'], 'Error:')
+            ) {
+                $runtime_error = $msg_data['result']['result']['value'];
+            }
+
+            if ('' !== $runtime_error) {
+                return [
+                    'status' => 'error',
+                    'error'  => '脚本执行错误，请检查选择器或页面状态: ' . $runtime_error,
+                ];
+            }
+
+            if ('screenshot' === $action) {
+                if (!isset($msg_data['result']['data'])) {
+                    return [
+                        'status' => 'error',
+                        'error'  => '截图数据缺失，请重试截图操作。',
+                    ];
+                }
+
+                $saved_path = $this->saveScreenshot($agent_core, $msg_data['result']['data'], $payload_data['params']['save_path']);
+
+                if ('' === $saved_path) {
+                    return [
+                        'status' => 'error',
+                        'error'  => '截图保存失败，请检查保存路径和磁盘空间。',
+                    ];
+                }
+
+                $data = ['saved_path' => $saved_path];
+            } else {
+                $data = $msg_data['result']['result']['value'] ?? $msg_data['result'] ?? [];
+            }
+
+            if (
+                in_array($action, ['waitForSelector', 'waitForPageLoad', 'waitForText', 'waitForElementVisible', 'waitForUrl',], true)
+                && false === $data
+            ) {
+                return [
+                    'status' => 'error',
+                    'error'  => '执行"' . $action . '"等待超时，条件未满足，请检查页面是否正常加载或增加超时时间。',
+                ];
+            }
+
+            if ('createTab' === $action) {
+                return $this->handleCreateTab($payload_data, $msg_data);
+            }
+
+            if ('closeTab' === $action) {
+                return $this->handleCloseTab($payload_data, $msg_data);
+            }
+
+            if ('switchTab' === $action) {
+                $this->curr_id = $target_id;
+
+                if (isset($this->tab_list[$target_id]['ws_addr'])) {
+                    $this->browser_data['debug_addr'] = $this->tab_list[$target_id]['ws_addr'];
+                }
+
+                return [
+                    'status'  => 'success',
+                    'message' => '当前标签页已切换至`' . $target_id . '`，可继续操作。',
+                ];
+            }
+
+            if ('navigate' === $action && isset($data['url'])) {
+                $this->tab_list[$target_id]['url'] = $data['url'];
+            }
+
+            return [
+                'status'  => 'success',
+                'data'    => $data,
+                'message' => $this->getMessage($action),
+            ];
         } catch (\Throwable $throwable) {
             $agent_core->utils->debug('Browser closed due to communication errors. (' . $throwable->getMessage() . ')', 'trace');
             $this->close($payload_data, $agent_core);
@@ -1351,7 +1413,7 @@ class handler extends Factory
             ];
         } finally {
             Factory::destroy($socketMgr);
-            unset($agent_core, $payload_data, $action, $socketMgr, $cmd_id, $write, $except, $master_id, $master_sock, $message, $msg_data, $runtime_error);
+            unset($agent_core, $payload_data, $action, $target_id, $tab_info, $ws_addr, $socketMgr, $cmd_id, $master_id, $raw_msg, $msg_data, $deadline, $remaining, $seconds, $microseconds, $read, $write, $except, $selected, $response_msg, $response_data, $runtime_error, $saved_path, $data);
         }
     }
 

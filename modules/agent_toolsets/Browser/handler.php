@@ -1057,7 +1057,11 @@ class handler extends Factory
 
             case 'evaluate':
                 $method     = 'Runtime.evaluate';
-                $cdp_params = ['expression' => $params['script'], 'returnByValue' => $params['return_by_value'] ?? true];
+                $cdp_params = [
+                    'expression'    => $params['script'],
+                    'returnByValue' => $params['return_by_value'] ?? true,
+                    'awaitPromise'  => true,
+                ];
                 break;
 
             case 'screenshot':
@@ -1401,38 +1405,56 @@ class handler extends Factory
                 if ('' !== $raw_msg) {
                     return [
                         'status'  => 'error',
-                        'error'   => '执行"' . $action . '"失败，响应格式异常，请重试或重启实例。',
+                        'error'   => '执行"' . $action . '"失败，浏览器响应异常，请稍后重试。',
                         'content' => $raw_msg,
                     ];
                 }
 
                 return [
                     'status' => 'error',
-                    'error'  => '执行"' . $action . '"超时未响应（' . $timeout . '秒），请增加超时时间或重启实例。',
+                    'error'  => '执行"' . $action . '"响应超时（' . $timeout . '秒），请检查页面状态或稍后重试。',
                 ];
             }
 
             if (isset($msg_data['error'])) {
+                $agent_core->utils->debug('Browser CDP error: ' . ($msg_data['error']['message'] ?? '未知错误'), 'debug');
+                $this->close($payload_data, $agent_core);
+
                 return [
                     'status' => 'error',
-                    'error'  => 'CDP协议错误，请重启浏览器实例。错误详情: ' . ($msg_data['error']['message'] ?? '未知错误'),
+                    'error'  => '浏览器实例执行失败，已关闭，请重新启动浏览器。',
                 ];
             }
 
             $runtime_error = '';
 
             if (isset($msg_data['result']['exceptionDetails'])) {
-                $runtime_error = $msg_data['result']['exceptionDetails']['exception']['description']
-                    ?? $msg_data['result']['exceptionDetails']['text']
+                $exception_details = $msg_data['result']['exceptionDetails'];
+
+                $runtime_error = $exception_details['exception']['description']
+                    ?? $exception_details['exception']['value']
+                    ?? $exception_details['text']
                     ?? '脚本异常';
+
+                if (is_array($runtime_error)) {
+                    $runtime_error = json_encode($runtime_error, JSON_FORMAT) ?: '脚本异常';
+                }
+
+                unset($exception_details);
             } elseif (isset($msg_data['result']['result']['subtype']) && 'error' === $msg_data['result']['result']['subtype']) {
-                $runtime_error = $msg_data['result']['result']['description'] ?? '脚本执行错误';
+                $runtime_error = $msg_data['result']['result']['description']
+                    ?? $msg_data['result']['result']['value']
+                    ?? '脚本执行错误';
+            }
+
+            if (!is_string($runtime_error)) {
+                $runtime_error = json_encode($runtime_error, JSON_FORMAT) ?: '脚本执行错误';
             }
 
             if ('' !== $runtime_error) {
                 return [
                     'status' => 'error',
-                    'error'  => '脚本执行错误，请检查选择器或页面状态: ' . $runtime_error,
+                    'error'  => '脚本执行失败，当前操作无法继续。请检查脚本、页面状态或返回值类型。错误详情：' . $runtime_error,
                 ];
             }
 

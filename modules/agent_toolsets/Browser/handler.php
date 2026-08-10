@@ -734,7 +734,7 @@ class handler extends Factory
             $read     = $socketMgr->master_sock;
             $write    = [];
             $except   = [];
-            $selected = stream_select($read, $write, $except, 10);
+            $selected = stream_select($read, $write, $except, $this->timeout);
 
             if (in_array($selected, [0, false], true)) {
                 continue;
@@ -930,7 +930,7 @@ class handler extends Factory
      */
     public function buildCommand(string $action, array $params, int $cmd_id): string
     {
-        $timeout_ms = (int)($params['timeout'] ?? $this->timeout) * 1000;
+        $timeout_ms = $this->timeout * 1000;
 
         switch ($action) {
             case 'createTab':
@@ -1326,7 +1326,7 @@ class handler extends Factory
         }
 
         $socketMgr     = SocketMgr::new('browser');
-        $this->timeout = $agent_core->utils->agent_config['chrome_timeout'] ?? 60;
+        $this->timeout = $agent_core->utils->agent_config['chrome_timeout'] ?? $this->timeout;
 
         try {
             $agent_core->utils->debug('Browser: working on ' . $action . '.', 'trace');
@@ -1338,8 +1338,7 @@ class handler extends Factory
 
             $raw_msg  = '';
             $msg_data = [];
-            $timeout  = $payload_data['params']['timeout'] ?? $this->timeout;
-            $deadline = microtime(true) + $timeout + 1;
+            $deadline = microtime(true) + $this->timeout;
             $command  = $this->buildCommand($action, $payload_data['params'] ?? [], $cmd_id);
 
             if ('' === $command) {
@@ -1357,7 +1356,7 @@ class handler extends Factory
             while (microtime(true) < $deadline) {
                 $remaining = $deadline - microtime(true);
 
-                if ($remaining <= 0) {
+                if (0 >= $remaining) {
                     break;
                 }
 
@@ -1412,7 +1411,7 @@ class handler extends Factory
 
                 return [
                     'status' => 'error',
-                    'error'  => '执行"' . $action . '"响应超时（' . $timeout . '秒），请检查页面状态或稍后重试。',
+                    'error'  => '执行"' . $action . '"响应超时（' . $this->timeout . '秒），请检查页面状态或稍后重试。',
                 ];
             }
 
@@ -1537,7 +1536,7 @@ class handler extends Factory
             ];
         } finally {
             Factory::destroy($socketMgr);
-            unset($agent_core, $payload_data, $action, $target_id, $tab_info, $ws_addr, $socketMgr, $cmd_id, $master_id, $raw_msg, $msg_data, $timeout, $deadline, $command, $remaining, $seconds, $microseconds, $read, $write, $except, $selected, $response_msg, $response_data, $runtime_error, $saved_path, $data);
+            unset($agent_core, $payload_data, $action, $target_id, $tab_info, $ws_addr, $socketMgr, $cmd_id, $master_id, $raw_msg, $msg_data, $deadline, $command, $remaining, $seconds, $microseconds, $read, $write, $except, $selected, $response_msg, $response_data, $runtime_error, $saved_path, $data);
         }
     }
 

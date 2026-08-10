@@ -330,79 +330,73 @@ class go extends Factory
 
     /**
      * @param string $selector
-     * @param int    $timeout
      *
      * @return array
      */
-    public function waitForSelector(string $selector, int $timeout = 30): array
+    public function waitForSelector(string $selector): array
     {
         return [
             'async'   => false,
             'action'  => __FUNCTION__,
-            'params'  => ['selector' => $selector, 'timeout' => $timeout],
+            'params'  => ['selector' => $selector],
             'handler' => handler::class,
         ];
     }
 
     /**
-     * @param int $timeout
-     *
      * @return array
      */
-    public function waitForPageLoad(int $timeout = 30): array
+    public function waitForPageLoad(): array
     {
         return [
             'async'   => false,
             'action'  => __FUNCTION__,
-            'params'  => ['timeout' => $timeout],
+            'params'  => [],
             'handler' => handler::class,
         ];
     }
 
     /**
      * @param string $text
-     * @param int    $timeout
      *
      * @return array
      */
-    public function waitForText(string $text, int $timeout = 30): array
+    public function waitForText(string $text): array
     {
         return [
             'async'   => false,
             'action'  => __FUNCTION__,
-            'params'  => ['text' => $text, 'timeout' => $timeout],
+            'params'  => ['text' => $text],
             'handler' => handler::class,
         ];
     }
 
     /**
      * @param string $selector
-     * @param int    $timeout
      *
      * @return array
      */
-    public function waitForElementVisible(string $selector, int $timeout = 30): array
+    public function waitForElementVisible(string $selector): array
     {
         return [
             'async'   => false,
             'action'  => __FUNCTION__,
-            'params'  => ['selector' => $selector, 'timeout' => $timeout],
+            'params'  => ['selector' => $selector],
             'handler' => handler::class,
         ];
     }
 
     /**
      * @param string $url_pattern
-     * @param int    $timeout
      *
      * @return array
      */
-    public function waitForUrl(string $url_pattern, int $timeout = 30): array
+    public function waitForUrl(string $url_pattern): array
     {
         return [
             'async'   => false,
             'action'  => __FUNCTION__,
-            'params'  => ['url_pattern' => $url_pattern, 'timeout' => $timeout],
+            'params'  => ['url_pattern' => $url_pattern],
             'handler' => handler::class,
         ];
     }

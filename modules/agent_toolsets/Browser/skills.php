@@ -300,8 +300,7 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
-                        'timeout'  => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器']
                     ],
                     'required'   => ['selector'],
                 ],
@@ -311,13 +310,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'waitForPageLoad',
-                'description' => '等待页面完全加载，超时报错。返回：{status, data: boolean, message}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'timeout' => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
-                    ],
-                ],
+                'description' => '等待页面完全加载，超时报错。返回：{status, data: boolean, message}。'
             ],
         ],
         [
@@ -328,8 +321,7 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'text'    => ['type' => 'string', 'description' => '要等待的文本'],
-                        'timeout' => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
+                        'text' => ['type' => 'string', 'description' => '要等待的文本']
                     ],
                     'required'   => ['text'],
                 ],
@@ -343,8 +335,7 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器'],
-                        'timeout'  => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
+                        'selector' => ['type' => 'string', 'description' => 'CSS 选择器']
                     ],
                     'required'   => ['selector'],
                 ],
@@ -358,8 +349,7 @@ class skills
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'url_pattern' => ['type' => 'string', 'description' => '要匹配的 URL 片段'],
-                        'timeout'     => ['type' => 'integer', 'default' => 30, 'description' => '超时秒数'],
+                        'url_pattern' => ['type' => 'string', 'description' => '要匹配的 URL 片段']
                     ],
                     'required'   => ['url_pattern'],
                 ],

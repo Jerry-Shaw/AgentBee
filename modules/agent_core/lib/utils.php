@@ -206,6 +206,10 @@ class utils extends Factory
             return count($this->session_history[$worker_name] ?? []);
         }
 
+        if (!isset($this->session_history[$worker_name])) {
+            return 0;
+        }
+
         $role_history = array_column($this->session_history[$worker_name], 'role');
         $role_count   = array_count_values($role_history);
         $msg_count    = $role_count[$role_name] ?? 0;

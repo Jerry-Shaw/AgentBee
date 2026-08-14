@@ -507,7 +507,6 @@ class go extends Factory
                         case 'end':
                             $max_ctx_len   = $this->utils->agent_config['max_ctx_len'];
                             $warning_count = $max_ctx_len * 2;
-                            $limit_count   = $max_ctx_len * 3;
 
                             if (WORKER_MAIN === $payload['sender']) {
                                 if (0 < $new_messages) {
@@ -528,14 +527,15 @@ class go extends Factory
                                         $metadata + ['socket_id' => $payload['socket_id']]
                                     );
                                 } else {
-                                    $current_count = $this->utils->countSessionHistory($payload['workerName']);
-                                    if ($current_count < $warning_count) {
+                                    $asst_msg_count = $this->utils->countSessionHistory($payload['workerName'], 'assistant');
+
+                                    if ($asst_msg_count < $warning_count) {
                                         $this->clean_warning = false;
                                         break;
                                     } elseif (!$this->clean_warning) {
                                         $this->clean_warning = true;
 
-                                        $this->utils->debug($payload['sender'] . ': History too long (' . $current_count . '/' . $limit_count . ', config: ' . $max_ctx_len . ')', 'trace');
+                                        $this->utils->debug($payload['sender'] . ': Assistant history too long (' . $asst_msg_count . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
                                         $this->utils->addMessageQueue(
                                             WORKER_MAIN,
                                             [
@@ -544,7 +544,8 @@ class go extends Factory
                                             ]
                                         );
                                     }
-                                    unset($current_count, $limit_count);
+
+                                    unset($asst_msg_count);
                                 }
                             } else {
                                 if ('' !== $payload['data']) {
@@ -581,7 +582,7 @@ class go extends Factory
                                             $this->utils->getSessionHistory($payload['workerName']),
                                             $metadata + ['socket_id' => $payload['socket_id']]
                                         );
-                                    } elseif ($payload['talk_count'] > $limit_count) {
+                                    } elseif ($payload['talk_count'] > $warning_count) {
                                         $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' history too long (' . $payload['talk_count'] . '/' . $warning_count . ', config: ' . $max_ctx_len . ')', 'trace');
 
                                         $this->utils->addMessageQueue(
@@ -597,7 +598,7 @@ class go extends Factory
                                 unset($worker_info);
                             }
 
-                            unset($max_ctx_len, $warning_count, $limit_count);
+                            unset($max_ctx_len, $warning_count);
                             break;
                     }
 
@@ -874,12 +875,12 @@ class go extends Factory
             $this->setStatus(self::STATUS_IDLE, true);
         }
 
-        $current_count = $this->utils->countSessionHistory(WORKER_MAIN);
+        $asst_msg_count = $this->utils->countSessionHistory(WORKER_MAIN, 'assistant');
 
-        if ($current_count > $this->utils->agent_config['max_ctx_len'] * 3) {
+        if ($asst_msg_count > $this->utils->agent_config['max_ctx_len'] * 3) {
             $keep_len = ceil($this->utils->agent_config['max_ctx_len'] / 10);
             $cleaned  = $this->utils->cleanSessionHistory(WORKER_MAIN, $keep_len * 4, $keep_len);
-            $this->utils->debug('System: History truncated (' . $current_count . ' -> ' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
+            $this->utils->debug('System: History truncated (' . $asst_msg_count . ' -> ' . $cleaned['current_count'] . ', config: ' . $this->utils->agent_config['max_ctx_len'] . ')', 'trace');
             unset($keep_len, $cleaned);
         }
 
@@ -908,7 +909,7 @@ class go extends Factory
             unset($metadata);
         }
 
-        unset($socket_id, $buffer, $current_count, $new_messages);
+        unset($socket_id, $buffer, $asst_msg_count, $new_messages);
         return [];
     }
 

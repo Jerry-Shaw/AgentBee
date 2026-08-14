@@ -196,12 +196,22 @@ class utils extends Factory
 
     /**
      * @param string $worker_name
+     * @param string $role_name
      *
      * @return int
      */
-    public function countSessionHistory(string $worker_name): int
+    public function countSessionHistory(string $worker_name, string $role_name = ''): int
     {
-        return count($this->session_history[$worker_name] ?? []);
+        if ('' === $role_name) {
+            return count($this->session_history[$worker_name] ?? []);
+        }
+
+        $role_history = array_column($this->session_history[$worker_name], 'role');
+        $role_count   = array_count_values($role_history);
+        $msg_count    = $role_count[$role_name] ?? 0;
+
+        unset($worker_name, $role_name, $role_history, $role_count);
+        return $msg_count;
     }
 
     /**

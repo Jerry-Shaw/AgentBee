@@ -685,21 +685,23 @@ class go extends Factory
 
         if ([] !== $task_list) {
             $this->utils->debug('ScheduledTask: Running task jobs (' . count($task_list) . ')', 'trace');
+
+            $task_jobs = [
+                'time' => date('Y-m-d H:i:s'),
+                'jobs' => $task_list
+            ];
+
+            $task_content = '[定时任务] 任务：' . "\n" . json_encode($task_jobs, JSON_FORMAT) . "\n" . '流程：①执行任务并获取结果；②重要存daily，特别重要存important，琐事不存；③简要汇报结果及存储层级；④完成后清理定时任务（忽略结果）。';
+
+            $task_data = [[
+                'type' => 'text',
+                'text' => $task_content
+            ]];
+
+            $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $task_data]);
+
+            unset($task_jobs, $task_content, $task_data);
         }
-
-        $task_jobs = [
-            'time' => date('Y-m-d H:i:s'),
-            'jobs' => $task_list
-        ];
-
-        $task_content = '[定时任务] 任务：' . "\n" . json_encode($task_jobs, JSON_FORMAT) . "\n" . '流程：①执行任务并获取结果；②重要存daily，特别重要存important，琐事不存；③简要汇报结果及存储层级；④完成后清理定时任务（忽略结果）。';
-
-        $task_data = [[
-            'type' => 'text',
-            'text' => $task_content
-        ]];
-
-        $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $task_data]);
 
         $metadata = $this->utils->getMessageMarker(
             WORKER_MAIN,
@@ -719,7 +721,7 @@ class go extends Factory
             $metadata + ['socket_id' => $socket_id]
         );
 
-        unset($socket_id, $task_list, $new_messages, $task_jobs, $task_content, $task_data, $metadata);
+        unset($socket_id, $task_list, $new_messages, $metadata);
         return '';
     }
 

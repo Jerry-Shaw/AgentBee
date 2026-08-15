@@ -27,21 +27,20 @@ use Nervsys\Core\Lib\IOData;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\Reflect;
 use Nervsys\Core\System;
+use Nervsys\Ext\Algo\NGram;
 
 final class core extends Factory
 {
     use System;
 
     public utils     $utils;
-    public Error     $error;
-    public IOData    $IOData;
+    public NGram     $NGram;
     public SocketMgr $socketMgr;
 
     public int $flush_time_at  = 0;
     public int $flush_interval = 30;
 
     public array $llm_tools       = [];
-    public array $llm_params      = [];
     public array $agent_tools     = [];
     public array $flush_buffers   = [];
     public array $curr_message_id = [];
@@ -60,18 +59,42 @@ final class core extends Factory
 
         $this->utils     = utils::new();
         $this->error     = Error::new();
+        $this->NGram     = NGram::new();
         $this->IOData    = IOData::new();
         $this->socketMgr = SocketMgr::new(WORKER_MAIN);
 
         $this->utils->agent_config = $this->utils->config->get(true, $reload);
-
-        $this->llm_params = $this->utils->agent_config['agent_llm']['params'] ?? [];
 
         if ('' === $this->utils->agent_config['workspace_path'] || !is_dir($this->utils->agent_config['workspace_path'])) {
             $this->utils->agent_config['workspace_path'] = $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
         }
 
         $this->utils->agent_config['workspace_path'] ??= $this->app->root_path . DIRECTORY_SEPARATOR . 'workspace';
+    }
+
+    /**
+     * @param string $type
+     * @param string $worker_name
+     * @param string $token_type
+     *
+     * @return int
+     */
+    public function countTokens(string $type, string $worker_name, string $token_type = 'input'): int
+    {
+        $llm_params = $this->utils->getChildWorker($type, $worker_name, 'llm_params');
+        $context    = json_encode($llm_params + $this->llm_tools + ['messages' => $this->utils->getSessionHistory($worker_name)], JSON_FORMAT);
+        $split      = $this->NGram->splitText($context);
+        $inputs     = ceil(strlen(str_replace(' ', '', $split['asian'])) / 2.8);
+        $inputs     += ceil(strlen($split['latin']) / 4);
+        $outputs    = ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) - $inputs;
+        $tokens     = 'input' === $token_type ? $inputs : $outputs;
+
+        $llm_params['max_completion_tokens'] = $outputs;
+
+        $this->utils->setChildWorker($type, $worker_name, 'llm_params', $llm_params);
+
+        unset($type, $worker_name, $token_type, $llm_params, $context, $split, $inputs, $outputs);
+        return $tokens;
     }
 
     /**
@@ -139,16 +162,6 @@ final class core extends Factory
 
         unset($tool_call_id, $tool_call_name, $tool_call_args, $module_name, $method_name, $fn_params, $fn_args, $tool_result, $result_content);
         return $results;
-    }
-
-    /**
-     * Get LLM parameters (including tools).
-     *
-     * @return array
-     */
-    public function getLLMParams(): array
-    {
-        return $this->llm_params + $this->llm_tools;
     }
 
     /**

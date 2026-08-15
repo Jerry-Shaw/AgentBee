@@ -5,15 +5,15 @@
     "ping_interval": 60
   },
   "agent_llm": {
-    "api_url": "http://127.0.0.1:1234/v1",
-    "api_key": "sk-lm-ru6XiZDE:WImxJO82hxm5L76fNcaK",
-    "model": "agents-a1",
     "org_id": "",
-    "hw_hash": "",
+    "api_url": "http://127.0.0.1:1234/v1",
+    "api_key": "sk-lm-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "model": "",
+    "model_ctx": 131072,
     "timeout": 3600,
+    "hw_hash": "",
     "keep_reasons": false,
     "params": {
-      "max_completion_tokens": 65536,
       "temperature": 0.6,
       "min_p": 0.05,
       "top_p": 0.95,
@@ -37,7 +37,6 @@
       }
     }
   },
-  "max_ctx_len": 20,
   "misc_save_len": 500,
   "misc_keep_days": 30,
   "chrome_timeout": 30,
@@ -45,6 +44,5 @@
   "sandbox_mode": false,
   "workspace_path": "",
   "memory_limit": "4G",
-  "agent_debug": "trace",
-  "socket_debug": false
+  "agent_debug": "trace"
 }

@@ -148,39 +148,38 @@ class config extends Factory
                 'ping_interval' => 60,
             ],
             'agent_llm'      => [
-                'api_url'      => 'http://127.0.0.1:1234/v1',
-                'api_key'      => 'sk-lm-ru6XiZDE:WImxJO82hxm5L76fNcaK',
-                'model'        => 'agents-a1',
                 'org_id'       => '',
-                'hw_hash'      => '',
+                'api_url'      => 'http://127.0.0.1:1234/v1',
+                'api_key'      => 'sk-lm-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+                'model'        => '',
+                'model_ctx'    => 131072,
                 'timeout'      => 3600,
+                'hw_hash'      => '',
                 'keep_reasons' => false,
                 'params'       => [
-                    'max_completion_tokens' => 65536,
-                    'temperature'           => 0.6,
-                    'min_p'                 => 0.05,
-                    'top_p'                 => 0.95,
-                    'top_k'                 => 40,
-                    'frequency_penalty'     => 0,
-                    'presence_penalty'      => 0,
-                    'repetition_penalty'    => 1,
-                    'enable_thinking'       => false,
-                    'stop'                  => [
+                    'temperature'          => 0.6,
+                    'min_p'                => 0.05,
+                    'top_p'                => 0.95,
+                    'top_k'                => 40,
+                    'frequency_penalty'    => 0,
+                    'presence_penalty'     => 0,
+                    'repetition_penalty'   => 1,
+                    'enable_thinking'      => false,
+                    'stop'                 => [
                         '<|im_end|>',
                         '<|endoftext|>',
                     ],
-                    'chat_template_kwargs'  => [
+                    'chat_template_kwargs' => [
                         'enable_thinking' => false,
                     ],
-                    'extra_body'            => [
+                    'extra_body'           => [
                         'enable_thinking' => false,
                     ],
-                    'thinking'              => [
+                    'thinking'             => [
                         'type' => 'disabled',
                     ],
                 ],
             ],
-            'max_ctx_len'    => 20,
             'misc_save_len'  => 500,
             'misc_keep_days' => 30,
             'chrome_timeout' => 30,
@@ -188,8 +187,7 @@ class config extends Factory
             'sandbox_mode'   => false,
             'workspace_path' => App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace',
             'memory_limit'   => '4G',
-            'agent_debug'    => 'trace',
-            'socket_debug'   => false,
+            'agent_debug'    => 'trace'
         ];
     }
 

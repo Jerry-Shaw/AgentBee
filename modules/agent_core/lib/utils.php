@@ -490,7 +490,8 @@ class utils extends Factory
      */
     public function addChildWorker(string $type, string $name, array $data): void
     {
-        $this->child_workers[$type][$name] = $data;
+        $this->child_workers[$type][$name] ??= [];
+        $this->child_workers[$type][$name] = array_merge($this->child_workers[$type][$name], $data);
         unset($type, $name, $data);
     }
 
@@ -511,12 +512,21 @@ class utils extends Factory
     /**
      * @param string $type
      * @param string $name
+     * @param string $key
      *
-     * @return array
+     * @return array|string|int
      */
-    public function getChildWorker(string $type, string $name = ''): array
+    public function getChildWorker(string $type, string $name = '', string $key = ''): array|string|int
     {
-        return '' === $name ? ($this->child_workers[$type] ?? []) : ($this->child_workers[$type][$name] ?? []);
+        if ('' !== $key) {
+            return $this->child_workers[$type][$name][$key] ?? [];
+        }
+
+        if ('' !== $name) {
+            return $this->child_workers[$type][$name] ?? [];
+        }
+
+        return $this->child_workers[$type] ?? [];
     }
 
     /**

@@ -63,8 +63,6 @@ class go extends Factory
         $custom_skills = $this->utils->fetchToolset('skills');
         $this->core->addSkills($custom_skills);
 
-        $this->libOpenAI->setModelParams($this->core->getLLMParams());
-
         unset($reload, $agent_toolsets, $custom_skills);
     }
 
@@ -98,8 +96,6 @@ class go extends Factory
 
         $custom_skills = $this->utils->fetchToolset('skills');
         $this->core->addSkills($custom_skills);
-
-        $this->libOpenAI->setModelParams($this->core->getLLMParams());
 
         unset($reload, $agent_toolsets, $core_skill, $custom_skills);
     }
@@ -140,27 +136,29 @@ class go extends Factory
     }
 
     /**
+     * @param string $type
+     * @param string $receiver
      * @param int    $proc_idx
      * @param string $cmd
-     * @param array  $history
      * @param array  $metadata
      *
      * @return void
      * @throws \Exception
      */
-    public function talk(int $proc_idx, string $cmd, array $history, array $metadata): void
+    public function talkTo(string $type, string $receiver, int $proc_idx, string $cmd, array $metadata): void
     {
         $this->libOpenAI->resumeStream();
         $this->utils->procMgr->writeProc(
             $proc_idx,
             json_encode([
-                'cmd'      => $cmd,
-                'history'  => $history,
-                'metadata' => $metadata
+                'cmd'        => $cmd,
+                'history'    => $this->utils->getSessionHistory($receiver),
+                'metadata'   => $metadata,
+                'llm_params' => $this->utils->getChildWorker($type, $receiver, 'llm_params')
             ], JSON_FORMAT)
         );
 
-        unset($proc_idx, $cmd, $history, $metadata);
+        unset($proc_idx, $cmd, $metadata);
     }
 
     /**
@@ -205,19 +203,21 @@ class go extends Factory
                 continue;
             }
 
-            $job_data = json_decode($job_line, true);
+            $talk_data = json_decode($job_line, true);
 
-            if (!is_array($job_data)) {
+            if (!is_array($talk_data)) {
                 continue;
             }
 
+            $this->libOpenAI->setModelParams($talk_data['llm_params'] + $this->core->llm_tools);
+
             $this->procWorker->talk(
-                $job_data['metadata'],
-                $job_data['history'],
+                $talk_data['metadata'],
+                $talk_data['history'],
                 $this->libOpenAI
             );
 
-            unset($job_line, $job_data);
+            unset($job_line, $talk_data);
         }
     }
 
@@ -249,19 +249,21 @@ class go extends Factory
                 continue;
             }
 
-            $data = json_decode($line, true);
+            $talk_data = json_decode($line, true);
 
-            if (!is_array($data)) {
+            if (!is_array($talk_data)) {
                 continue;
             }
 
-            switch ($data['cmd']) {
+            $this->libOpenAI->setModelParams($talk_data['llm_params'] + $this->core->llm_tools);
+
+            switch ($talk_data['cmd']) {
                 case 'start':
-                    $socket_id = $data['metadata']['socket_id'];
+                    $socket_id = $talk_data['metadata']['socket_id'];
 
                 case 'talk':
-                    $history  = $data['history'];
-                    $metadata = $data['metadata'] + ['talk_count' => count($history), 'socket_id' => $socket_id];
+                    $history  = $talk_data['history'];
+                    $metadata = $talk_data['metadata'] + ['socket_id' => $socket_id];
 
                     $this->procWorker->talk(
                         $metadata,

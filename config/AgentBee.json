@@ -14,6 +14,7 @@
     "hw_hash": "",
     "keep_reasons": false,
     "params": {
+      "max_completion_tokens": 12288,
       "temperature": 0.6,
       "min_p": 0.05,
       "top_p": 0.95,

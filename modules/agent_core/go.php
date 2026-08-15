@@ -523,7 +523,6 @@ class go extends Factory
 
                         case 'end':
                             $completion_tokens = $this->core->countTokens($payload['sender'], $payload['workerName'], 'completion');
-                            $completion_usage  = $completion_tokens / $this->utils->agent_config['agent_llm']['model_ctx'];
 
                             if (WORKER_MAIN === $payload['sender']) {
                                 if (0 < $new_messages) {
@@ -545,10 +544,10 @@ class go extends Factory
                                         $metadata + ['socket_id' => $payload['socket_id']]
                                     );
                                 } else {
-                                    if ($completion_usage > 0.25) {
+                                    if ($completion_tokens > ($this->utils->agent_config['agent_llm']['params']['max_completion_tokens'] ?? 12288)) {
                                         $this->ctx_warning = false;
                                         break;
-                                    } elseif ($completion_tokens > 4096) {
+                                    } elseif ($completion_tokens > 8192) {
                                         if (!$this->ctx_warning) {
                                             $this->ctx_warning = true;
 
@@ -608,7 +607,7 @@ class go extends Factory
                                             'talk',
                                             $metadata + ['socket_id' => $payload['socket_id']]
                                         );
-                                    } elseif ($completion_usage < 0.1) {
+                                    } elseif ($completion_tokens < 8192) {
                                         $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' completion tokens too low (' . $completion_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
 
                                         $this->utils->addMessageQueue(
@@ -624,7 +623,7 @@ class go extends Factory
                                 unset($worker_info);
                             }
 
-                            unset($max_ctx_len, $warning_count);
+                            unset($completion_tokens);
                             break;
                     }
 

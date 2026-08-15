@@ -979,9 +979,6 @@ class utils extends Factory
         }
         $prompts[] = '- 调用其他外部程序前，先用`where`（Windows）或`which`（Unix）探测路径，确认存在后再调用。';
 
-        $prompts[] = '## 上下文';
-        $prompts[] = '- 收到清理指令时，先保存有价值信息再清理；单次回复最多' . $this->agent_config['agent_llm']['params']['max_completion_tokens'] . ' token，超长内容分段交付。';
-
         $prompts[] = '## 记忆';
         $prompts[] = '- **层级（level）**：';
         $prompts[] = '  - `system`：仅系统配置/人设/身份/规则/权限/边界/约束，禁止写入用户请求/偏好/助手推断。';

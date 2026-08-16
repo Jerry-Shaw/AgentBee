@@ -1,6 +1,6 @@
 {
   "model_id": "gpt-image-2",
-  "base_url": "https://api.openai.com/v1",
+  "base_url": "https://api.openai.com",
   "api_key": "sk-xxxxxx",
   "type": "base64"
 }

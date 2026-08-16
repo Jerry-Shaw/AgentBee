@@ -149,7 +149,7 @@ class config extends Factory
             ],
             'agent_llm'      => [
                 'org_id'       => '',
-                'api_url'      => 'http://127.0.0.1:1234/v1',
+                'api_url'      => 'http://127.0.0.1:1234',
                 'api_key'      => 'sk-lm-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
                 'model'        => '',
                 'model_ctx'    => 131072,

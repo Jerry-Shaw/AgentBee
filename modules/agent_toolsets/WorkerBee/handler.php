@@ -61,7 +61,7 @@ class handler extends Factory
 
         $this->sendMessage($agent_core, $worker_info, ['content' => $init_prompt]);
         $agent_core->utils->addChildWorker(WORKER_CHILD, $payload_data['worker_name'], $worker_info);
-        $agent_core->utils->setSessionHistory($payload_data['worker_name'], [$child_prompt]);
+        $agent_core->utils->addSessionHistory($payload_data['worker_name'], $child_prompt);
         $agent_core->utils->addSessionHistory(
             $payload_data['worker_name'],
             ['role' => 'user', 'content' => '[用户要求] ' . $init_prompt]

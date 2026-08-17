@@ -174,18 +174,6 @@ class utils extends Factory
 
     /**
      * @param string $worker_name
-     * @param array  $history
-     *
-     * @return void
-     */
-    public function setSessionHistory(string $worker_name, array $history): void
-    {
-        $this->session_history[$worker_name] = $history;
-        unset($worker_name, $history);
-    }
-
-    /**
-     * @param string $worker_name
      *
      * @return array
      */

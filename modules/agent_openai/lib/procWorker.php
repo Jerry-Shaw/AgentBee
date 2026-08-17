@@ -61,9 +61,6 @@ class procWorker extends Factory
 
         $socket_id = $metadata['socket_id'];
 
-        // Sync session history from main process
-        $this->core->utils->setSessionHistory($metadata['workerName'], $history);
-
         $stream_callback = function (
             string $key,
             array  $data,

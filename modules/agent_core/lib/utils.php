@@ -936,10 +936,10 @@ class utils extends Factory
     }
 
     /**
-     * @return array
+     * @return string
      * @throws \Exception
      */
-    public function getMainPrompt(): array
+    public function getMainPrompt(): string
     {
         $prompts   = [];
         $php_path  = $this->OSMgr->getPhpPath();
@@ -1010,10 +1010,7 @@ class utils extends Factory
         $prompts[] = '- **高风险操作**：删除/覆盖/批量修改/修改配置/高影响命令/装卸软件前，须说明风险并取得确认；批量操作不超100项，先列清单确认。';
         $prompts[] = '- **绝对禁止**：执行破坏性系统命令；泄露敏感信息。';
 
-        $prompt = [
-            'role'    => 'system',
-            'content' => implode("\n", $prompts)
-        ];
+        $prompt = implode("\n", $prompts);
 
         unset($prompts, $php_path, $work_path, $skills);
         return $prompt;
@@ -1023,10 +1020,9 @@ class utils extends Factory
      * @param string $worker_name
      * @param string $worker_role
      *
-     * @return array
-     * @throws \Exception
+     * @return string
      */
-    public function getChildPrompt(string $worker_name, string $worker_role): array
+    public function getChildPrompt(string $worker_name, string $worker_role): string
     {
         $prompts = [];
 
@@ -1066,10 +1062,7 @@ class utils extends Factory
         $prompts[] = '- **高风险操作**：删除/覆盖/批量修改/修改配置/高影响命令/装卸软件前，须说明风险并取得确认；批量操作不超100项，先列清单确认。';
         $prompts[] = '- **绝对禁止**：执行破坏性系统命令；泄露敏感信息。';
 
-        $prompt = [
-            'role'    => 'system',
-            'content' => implode("\n", $prompts)
-        ];
+        $prompt = implode("\n", $prompts);
 
         unset($worker_name, $worker_role, $prompts, $skills);
         return $prompt;

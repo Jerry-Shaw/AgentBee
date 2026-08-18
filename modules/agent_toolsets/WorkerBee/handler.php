@@ -44,11 +44,7 @@ class handler extends Factory
 
         $agent_core->utils->debug('WorkerBee started: ' . $payload_data['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload_data['worker_role'] . ')', 'trace');
 
-        $init_prompt  = $payload_data['init_prompt'] . ' | 先阅读用户要求，用一句话介绍你的名字和角色，并回复“已就绪”。';
-        $child_prompt = $agent_core->utils->getChildPrompt(
-            $payload_data['worker_name'],
-            $payload_data['worker_role']
-        );
+        $init_prompt = $payload_data['init_prompt'] . ' | 先阅读用户要求，用一句话介绍你的名字和角色，并回复“已就绪”。';
 
         $worker_info = [
             'proc_idx'    => $proc_idx,
@@ -61,7 +57,6 @@ class handler extends Factory
 
         $this->sendMessage($agent_core, $worker_info, ['content' => $init_prompt]);
         $agent_core->utils->addChildWorker(WORKER_CHILD, $payload_data['worker_name'], $worker_info);
-        $agent_core->utils->addSessionHistory($payload_data['worker_name'], $child_prompt);
         $agent_core->utils->addSessionHistory(
             $payload_data['worker_name'],
             ['role' => 'user', 'content' => '[用户要求] ' . $init_prompt]
@@ -77,6 +72,10 @@ class handler extends Factory
 
         $agent_core->openai->talkTo(
             WORKER_CHILD,
+            $agent_core->utils->getChildPrompt(
+                $payload_data['worker_name'],
+                $payload_data['worker_role']
+            ),
             $payload_data['worker_name'],
             $proc_idx,
             'start',
@@ -85,7 +84,7 @@ class handler extends Factory
 
         $message = 'Worker子进程正在启动。收到"`' . $payload_data['worker_name'] . '`"的“已就绪”信息后，即可调用talk开始互动。';
 
-        unset($payload_data, $agent_core, $proc_idx, $init_prompt, $child_prompt, $worker_info, $metadata);
+        unset($payload_data, $agent_core, $proc_idx, $init_prompt, $worker_info, $metadata);
         return $message;
     }
 
@@ -153,6 +152,10 @@ class handler extends Factory
 
         $agent_core->openai->talkTo(
             WORKER_CHILD,
+            $agent_core->utils->getChildPrompt(
+                $payload_data['worker_name'],
+                $payload_data['worker_role']
+            ),
             $worker_info['worker_name'],
             $worker_info['proc_idx'],
             'talk',

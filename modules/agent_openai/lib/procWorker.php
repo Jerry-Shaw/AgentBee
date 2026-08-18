@@ -46,13 +46,14 @@ class procWorker extends Factory
      * Execute a single LLM request (called by worker).
      *
      * @param array     $metadata
+     * @param string    $system
      * @param array     $history
      * @param libOpenAI $libOpenAI
      *
      * @return void
      * @throws \ReflectionException
      */
-    public function talk(array $metadata, array $history, libOpenAI $libOpenAI): void
+    public function talk(array $metadata, string $system, array $history, libOpenAI $libOpenAI): void
     {
         $finish_reason     = 'undefined';
         $reasons_content   = '';
@@ -376,7 +377,7 @@ class procWorker extends Factory
         };
 
         try {
-            $libOpenAI->completions($history, $this->core->utils->agent_config['agent_llm']['model'], [], $stream_callback);
+            $libOpenAI->completions($history, $system, $this->core->utils->agent_config['agent_llm']['model'], [], $stream_callback);
         } catch (\Throwable $throwable) {
             $this->sendMsg(
                 $socket_id,
@@ -389,7 +390,7 @@ class procWorker extends Factory
             unset($throwable);
         }
 
-        unset($metadata, $history, $libOpenAI, $finish_reason, $reasons_content, $assistant_content, $tool_calls_buffer, $socket_id, $stream_callback);
+        unset($metadata, $system, $history, $libOpenAI, $finish_reason, $reasons_content, $assistant_content, $tool_calls_buffer, $socket_id, $stream_callback);
     }
 
     /**

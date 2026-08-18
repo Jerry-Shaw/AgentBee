@@ -200,10 +200,11 @@ class go extends Factory
     /**
      * Get system memory prompt.
      *
-     * @return array
+     * @return string
+     * @throws \ReflectionException
      * @throws \Exception
      */
-    public function getSystemPrompt(): array
+    public function getSystemPrompt(): string
     {
         $system_default = $this->utils->getMainPrompt();
         $system_memory  = $this->memory->read('system', 0, 0);
@@ -215,7 +216,7 @@ class go extends Factory
                 $memory[] = '- ' . $content['content'];
             }
 
-            $system_default['content'] .= "\n" . implode("\n", $memory);
+            $system_default .= "\n" . implode("\n", $memory);
         }
 
         unset($system_memory, $memory, $content);
@@ -290,6 +291,7 @@ class go extends Factory
 
                                 $this->openai->talkTo(
                                     $payload['sender'],
+                                    $this->getSystemPrompt(),
                                     WORKER_MAIN,
                                     $this->utils->getMainIDX(),
                                     'talk',
@@ -303,6 +305,7 @@ class go extends Factory
 
                                     $this->openai->talkTo(
                                         $payload['sender'],
+                                        $this->getSystemPrompt(),
                                         $payload['workerName'],
                                         $worker_info['proc_idx'],
                                         'talk',
@@ -514,6 +517,7 @@ class go extends Factory
 
                             $this->openai->talkTo(
                                 $payload['sender'],
+                                $this->getSystemPrompt(),
                                 $payload['workerName'],
                                 $worker_idx,
                                 'talk',
@@ -538,6 +542,7 @@ class go extends Factory
 
                                     $this->openai->talkTo(
                                         $payload['sender'],
+                                        $this->getSystemPrompt(),
                                         $payload['workerName'],
                                         $this->utils->getMainIDX(),
                                         'talk',
@@ -602,6 +607,7 @@ class go extends Factory
 
                                         $this->openai->talkTo(
                                             $payload['sender'],
+                                            $this->getSystemPrompt(),
                                             $payload['workerName'],
                                             $worker_info['proc_idx'],
                                             'talk',
@@ -714,6 +720,7 @@ class go extends Factory
 
         $this->openai->talkTo(
             WORKER_MAIN,
+            $this->getSystemPrompt(),
             WORKER_MAIN,
             $this->utils->getMainIDX(),
             'talk',
@@ -818,8 +825,6 @@ class go extends Factory
                 $curr_msg = array_merge($curr_msg, $result['content']);
 
                 if ([] === $this->utils->getSessionHistory(WORKER_MAIN)) {
-                    $this->utils->addSessionHistory(WORKER_MAIN, $this->getSystemPrompt());
-
                     array_unshift(
                         $curr_msg, [
                             'type' => 'text',
@@ -871,6 +876,7 @@ class go extends Factory
 
             $this->openai->talkTo(
                 WORKER_MAIN,
+                $this->getSystemPrompt(),
                 WORKER_MAIN,
                 $this->utils->getMainIDX(),
                 'talk',
@@ -922,6 +928,7 @@ class go extends Factory
 
             $this->openai->talkTo(
                 WORKER_MAIN,
+                $this->getSystemPrompt(),
                 WORKER_MAIN,
                 $this->utils->getMainIDX(),
                 'talk',

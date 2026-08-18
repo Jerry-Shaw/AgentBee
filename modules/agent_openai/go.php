@@ -137,6 +137,7 @@ class go extends Factory
 
     /**
      * @param string $type
+     * @param string $system
      * @param string $receiver
      * @param int    $proc_idx
      * @param string $cmd
@@ -145,20 +146,21 @@ class go extends Factory
      * @return void
      * @throws \Exception
      */
-    public function talkTo(string $type, string $receiver, int $proc_idx, string $cmd, array $metadata): void
+    public function talkTo(string $type, string $system, string $receiver, int $proc_idx, string $cmd, array $metadata): void
     {
         $this->libOpenAI->resumeStream();
         $this->utils->procMgr->writeProc(
             $proc_idx,
             json_encode([
                 'cmd'        => $cmd,
+                'system'     => $system,
                 'history'    => $this->utils->getSessionHistory($receiver),
                 'metadata'   => $metadata,
                 'llm_params' => $this->utils->getChildWorker($type, $receiver, 'llm_params')
             ], JSON_FORMAT)
         );
 
-        unset($proc_idx, $cmd, $metadata);
+        unset($type, $system, $receiver, $proc_idx, $cmd, $metadata);
     }
 
     /**
@@ -213,6 +215,7 @@ class go extends Factory
 
             $this->procWorker->talk(
                 $talk_data['metadata'],
+                $talk_data['system'],
                 $talk_data['history'],
                 $this->libOpenAI
             );
@@ -262,12 +265,10 @@ class go extends Factory
                     $socket_id = $talk_data['metadata']['socket_id'];
 
                 case 'talk':
-                    $history  = $talk_data['history'];
-                    $metadata = $talk_data['metadata'] + ['socket_id' => $socket_id];
-
                     $this->procWorker->talk(
-                        $metadata,
-                        $history,
+                        $talk_data['metadata'] + ['socket_id' => $socket_id],
+                        $talk_data['system'],
+                        $talk_data['history'],
                         $this->libOpenAI
                     );
                     break;

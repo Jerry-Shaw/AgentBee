@@ -398,20 +398,6 @@ class completions extends stream
     }
 
     /**
-     * @param array $call
-     *
-     * @return array
-     */
-    private function buildToolCall(array $call): array
-    {
-        return [
-            'id'       => $call['id'],
-            'type'     => $call['type'],
-            'function' => ['name' => $call['name'], 'arguments' => $call['arguments']],
-        ];
-    }
-
-    /**
      * @return array
      */
     private function buildAssistantEvent(): array

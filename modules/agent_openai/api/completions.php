@@ -109,16 +109,51 @@ class completions extends stream
     public function buildTools(array $tools): array
     {
         return array_map(
-            fn(array $tool): array => [
-                'type'     => $tool['type'],
-                'function' => [
+            function (array $tool): array
+            {
+                $function = [
                     'name'        => $tool['name'],
                     'description' => $tool['description'],
-                    'parameters'  => $tool['parameters'],
-                ],
-            ],
+                ];
+
+                if (isset($tool['parameters'])) {
+                    $function['parameters'] = $tool['parameters'];
+                }
+
+                return [
+                    'type'     => $tool['type'],
+                    'function' => $function,
+                ];
+            },
             $tools
         );
+    }
+
+    /**
+     * @param array $tools
+     *
+     * @return array
+     */
+    public function formatTools(array $tools): array
+    {
+        $normalized = [];
+
+        foreach ($tools as $tool) {
+            $definition = [
+                'type'        => $tool['type'] ?? 'function',
+                'name'        => $tool['function']['name'],
+                'description' => $tool['function']['description']
+            ];
+
+            if (isset($tool['function']['parameters']) && [] !== $tool['function']['parameters']) {
+                $definition['parameters'] = $tool['function']['parameters'];
+            }
+
+            $normalized[] = $definition;
+        }
+
+        unset($tools, $tool, $definition);
+        return $normalized;
     }
 
     /**

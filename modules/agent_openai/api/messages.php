@@ -139,13 +139,48 @@ class messages extends stream
     public function buildTools(array $tools): array
     {
         return array_map(
-            fn(array $tool): array => [
-                'name'         => $tool['name'],
-                'description'  => $tool['description'],
-                'input_schema' => $tool['parameters']
-            ],
+            function (array $tool): array
+            {
+                $result = [
+                    'name'        => $tool['name'],
+                    'description' => $tool['description'],
+                ];
+
+                if (isset($tool['parameters'])) {
+                    $result['input_schema'] = $tool['parameters'];
+                }
+
+                return $result;
+            },
             $tools
         );
+    }
+
+    /**
+     * @param array $tools
+     *
+     * @return array
+     */
+    public function formatTools(array $tools): array
+    {
+        $normalized = [];
+
+        foreach ($tools as $tool) {
+            $definition = [
+                'type'        => 'function',
+                'name'        => $tool['name'],
+                'description' => $tool['description'],
+            ];
+
+            if (isset($tool['input_schema']) && [] !== $tool['input_schema']) {
+                $definition['parameters'] = $tool['input_schema'];
+            }
+
+            $normalized[] = $definition;
+        }
+
+        unset($tools, $tool, $definition);
+        return $normalized;
     }
 
     /**

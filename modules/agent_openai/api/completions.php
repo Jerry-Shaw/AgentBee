@@ -70,7 +70,7 @@ class completions extends stream
                         $contents['content'] = $event['content'];
                     }
 
-                    if ('' !== $event['reasoning_content']) {
+                    if (isset($event['reasoning_content']) && '' !== $event['reasoning_content']) {
                         $contents['reasoning_content'] = $event['reasoning_content'];
                     }
 
@@ -252,7 +252,7 @@ class completions extends stream
         switch ($this->finish_reason) {
             case 'stop':
                 if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
-                    $this->output('history', 'add', $metadata, $this->buildAssistantEvent());
+                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
 
                 if ('' !== $this->assistant_content) {
@@ -264,8 +264,8 @@ class completions extends stream
                 break;
 
             case 'length':
-                $this->output('history', 'add', $metadata, $this->buildAssistantEvent());
-                $this->output('history', 'add', $metadata, [
+                $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
+                $this->output('history', 'addUserMessage', $metadata, [
                     'role'    => 'user',
                     'content' => [[
                         'type' => 'text',
@@ -363,10 +363,10 @@ class completions extends stream
                     $assistant_message['tool_calls'] = $correct_calls;
                 }
 
-                $this->output('history', 'add', $metadata, $assistant_message);
+                $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
 
                 foreach ($tool_results as $tool_result) {
-                    $this->output('history', 'add', $metadata, $tool_result);
+                    $this->output('history', 'addToolResult', $metadata, $tool_result);
                 }
 
                 if ([] !== $handler_calls) {
@@ -388,7 +388,7 @@ class completions extends stream
                 }
 
                 if ([] !== $error_types) {
-                    $this->output('history', 'add', $metadata, [
+                    $this->output('history', 'addUserMessage', $metadata, [
                         'role'    => 'user',
                         'content' => [[
                             'type' => 'text',
@@ -410,7 +410,7 @@ class completions extends stream
 
             case 'undefined':
                 if ([] !== $this->tool_calls) {
-                    $this->output('history', 'add', $metadata, [
+                    $this->output('history', 'addUserMessage', $metadata, [
                         'role'    => 'user',
                         'content' => [[
                             'type' => 'text',

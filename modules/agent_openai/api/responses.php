@@ -65,22 +65,6 @@ class responses extends stream
                     $messages[] = ['role' => 'user', 'content' => $contents];
                     break;
 
-                case 'assistant':
-                    if ('' !== $event['content']) {
-                        $contents['content'] = $event['content'];
-                    }
-
-                    if ('' !== $event['reasoning_content']) {
-                        $contents['reasoning_content'] = $event['reasoning_content'];
-                    }
-
-                    if (isset($event['tool_calls']) && [] !== $event['tool_calls']) {
-                        $contents['tool_calls'] = $event['tool_calls'];
-                    }
-
-                    $messages[] = ['role' => 'assistant'] + $contents;
-                    break;
-
                 case 'tool':
                     $messages[] = [
                         'type'    => 'function_call_output',
@@ -248,13 +232,24 @@ class responses extends stream
 
             case 'response.function_call_arguments.delta':
                 if (isset($chunk['item_id']) && isset($chunk['delta'])) {
-                    $tool_chunk = [
-                        'arguments' => $chunk['delta'],
-                    ];
-
+                    $tool_chunk = ['arguments' => $chunk['delta']];
                     $this->mergeToolCallChunk($chunk['item_id'], $tool_chunk);
-
                     unset($tool_chunk);
+                }
+                break;
+
+            case 'response.function_call_arguments.done':
+                if (isset($chunk['item_id']) && isset($chunk['arguments'])) {
+                    if (isset($this->tool_calls[$chunk['item_id']])) {
+                        $this->tool_calls[$chunk['item_id']]['arguments'] = $chunk['arguments'];
+                    } else {
+                        $this->tool_calls[$chunk['item_id']] = [
+                            'id'        => $chunk['item_id'],
+                            'type'      => 'function',
+                            'name'      => '',
+                            'arguments' => $chunk['arguments'],
+                        ];
+                    }
                 }
                 break;
         }
@@ -266,6 +261,7 @@ class responses extends stream
      * @param array $metadata
      *
      * @return void
+     * @throws \ReflectionException
      */
     private function finishStream(array $metadata): void
     {
@@ -276,7 +272,7 @@ class responses extends stream
         switch ($this->finish_reason) {
             case 'stop':
                 if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
-                    $this->output('history', 'add', $metadata, $this->buildAssistantEvent());
+                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
 
                 if ('' !== $this->assistant_content) {
@@ -288,8 +284,8 @@ class responses extends stream
                 break;
 
             case 'length':
-                $this->output('history', 'add', $metadata, $this->buildAssistantEvent());
-                $this->output('history', 'add', $metadata, [
+                $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
+                $this->output('history', 'addUserMessage', $metadata, [
                     'role'    => 'user',
                     'content' => [[
                         'type' => 'input_text',
@@ -332,7 +328,7 @@ class responses extends stream
 
                     $tool_call = [
                         'id'        => $fn_call['id'],
-                        'type'      => ($fn_call['type'] ?? 'function'),
+                        'type'      => $fn_call['type'],
                         'name'      => $fn_call['name'],
                         'arguments' => $fn_call['arguments'],
                     ];
@@ -385,10 +381,10 @@ class responses extends stream
                     $assistant_message['tool_calls'] = $correct_calls;
                 }
 
-                $this->output('history', 'add', $metadata, $assistant_message);
+                $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
 
                 foreach ($tool_results as $tool_result) {
-                    $this->output('history', 'add', $metadata, $tool_result);
+                    $this->output('history', 'addToolResult', $metadata, $tool_result);
                 }
 
                 if ([] !== $handler_calls) {
@@ -410,7 +406,7 @@ class responses extends stream
                 }
 
                 if ([] !== $error_types) {
-                    $this->output('history', 'add', $metadata, [
+                    $this->output('history', 'addUserMessage', $metadata, [
                         'role'    => 'user',
                         'content' => [[
                             'type' => 'input_text',
@@ -432,7 +428,7 @@ class responses extends stream
 
             case 'undefined':
                 if ([] !== $this->tool_calls) {
-                    $this->output('history', 'add', $metadata, [
+                    $this->output('history', 'addUserMessage', $metadata, [
                         'role'    => 'user',
                         'content' => [[
                             'type' => 'input_text',

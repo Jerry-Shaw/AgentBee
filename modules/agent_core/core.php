@@ -28,14 +28,12 @@ use Nervsys\Core\Lib\IOData;
 use Nervsys\Core\Mgr\SocketMgr;
 use Nervsys\Core\Reflect;
 use Nervsys\Core\System;
-use Nervsys\Ext\Algo\NGram;
 
 final class core extends Factory
 {
     use System;
 
     public utils     $utils;
-    public NGram     $NGram;
     public context   $context;
     public SocketMgr $socketMgr;
 
@@ -61,7 +59,6 @@ final class core extends Factory
 
         $this->utils     = utils::new();
         $this->error     = Error::new();
-        $this->NGram     = NGram::new();
         $this->IOData    = IOData::new();
         $this->context   = context::new();
         $this->socketMgr = SocketMgr::new(WORKER_MAIN);
@@ -93,19 +90,35 @@ final class core extends Factory
             $llm_tools['tools'] = $this->context->buildTools($llm_tools['tools']);
         }
 
-        $context = json_encode($llm_params + $llm_tools + ['messages' => $this->context->getHistory($worker_name)], JSON_FORMAT);
+        $history = $this->context->getHistory($worker_name, false);
 
-        $split   = $this->NGram->splitText($context);
-        $inputs  = ceil(strlen(str_replace(' ', '', $split['asian'])) / 2.8);
-        $inputs  += ceil(strlen($split['latin']) / 4);
+        foreach ($history as $key => $item) {
+            if (!isset($item['contents']) || !is_array($item['contents'])) {
+                continue;
+            }
+
+            foreach ($item['contents'] as $contents) {
+                if (isset($contents['type']) && 'image' === $contents['type']) {
+                    unset($history[$key]);
+                }
+            }
+        }
+
+        $context     = json_encode($llm_params + $llm_tools + ['contents' => $history], JSON_FORMAT);
+        $compressed  = gzdeflate($context, 1);
+        $context_len = strlen($context);
+
+        $ratio   = strlen($compressed) / $context_len;
+        $ratio   = min(1.0, max(0.05, $ratio));
+        $inputs  = intval($context_len * (0.8 * $ratio + 0.1));
         $outputs = ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) - $inputs;
         $tokens  = 'input' === $token_type ? $inputs : $outputs;
 
-        $llm_params['max_tokens'] = $outputs;
+        $llm_params['max_tokens'] = max(0, $outputs);
 
         $this->utils->setChildWorker($type, $worker_name, 'llm_params', $llm_params);
 
-        unset($type, $worker_name, $token_type, $llm_tools, $llm_params, $context, $split, $inputs, $outputs);
+        unset($type, $worker_name, $token_type, $llm_tools, $llm_params, $history, $key, $item, $contents, $context, $compressed, $context_len, $ratio, $inputs, $outputs);
         return $tokens;
     }
 

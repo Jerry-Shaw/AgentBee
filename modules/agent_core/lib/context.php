@@ -198,21 +198,24 @@ class context extends Factory
     }
 
     /**
-     * Get normalized conversation events for a worker.
+     * Get formated/normalized conversation events for a worker.
      *
      * @param string $worker_name
+     * @param bool   $formated
      *
      * @return array
      */
-    public function getHistory(string $worker_name): array
+    public function getHistory(string $worker_name, bool $formated = true): array
     {
         if (!isset($this->history[$worker_name]) || [] === $this->history[$worker_name]) {
             return [];
         }
 
-        $worker_history = $this->api_object->build($this->history[$worker_name]);
+        $worker_history = $formated
+            ? $this->api_object->build($this->history[$worker_name])
+            : $this->history[$worker_name];
 
-        unset($worker_name, $api_type, $api_object);
+        unset($worker_name, $formated);
         return $worker_history;
     }
 

@@ -87,7 +87,7 @@ class config extends Factory
 
         $config_data['agent_llm']['api_type'] = in_array($config_data['agent_llm']['api_type'], ['completions', 'responses', 'messages'], true)
             ? $config_data['agent_llm']['api_type']
-            : 'responses';
+            : 'completions';
 
         if (!$decrypt) {
             $key_data = $this->encryptKey($this->config['agent_llm']['api_key']);
@@ -155,7 +155,7 @@ class config extends Factory
                 'org_id'       => '',
                 'api_url'      => 'http://127.0.0.1:1234',
                 'api_key'      => 'sk-xx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-                'api_type'     => 'responses',
+                'api_type'     => 'completions',
                 'model'        => '',
                 'model_ctx'    => 131072,
                 'timeout'      => 3600,
@@ -167,6 +167,7 @@ class config extends Factory
                     'min_p'                => 0.05,
                     'top_p'                => 0.95,
                     'top_k'                => 20,
+                    'store'                => true,
                     'frequency_penalty'    => 0,
                     'presence_penalty'     => 0,
                     'repetition_penalty'   => 1,

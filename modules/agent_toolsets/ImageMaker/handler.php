@@ -85,7 +85,7 @@ class handler extends Factory
     public function create(array $payload_data, agent_core $agent_core): array
     {
         $config = $this->loadConfig($agent_core);
-        $openai = libOpenAI::new($config['base_url'], $config['api_key'], '', '/ImageCreator');
+        $openai = libOpenAI::new($config['base_url'], $config['api_key'], '/ImageCreator');
         $result = $openai->createImage(
             $payload_data['prompt'],
             $config['model_id'],
@@ -118,7 +118,7 @@ class handler extends Factory
     public function edit(array $payload_data, agent_core $agent_core): array
     {
         $config  = $this->loadConfig($agent_core);
-        $openai  = libOpenAI::new($config['base_url'], $config['api_key'], '', '/ImageEditor');
+        $openai  = libOpenAI::new($config['base_url'], $config['api_key'], '/ImageEditor');
         $options = [
             'n'               => $payload_data['n'],
             'size'            => $payload_data['size'],

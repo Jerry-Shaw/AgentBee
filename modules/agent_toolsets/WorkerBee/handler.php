@@ -24,11 +24,11 @@ class handler extends Factory
             // WorkerBee already exists, change name or talk
             $agent_core->utils->debug('WorkerBee already exists: ' . $payload_data['worker_name'] . ' | ' . $worker_info['worker_role'] . ' already exists!', 'trace');
 
-            $agent_core->utils->addMessageQueue(
+            $agent_core->core->context->addMessageQueue(
                 WORKER_MAIN,
                 [
-                    'type' => 'text',
-                    'text' => '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')'
+                    'type'    => 'text',
+                    'content' => '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')'
                 ]
             );
 
@@ -57,9 +57,9 @@ class handler extends Factory
 
         $this->sendMessage($agent_core, $worker_info, ['content' => $init_prompt]);
         $agent_core->utils->addChildWorker(WORKER_CHILD, $payload_data['worker_name'], $worker_info);
-        $agent_core->utils->addSessionHistory(
-            $payload_data['worker_name'],
-            ['role' => 'user', 'content' => '[用户要求] ' . $init_prompt]
+        $agent_core->core->context->addUserMessage(
+            $worker_info['worker_name'],
+            [['type' => 'text', 'content' => '[用户要求] ' . $init_prompt]]
         );
 
         $metadata = $agent_core->utils->getMessageMarker(
@@ -103,11 +103,11 @@ class handler extends Factory
 
         if ([] === $worker_info || 0 === $agent_core->utils->procMgr->getStatus($worker_info['proc_idx'])) {
             // WorkerBee died, notice main worker
-            $agent_core->utils->addMessageQueue(
+            $agent_core->core->context->addMessageQueue(
                 WORKER_MAIN,
                 [
-                    'type' => 'text',
-                    'text' => '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 进程已终止，消息发送失败'
+                    'type'    => 'text',
+                    'content' => '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 进程已终止，消息发送失败'
                 ]
             );
 
@@ -119,11 +119,11 @@ class handler extends Factory
 
             $this->sendMessage($agent_core, $worker_info, $payload_data);
 
-            $agent_core->utils->addMessageQueue(
+            $agent_core->core->context->addMessageQueue(
                 $worker_info['worker_name'],
                 [
-                    'type' => 'text',
-                    'text' => $payload_data['content']
+                    'type'    => 'text',
+                    'content' => $payload_data['content']
                 ]
             );
 
@@ -133,13 +133,13 @@ class handler extends Factory
         $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');
 
         $agent_core->utils->setChildWorker(WORKER_CHILD, $worker_info['worker_name'], 'status', 'busy');
-        $agent_core->utils->refreshSessionHistory($worker_info['worker_name']);
+        $agent_core->core->context->refreshHistory($worker_info['worker_name']);
 
         $this->sendMessage($agent_core, $worker_info, $payload_data);
 
-        $agent_core->utils->addSessionHistory(
+        $agent_core->core->context->addUserMessage(
             $worker_info['worker_name'],
-            ['role' => 'user', 'content' => $payload_data['content']]
+            [['type' => 'text', 'content' => $payload_data['content']]]
         );
 
         $metadata = $agent_core->utils->getMessageMarker(
@@ -153,8 +153,8 @@ class handler extends Factory
         $agent_core->openai->talkTo(
             WORKER_CHILD,
             $agent_core->utils->getChildPrompt(
-                $payload_data['worker_name'],
-                $payload_data['worker_role']
+                $worker_info['worker_name'],
+                $worker_info['worker_role'],
             ),
             $worker_info['worker_name'],
             $worker_info['proc_idx'],
@@ -184,8 +184,7 @@ class handler extends Factory
             $agent_core->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
 
             $agent_core->utils->procMgr->close($worker_info['proc_idx']);
-            $agent_core->utils->removeSessionHistory($worker_info['worker_name']);
-            $agent_core->utils->removeMessageQueue($worker_info['worker_name']);
+            $agent_core->core->context->removeHistory($worker_info['worker_name']);
             $agent_core->utils->removeChildWorker(WORKER_CHILD, $worker_info['worker_name']);
 
             $this->sendMessage($agent_core, $worker_info, ['content' => '子进程"' . $payload_data['worker_name'] . '"已关闭。']);

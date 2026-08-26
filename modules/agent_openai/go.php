@@ -21,8 +21,9 @@
 namespace modules\agent_openai;
 
 use modules\agent_core\core;
+use modules\agent_core\lib\context;
 use modules\agent_core\lib\utils;
-use modules\agent_openai\lib\procWorker;
+use modules\agent_openai\lib\processor;
 use Nervsys\Core\Factory;
 use Nervsys\Ext\libOpenAI;
 
@@ -33,17 +34,17 @@ class go extends Factory
     public core  $core;
     public utils $utils;
 
-    public libOpenAI  $libOpenAI;
-    public procWorker $procWorker;
+    public libOpenAI $libOpenAI;
+    public processor $processor;
 
     /**
      * @throws \ReflectionException
      */
     public function __construct()
     {
-        $this->core       = core::new();
-        $this->utils      = utils::new();
-        $this->procWorker = procWorker::new();
+        $this->core      = core::new();
+        $this->utils     = utils::new();
+        $this->processor = processor::new();
 
         $this->init();
     }
@@ -154,7 +155,7 @@ class go extends Factory
             json_encode([
                 'cmd'        => $cmd,
                 'system'     => $system,
-                'history'    => $this->utils->getSessionHistory($receiver),
+                'history'    => $this->core->context->getHistory($receiver),
                 'metadata'   => $metadata,
                 'llm_params' => $this->utils->getChildWorker($type, $receiver, 'llm_params')
             ], JSON_FORMAT)
@@ -190,6 +191,8 @@ class go extends Factory
         $this->initMain();
         $this->setShmop(getmypid());
 
+        $context = context::new();
+
         while (true) {
             $job_line = fgets(STDIN);
 
@@ -211,9 +214,10 @@ class go extends Factory
                 continue;
             }
 
+            $this->core->llm_tools['tools'] = $context->buildTools($this->core->llm_tools['tools']);
             $this->libOpenAI->setModelParams($talk_data['llm_params'] + $this->core->llm_tools);
 
-            $this->procWorker->talk(
+            $this->processor->talk(
                 $talk_data['metadata'],
                 $talk_data['system'],
                 $talk_data['history'],
@@ -238,6 +242,7 @@ class go extends Factory
         $this->setShmop(getmypid());
 
         $socket_id = '';
+        $context   = context::new();
 
         while (true) {
             $line = fgets(STDIN);
@@ -258,6 +263,7 @@ class go extends Factory
                 continue;
             }
 
+            $this->core->llm_tools['tools'] = $context->buildTools($this->core->llm_tools['tools']);
             $this->libOpenAI->setModelParams($talk_data['llm_params'] + $this->core->llm_tools);
 
             switch ($talk_data['cmd']) {
@@ -265,7 +271,7 @@ class go extends Factory
                     $socket_id = $talk_data['metadata']['socket_id'];
 
                 case 'talk':
-                    $this->procWorker->talk(
+                    $this->processor->talk(
                         $talk_data['metadata'] + ['socket_id' => $socket_id],
                         $talk_data['system'],
                         $talk_data['history'],
@@ -293,7 +299,7 @@ class go extends Factory
         $this->libOpenAI = libOpenAI::new(
             $this->utils->agent_config['agent_llm']['api_url'],
             $this->utils->agent_config['agent_llm']['api_key'],
-            '[DONE]'
+            'AgentBee'
         );
 
         $this->libOpenAI->setOrgId($this->utils->agent_config['agent_llm']['org_id']);

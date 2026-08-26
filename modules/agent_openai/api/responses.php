@@ -139,6 +139,7 @@ class responses extends stream
      * @param array  $metadata
      *
      * @return void
+     * @throws \ReflectionException
      */
     public function streamHandler(string $key, array $data, bool $finished, array $metadata): void
     {
@@ -149,6 +150,7 @@ class responses extends stream
 
         if (isset($data['error'])) {
             $this->finish_reason = 'error';
+            unset($this->options['previous_response_id']);
             $this->output('stream', 'error', $metadata, $data['error']);
             return;
         }
@@ -181,6 +183,10 @@ class responses extends stream
     {
         switch ($chunk['type']) {
             case 'response.completed':
+                if (isset($chunk['response']['id'])) {
+                    $this->options['previous_response_id'] = $chunk['response']['id'];
+                }
+
                 $this->finish_reason = match ($chunk['response']['status']) {
                     'completed' => 'stop',
                     'incomplete' => 'length',
@@ -280,7 +286,7 @@ class responses extends stream
                 }
 
                 $this->output('stream', 'end', $metadata);
-                $this->output('end', 'end', $metadata);
+                $this->output('end', 'end', $metadata, $this->assistant_content);
                 break;
 
             case 'length':
@@ -381,7 +387,9 @@ class responses extends stream
                     $assistant_message['tool_calls'] = $correct_calls;
                 }
 
-                $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
+                if ('' !== $this->assistant_content || '' !== $this->reasons_content || [] !== $correct_calls) {
+                    $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
+                }
 
                 foreach ($tool_results as $tool_result) {
                     $this->output('history', 'addToolResult', $metadata, $tool_result);
@@ -416,7 +424,7 @@ class responses extends stream
                 }
 
                 $this->output('stream', 'end', $metadata);
-                $this->output('end', 'tools', $metadata);
+                $this->output('end', 'tools', $metadata, $correct_calls);
 
                 unset($error_args, $error_names, $error_calls, $correct_calls, $tool_results, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $assistant_message, $tool_result, $error_types);
                 break;

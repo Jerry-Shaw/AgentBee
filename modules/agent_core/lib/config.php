@@ -85,6 +85,10 @@ class config extends Factory
             $this->config = $config_data;
         }
 
+        $config_data['agent_llm']['api_type'] = in_array($config_data['agent_llm']['api_type'], ['completions', 'responses', 'messages'], true)
+            ? $config_data['agent_llm']['api_type']
+            : 'responses';
+
         if (!$decrypt) {
             $key_data = $this->encryptKey($this->config['agent_llm']['api_key']);
 
@@ -150,33 +154,31 @@ class config extends Factory
             'agent_llm'      => [
                 'org_id'       => '',
                 'api_url'      => 'http://127.0.0.1:1234',
-                'api_key'      => 'sk-lm-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+                'api_key'      => 'sk-xx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+                'api_type'     => 'responses',
                 'model'        => '',
                 'model_ctx'    => 131072,
                 'timeout'      => 3600,
                 'hw_hash'      => '',
                 'keep_reasons' => false,
                 'params'       => [
-                    'max_completion_tokens' => 12288,
-                    'temperature'           => 0.6,
-                    'min_p'                 => 0.05,
-                    'top_p'                 => 0.95,
-                    'top_k'                 => 40,
-                    'frequency_penalty'     => 0,
-                    'presence_penalty'      => 0,
-                    'repetition_penalty'    => 1,
-                    'enable_thinking'       => false,
-                    'stop'                  => [
-                        '<|im_end|>',
-                        '<|endoftext|>',
-                    ],
-                    'chat_template_kwargs'  => [
+                    'max_tokens'           => 12288,
+                    'temperature'          => 0.6,
+                    'min_p'                => 0.05,
+                    'top_p'                => 0.95,
+                    'top_k'                => 20,
+                    'frequency_penalty'    => 0,
+                    'presence_penalty'     => 0,
+                    'repetition_penalty'   => 1,
+                    'enable_thinking'      => false,
+                    'stop'                 => ['<|im_end|>', '<|endoftext|>'],
+                    'chat_template_kwargs' => [
                         'enable_thinking' => false,
                     ],
-                    'extra_body'            => [
+                    'extra_body'           => [
                         'enable_thinking' => false,
                     ],
-                    'thinking'              => [
+                    'thinking'             => [
                         'type' => 'disabled',
                     ],
                 ],

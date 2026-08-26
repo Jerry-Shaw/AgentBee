@@ -260,7 +260,7 @@ class completions extends stream
                 }
 
                 $this->output('stream', 'end', $metadata);
-                $this->output('end', 'end', $metadata);
+                $this->output('end', 'end', $metadata, $this->assistant_content);
                 break;
 
             case 'length':
@@ -351,7 +351,12 @@ class completions extends stream
                         $result_data['process_name'] = $metadata['workerName'];
 
                         $handler_calls[] = [
-                            'tool_calls'   => $tool_call,
+                            'tool_calls'   => [
+                                'id'        => $fn_call['id'],
+                                'type'      => $fn_call['type'],
+                                'name'      => $fn_call['function']['name'],
+                                'arguments' => $fn_call['function']['arguments'],
+                            ],
                             'handler_args' => $result_data,
                         ];
                     }
@@ -363,7 +368,9 @@ class completions extends stream
                     $assistant_message['tool_calls'] = $correct_calls;
                 }
 
-                $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
+                if ('' !== $this->assistant_content || '' !== $this->reasons_content || [] !== $correct_calls) {
+                    $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
+                }
 
                 foreach ($tool_results as $tool_result) {
                     $this->output('history', 'addToolResult', $metadata, $tool_result);
@@ -398,7 +405,7 @@ class completions extends stream
                 }
 
                 $this->output('stream', 'end', $metadata);
-                $this->output('end', 'tools', $metadata);
+                $this->output('end', 'tools', $metadata, $correct_calls);
 
                 unset($error_args, $error_names, $error_calls, $correct_calls, $tool_results, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $assistant_message, $tool_result, $error_types);
                 break;

@@ -72,6 +72,7 @@ class go extends Factory
         $this->core->initCore($reload);
 
         $this->utils->debug('API-URL: ' . ($this->utils->agent_config['agent_llm']['api_url'] ?? 'NONE'), 'trace');
+        $this->utils->debug('API-Type: ' . $this->utils->agent_config['agent_llm']['api_type'], 'trace');
         $this->utils->debug('Model-ID: ' . ($this->utils->agent_config['agent_llm']['model'] ?? 'NONE'), 'trace');
         $this->utils->debug('SandBox mode: ' . ($this->utils->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
 
@@ -333,13 +334,35 @@ class go extends Factory
                     break;
 
                 case 'history':
-                    if (isset($payload['data'])) {
-                        $this->utils->addSessionHistory($payload['workerName'], $payload['data']);
+                    switch ($payload_type) {
+                        case 'addUserMessage':
+                            $this->core->context->addUserMessage(
+                                $payload['workerName'],
+                                $payload['data']['content']
+                            );
+                            break;
+
+                        case 'addAssistantMessage':
+                            $this->core->context->addAssistantMessage(
+                                $payload['workerName'],
+                                $payload['data']['content'],
+                                $payload['data']['tool_calls'] ?? [],
+                                $payload['data']['reasoning_content'] ?? ''
+                            );
+                            break;
+
+                        case 'addToolResult':
+                            $this->core->context->addToolResult(
+                                $payload['workerName'],
+                                $payload['data']['call_id'],
+                                $payload['data']['content']
+                            );
+                            break;
                     }
                     break;
 
                 case 'memory':
-                    if (isset($payload['data'])) {
+                    if ('' !== ($payload['data'] ?? '')) {
                         switch ($payload_type) {
                             case 'add':
                                 $this->utils->memory_buffer .= $payload['data'];
@@ -348,7 +371,6 @@ class go extends Factory
                             case 'save':
                                 $this->utils->memory_buffer .= $payload['data'];
                                 $this->memory->save('misc', 'assistant', $this->utils->memory_buffer);
-
                                 $this->utils->memory_buffer = '';
                                 break;
                         }
@@ -374,10 +396,10 @@ class go extends Factory
                                     continue;
                                 }
 
-                                $this->utils->debug('Handler: Calling ' . $data['tool_calls']['function']['name'], 'trace');
+                                $this->utils->debug('Handler: Calling ' . $data['tool_calls']['name'], 'trace');
 
                                 try {
-                                    $this->core->IOData->src_cmd  = $data['tool_calls']['function']['name'];
+                                    $this->core->IOData->src_cmd  = $data['tool_calls']['name'];
                                     $this->core->IOData->src_argv = $data['handler_args'];
 
                                     $data['handler_args']['ext_id'] = $context['ext_id'];
@@ -390,7 +412,7 @@ class go extends Factory
                                         'error'  => $throwable->getMessage(),
                                     ];
 
-                                    $this->utils->debug('Handler ERROR: ' . $data['tool_calls']['function']['name'] . ' => ' . $throwable->getMessage(), 'trace');
+                                    $this->utils->debug('Handler ERROR: ' . $data['tool_calls']['name'] . ' => ' . $throwable->getMessage(), 'trace');
                                     $this->core->error->exceptionHandler($throwable, false, false);
                                     unset($throwable);
                                 }
@@ -402,15 +424,15 @@ class go extends Factory
                                     $result = json_encode($result, JSON_FORMAT);
 
                                     if (false === $result) {
-                                        $result = 'Handler ERROR: ' . $data['tool_calls']['function']['name'] . ' -> ' . json_last_error_msg();
+                                        $result = 'Handler ERROR: ' . $data['tool_calls']['name'] . ' -> ' . json_last_error_msg();
                                     }
                                 }
 
                                 $tool_calls[]   = $data['tool_calls'];
                                 $tool_results[] = [
-                                    'tool_call_id'  => $data['tool_calls']['id'],
-                                    'function_name' => $data['tool_calls']['function']['name'],
-                                    'content'       => $result
+                                    'call_id'     => $data['tool_calls']['id'],
+                                    'call_name'   => $data['tool_calls']['name'],
+                                    'call_result' => $result
                                 ];
                             }
 
@@ -427,30 +449,17 @@ class go extends Factory
                                 $payload['messageId']
                             );
 
-                            $assistant_message = [
-                                'role'       => 'assistant',
-                                'content'    => '',
-                                'tool_calls' => $tool_calls
-                            ];
-
-                            $this->utils->addSessionHistory($payload['workerName'], $assistant_message);
+                            $this->core->context->addAssistantMessage($payload['workerName'], '', $tool_calls);
 
                             foreach ($tool_results as $tool_result) {
-                                $this->utils->addSessionHistory(
-                                    $payload['workerName'],
-                                    [
-                                        'role'         => 'tool',
-                                        'tool_call_id' => $tool_result['tool_call_id'],
-                                        'content'      => $tool_result['content']
-                                    ]
-                                );
+                                $this->core->context->addToolResult($payload['workerName'], $tool_result['call_id'], $tool_result['call_result']);
 
                                 $msg_data = [
                                     'type' => 'tool_result',
                                     'data' => [
-                                        'tool_call_id'  => $tool_result['tool_call_id'],
-                                        'function_name' => $tool_result['function_name'],
-                                        'content'       => $tool_result['content'],
+                                        'call_id'       => $tool_result['call_id'],
+                                        'function_name' => $tool_result['call_name'],
+                                        'content'       => $tool_result['call_result'],
                                     ]
                                 ];
 
@@ -458,19 +467,6 @@ class go extends Factory
                             }
 
                             unset($tool_calls, $tool_results, $data, $handler, $result, $metadata, $assistant_message, $tool_result, $msg_data);
-                            break;
-
-                        case 'ToolErrors':
-                            $this->utils->addSessionHistory(
-                                $payload['workerName'],
-                                [
-                                    'role'    => 'user',
-                                    'content' => [[
-                                        'type' => 'text',
-                                        'text' => '停止重复调用 `' . $payload['data']['function_name'] . '`，立即审视历史中的错误与上下文，调整策略；无法解决则上报用户。'
-                                    ]]
-                                ]
-                            );
                             break;
                     }
                     break;
@@ -483,7 +479,15 @@ class go extends Factory
                         $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' reply completed, ready.', 'trace');
                     }
 
-                    $new_messages = $this->utils->refreshSessionHistory($payload['workerName']);
+                    $new_messages  = $this->core->context->refreshHistory($payload['workerName']);
+                    $remain_tokens = $this->core->countTokens($payload['sender'], $payload['workerName'], 'output');
+
+                    if (0 >= $remain_tokens) {
+                        $this->core->context->removeHistory($payload['workerName']);
+                        $this->utils->debug('System: Context forcibly cleaned due to token overflow.', 'trace');
+                        $this->core->sendMessage($payload['socket_id'], ['type' => 'error', 'error' => '抱歉，因对话内容过长（Token超出限制），系统已自动清空上下文。咱两重新开始吧。']);
+                        break 2;
+                    }
 
                     switch ($payload_type) {
                         case 'tools':
@@ -526,8 +530,6 @@ class go extends Factory
                             break;
 
                         case 'end':
-                            $completion_tokens = $this->core->countTokens($payload['sender'], $payload['workerName'], 'completion');
-
                             if (WORKER_MAIN === $payload['sender']) {
                                 if (0 < $new_messages) {
                                     $metadata = $this->utils->getMessageMarker(
@@ -549,27 +551,27 @@ class go extends Factory
                                         $metadata + ['socket_id' => $payload['socket_id']]
                                     );
                                 } else {
-                                    if ($completion_tokens > ($this->utils->agent_config['agent_llm']['params']['max_completion_tokens'] ?? 12288)) {
+                                    if ($remain_tokens > ($this->utils->agent_config['agent_llm']['params']['max_tokens'] ?? 12288)) {
                                         $this->ctx_warning = false;
                                         break;
-                                    } elseif ($completion_tokens > 8192) {
+                                    } elseif ($remain_tokens > 8192) {
                                         if (!$this->ctx_warning) {
                                             $this->ctx_warning = true;
 
-                                            $this->utils->debug($payload['sender'] . ': Completion tokens too low (' . $completion_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
+                                            $this->utils->debug($payload['sender'] . ': Completion tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
 
-                                            $this->utils->addMessageQueue(
+                                            $this->core->context->addMessageQueue(
                                                 WORKER_MAIN,
                                                 [
-                                                    'type' => 'text',
-                                                    'text' => '[系统提醒] 上下文已达上限。请：①调用记忆工具保存当前任务进度与关键状态 → ②调用清理工具清理上下文 → ③继续执行原有任务，清理过程不汇报。'
+                                                    'type'    => 'text',
+                                                    'content' => '[系统提醒] 上下文已达上限。请：①调用记忆工具保存当前任务进度与关键状态 → ②调用清理工具清理上下文 → ③继续执行原有任务，清理过程不汇报。'
                                                 ]
                                             );
                                         }
                                     } else {
-                                        $msg_count = $this->utils->countSessionHistory(WORKER_MAIN);
+                                        $msg_count = $this->core->context->countHistory(WORKER_MAIN);
                                         $keep_len  = ceil($msg_count / 5);
-                                        $cleaned   = $this->utils->cleanSessionHistory(WORKER_MAIN, $keep_len * 2, $keep_len);
+                                        $cleaned   = $this->core->context->cleanHistory(WORKER_MAIN, $keep_len * 2, $keep_len);
 
                                         $this->utils->debug('System: Context truncated (' . $msg_count . ' -> ' . $cleaned['current_count'] . ')', 'trace');
 
@@ -579,11 +581,11 @@ class go extends Factory
                                 }
                             } else {
                                 if ('' !== $payload['data']) {
-                                    $this->utils->addMessageQueue(
+                                    $this->core->context->addMessageQueue(
                                         WORKER_MAIN,
                                         [
-                                            'type' => 'text',
-                                            'text' => '[WorkerBee] 异步消息' . "\n\n" . '`' . $payload['workerName'] . '`：' . $payload['workerRole'] . "\n\n" . '消息内容：' . "\n" . $payload['data']
+                                            'type'    => 'text',
+                                            'content' => '[WorkerBee] 异步消息' . "\n\n" . '`' . $payload['workerName'] . '`：' . $payload['workerRole'] . "\n\n" . '消息内容：' . "\n" . $payload['data']
                                         ]
                                     );
                                 }
@@ -613,14 +615,14 @@ class go extends Factory
                                             'talk',
                                             $metadata + ['socket_id' => $payload['socket_id']]
                                         );
-                                    } elseif ($completion_tokens < 8192) {
-                                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' completion tokens too low (' . $completion_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
+                                    } elseif ($remain_tokens < 8192) {
+                                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' completion tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
 
-                                        $this->utils->addMessageQueue(
+                                        $this->core->context->addMessageQueue(
                                             WORKER_MAIN,
                                             [
-                                                'type' => 'text',
-                                                'text' => '[WorkerBee] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '：上下文已满。请：①生成任务摘要（目标+进度+待办） → ②重启`' . $payload['workerName'] . '` → ③注入任务摘要，继续原有任务，重启过程不汇报。'
+                                                'type'    => 'text',
+                                                'content' => '[WorkerBee] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '：上下文已满。请：①生成任务摘要（目标+进度+待办） → ②重启`' . $payload['workerName'] . '` → ③注入任务摘要，继续原有任务，重启过程不汇报。'
                                             ]
                                         );
                                     }
@@ -629,7 +631,7 @@ class go extends Factory
                                 unset($worker_info);
                             }
 
-                            unset($completion_tokens);
+                            unset($remain_tokens);
                             break;
                     }
 
@@ -682,7 +684,7 @@ class go extends Factory
         }
 
         $task_list    = $this->memory->runTask();
-        $new_messages = $this->utils->refreshSessionHistory(WORKER_MAIN);
+        $new_messages = $this->core->context->refreshHistory(WORKER_MAIN);
 
         if ([] === $task_list && 0 === $new_messages) {
             return '';
@@ -699,11 +701,11 @@ class go extends Factory
             $task_content = '[定时任务] 任务：' . "\n" . json_encode($task_jobs, JSON_FORMAT) . "\n" . '流程：①执行任务并获取结果；②重要存daily，特别重要存important，琐事不存；③简要汇报结果及存储层级；④完成后清理定时任务（忽略结果）。';
 
             $task_data = [[
-                'type' => 'text',
-                'text' => $task_content
+                'type'    => 'text',
+                'content' => $task_content
             ]];
 
-            $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $task_data]);
+            $this->core->context->addUserMessage(WORKER_MAIN, [['type' => 'text', 'content' => $task_content]]);
 
             unset($task_jobs, $task_content, $task_data);
         }
@@ -798,7 +800,7 @@ class go extends Factory
                     // Reset session memory
                     case 'reset':
                         $this->setStatus(self::STATUS_IDLE);
-                        $this->utils->removeSessionHistory(WORKER_MAIN);
+                        $this->core->context->removeHistory(WORKER_MAIN);
                         break;
 
                     // Reload config
@@ -824,11 +826,11 @@ class go extends Factory
             if (self::STATUS_IDLE === $this->wait_status) {
                 $curr_msg = array_merge($curr_msg, $result['content']);
 
-                if ([] === $this->utils->getSessionHistory(WORKER_MAIN)) {
+                if ([] === $this->core->context->getHistory(WORKER_MAIN)) {
                     array_unshift(
                         $curr_msg, [
-                            'type' => 'text',
-                            'text' => '[系统指令] 新会话，必须读取`misc`记忆后再回复。读取记忆后，若用户有明确需求，且上下文仍不足，则搜索相关记忆。记忆读取过程不汇报。'
+                            'type'    => 'text',
+                            'content' => '[系统指令] 新会话，必须读取`misc`记忆后再回复。读取记忆后，若用户有明确需求，且上下文仍不足，则搜索相关记忆。记忆读取过程不汇报。'
                         ]
                     );
                 }
@@ -836,7 +838,7 @@ class go extends Factory
                 $this->utils->debug('AgentBee: LLM is busy, new message queued.', 'trace');
 
                 foreach ($result['content'] as $msg_line) {
-                    $this->utils->addMessageQueue(WORKER_MAIN, $msg_line);
+                    $this->core->context->addMessageQueue(WORKER_MAIN, $msg_line);
                 }
 
                 unset($msg_line);
@@ -859,8 +861,8 @@ class go extends Factory
         $count_msg = count($curr_msg);
         if (0 < $count_msg) {
             $this->utils->debug('User: Sending ' . $count_msg . ' message(s) to ' . WORKER_MAIN, 'trace');
-            $this->utils->refreshSessionHistory(WORKER_MAIN);
-            $this->utils->addSessionHistory(WORKER_MAIN, ['role' => 'user', 'content' => $curr_msg]);
+            $this->core->context->refreshHistory(WORKER_MAIN);
+            $this->core->context->addUserMessage(WORKER_MAIN, $curr_msg);
             $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, WORKER_MAIN, [$this, 'streamWorkerHandler']);
 
             $message_metadata = $this->utils->getMessageMarker(
@@ -911,7 +913,7 @@ class go extends Factory
             $this->setStatus(self::STATUS_IDLE, true);
         }
 
-        $new_messages = $this->utils->refreshSessionHistory(WORKER_MAIN);
+        $new_messages = $this->core->context->refreshHistory(WORKER_MAIN);
 
         if (0 < $new_messages) {
             $this->utils->debug('System: Sending ' . $new_messages . ' message(s) to ' . WORKER_MAIN, 'trace');

@@ -20,6 +20,7 @@
 
 namespace modules\agent_core;
 
+use modules\agent_core\lib\context;
 use modules\agent_core\lib\utils;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Lib\Error;
@@ -35,6 +36,7 @@ final class core extends Factory
 
     public utils     $utils;
     public NGram     $NGram;
+    public context   $context;
     public SocketMgr $socketMgr;
 
     public int $flush_time_at  = 0;
@@ -61,6 +63,7 @@ final class core extends Factory
         $this->error     = Error::new();
         $this->NGram     = NGram::new();
         $this->IOData    = IOData::new();
+        $this->context   = context::new();
         $this->socketMgr = SocketMgr::new(WORKER_MAIN);
 
         $this->utils->agent_config = $this->utils->config->get(true, $reload);
@@ -78,22 +81,31 @@ final class core extends Factory
      * @param string $token_type
      *
      * @return int
+     * @throws \ReflectionException
      */
     public function countTokens(string $type, string $worker_name, string $token_type = 'input'): int
     {
+        $llm_tools  = [] !== $this->llm_tools ? $this->llm_tools : [];
         $llm_params = $this->utils->getChildWorker($type, $worker_name, 'llm_params');
-        $context    = json_encode($llm_params + $this->llm_tools + ['messages' => $this->utils->getSessionHistory($worker_name)], JSON_FORMAT);
-        $split      = $this->NGram->splitText($context);
-        $inputs     = ceil(strlen(str_replace(' ', '', $split['asian'])) / 2.8);
-        $inputs     += ceil(strlen($split['latin']) / 4);
-        $outputs    = ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) - $inputs;
-        $tokens     = 'input' === $token_type ? $inputs : $outputs;
 
-        $llm_params['max_completion_tokens'] = $outputs;
+        if (isset($llm_tools['tools']) && [] !== $llm_tools['tools']) {
+            $llm_tools['tools'] = $this->context->formatTools($llm_tools['tools']);
+            $llm_tools['tools'] = $this->context->buildTools($llm_tools['tools']);
+        }
+
+        $context = json_encode($llm_params + $llm_tools + ['messages' => $this->context->getHistory($worker_name)], JSON_FORMAT);
+
+        $split   = $this->NGram->splitText($context);
+        $inputs  = ceil(strlen(str_replace(' ', '', $split['asian'])) / 2.8);
+        $inputs  += ceil(strlen($split['latin']) / 4);
+        $outputs = ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) - $inputs;
+        $tokens  = 'input' === $token_type ? $inputs : $outputs;
+
+        $llm_params['max_tokens'] = $outputs;
 
         $this->utils->setChildWorker($type, $worker_name, 'llm_params', $llm_params);
 
-        unset($type, $worker_name, $token_type, $llm_params, $context, $split, $inputs, $outputs);
+        unset($type, $worker_name, $token_type, $llm_tools, $llm_params, $context, $split, $inputs, $outputs);
         return $tokens;
     }
 
@@ -109,6 +121,8 @@ final class core extends Factory
 
         foreach ($fetched_skills as $skill) {
             try {
+                $skill['meta'] = $this->context->formatTools($skill['meta']);
+
                 $this->agent_tools[$skill['name']] = ($skill['class'])::new();
 
                 $skill_metadata = array_merge($skill_metadata, $skill['meta']);
@@ -128,26 +142,26 @@ final class core extends Factory
     }
 
     /**
-     * @param string $tool_call_id
-     * @param string $tool_call_name
+     * @param string $call_id
+     * @param string $call_name
      * @param array  $tool_call_args
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function execTools(string $tool_call_id, string $tool_call_name, array $tool_call_args): array
+    public function execTools(string $call_id, string $call_name, array $tool_call_args): array
     {
-        $this->IOData->src_cmd  = $tool_call_name;
+        $this->IOData->src_cmd  = $call_name;
         $this->IOData->src_argv = $tool_call_args;
 
-        [$module_name, $method_name] = explode('-', $tool_call_name);
+        [$module_name, $method_name] = explode('-', $call_name);
 
-        $fn_params      = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();
-        $fn_args        = Factory::buildArgs($fn_params, $tool_call_args);
-        $tool_result    = $this->agent_tools[$module_name]->$method_name(...$fn_args);
-        $result_content = json_encode($tool_result, JSON_FORMAT);
+        $fn_params   = Reflect::getCallable([$this->agent_tools[$module_name], $method_name])->getParameters();
+        $fn_args     = Factory::buildArgs($fn_params, $tool_call_args);
+        $tool_result = $this->agent_tools[$module_name]->$method_name(...$fn_args);
+        $call_result = json_encode($tool_result, JSON_FORMAT);
 
-        if (false === $result_content) {
+        if (false === $call_result) {
             throw new \RuntimeException(json_last_error_msg());
         }
 
@@ -155,12 +169,12 @@ final class core extends Factory
         $this->IOData->src_argv = [];
 
         $results = [
-            'tool_call_id'  => $tool_call_id,
-            'function_name' => $tool_call_name,
-            'content'       => $result_content
+            'call_id'     => $call_id,
+            'call_name'   => $call_name,
+            'call_result' => $call_result
         ];
 
-        unset($tool_call_id, $tool_call_name, $tool_call_args, $module_name, $method_name, $fn_params, $fn_args, $tool_result, $result_content);
+        unset($call_id, $call_name, $tool_call_args, $module_name, $method_name, $fn_params, $fn_args, $tool_result, $call_result);
         return $results;
     }
 

@@ -15,7 +15,7 @@ class handler extends Factory
      */
     public function cleanContext(array $payload_data, agent_core $agent_core): array
     {
-        $agent_core->utils->cleanSessionHistory(
+        $agent_core->core->context->cleanHistory(
             $payload_data['worker_name'],
             $payload_data['keep_normal'],
             $payload_data['max_tool_pairs'],
@@ -70,16 +70,10 @@ class handler extends Factory
 
         $data_url = $agent_core->utils->resizeImage($binary_data);
 
-        $agent_core->utils->addSessionHistory(
-            $payload_data['process_name'],
-            [
-                'role'    => 'user',
-                'content' => [
-                    ['type' => 'text', 'text' => $filename],
-                    ['type' => 'image_url', 'image_url' => ['url' => $data_url]]
-                ]
-            ]
-        );
+        $agent_core->core->context->addUserMessage($payload_data['process_name'], [
+            ['type' => 'text', 'content' => $filename],
+            ['type' => 'image', 'content' => $data_url]
+        ]);
 
         if ($payload_data['rendering']) {
             $message = $agent_core->utils->getMessageMarker(

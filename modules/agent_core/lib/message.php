@@ -204,7 +204,7 @@ class message extends Factory
             if ('/reset' !== $text) {
                 $result = [
                     'need_llm' => true,
-                    'content'  => [['type' => 'text', 'text' => $text]],
+                    'content'  => [['type' => 'text', 'content' => $text]],
                     'saves'    => [$text],
                     'type'     => 'chat'
                 ];
@@ -262,7 +262,7 @@ class message extends Factory
 
                 if ('/reset' !== $text) {
                     $saves[]   = $text;
-                    $content[] = ['type' => 'text', 'text' => $text];
+                    $content[] = ['type' => 'text', 'content' => $text];
                 } else {
                     $reset = true;
                 }
@@ -287,8 +287,8 @@ class message extends Factory
 
                     try {
                         $data_url  = $this->utils->resizeImage($binary);
-                        $content[] = ['type' => 'text', 'text' => $data['file']['filename']];
-                        $content[] = ['type' => 'image_url', 'image_url' => ['url' => $data_url]];
+                        $content[] = ['type' => 'text', 'content' => $data['file']['filename']];
+                        $content[] = ['type' => 'image', 'content' => $data_url];
                     } catch (\Throwable $throwable) {
                         $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();
                         unset($throwable);
@@ -313,8 +313,8 @@ class message extends Factory
                     }
 
                     $content[] = [
-                        'type' => 'text',
-                        'text' => '--- 文件信息 ---' . "\n"
+                        'type'    => 'text',
+                        'content' => '--- 文件信息 ---' . "\n"
                             . '文件名: ' . $data['file']['filename'] . "\n"
                             . 'MIME类型: ' . $data['file']['mimeType'] . "\n"
                             . '--- 文件内容（开始） ---' . "\n"

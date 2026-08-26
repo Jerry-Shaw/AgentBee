@@ -27,6 +27,8 @@ class stream extends Factory
 {
     public core $core;
 
+    public array $options = [];
+
     /**
      * @throws \ReflectionException
      */

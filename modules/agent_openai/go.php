@@ -191,7 +191,10 @@ class go extends Factory
         $this->initMain();
         $this->setShmop(getmypid());
 
-        $context = context::new();
+        $context   = context::new();
+        $llm_tools = $this->core->llm_tools;
+
+        $llm_tools['tools'] = $context->buildTools($llm_tools['tools']);
 
         while (true) {
             $job_line = fgets(STDIN);
@@ -214,8 +217,7 @@ class go extends Factory
                 continue;
             }
 
-            $this->core->llm_tools['tools'] = $context->buildTools($this->core->llm_tools['tools']);
-            $this->libOpenAI->setModelParams($talk_data['llm_params'] + $this->core->llm_tools);
+            $this->libOpenAI->setModelParams($talk_data['llm_params'] + $llm_tools);
 
             $this->processor->talk(
                 $talk_data['metadata'],
@@ -243,6 +245,9 @@ class go extends Factory
 
         $socket_id = '';
         $context   = context::new();
+        $llm_tools = $this->core->llm_tools;
+
+        $llm_tools['tools'] = $context->buildTools($llm_tools['tools']);
 
         while (true) {
             $line = fgets(STDIN);
@@ -263,8 +268,7 @@ class go extends Factory
                 continue;
             }
 
-            $this->core->llm_tools['tools'] = $context->buildTools($this->core->llm_tools['tools']);
-            $this->libOpenAI->setModelParams($talk_data['llm_params'] + $this->core->llm_tools);
+            $this->libOpenAI->setModelParams($talk_data['llm_params'] + $llm_tools);
 
             switch ($talk_data['cmd']) {
                 case 'start':

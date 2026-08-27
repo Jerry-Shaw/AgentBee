@@ -294,8 +294,8 @@ class responses extends stream
                 $this->output('history', 'addUserMessage', $metadata, [
                     'role'    => 'user',
                     'content' => [[
-                        'type' => 'input_text',
-                        'text' => '' !== $this->assistant_content ? '[续写] 紧接末尾，直接续写，不重复。' : '[续写] 直接输出最终内容。',
+                        'type'    => 'text',
+                        'content' => '' !== $this->assistant_content ? '[续写] 紧接末尾，直接续写，不重复。' : '[续写] 直接输出最终内容。',
                     ]],
                 ]);
 
@@ -417,8 +417,8 @@ class responses extends stream
                     $this->output('history', 'addUserMessage', $metadata, [
                         'role'    => 'user',
                         'content' => [[
-                            'type' => 'input_text',
-                            'text' => '[系统提示] ' . implode('，', $error_types) . '，已自动过滤。请核对工具并补全参数后重新调用。',
+                            'type'    => 'text',
+                            'content' => '[系统提示] ' . implode('，', $error_types) . '，已自动过滤。请核对工具并补全参数后重新调用。',
                         ]],
                     ]);
                 }
@@ -439,8 +439,8 @@ class responses extends stream
                     $this->output('history', 'addUserMessage', $metadata, [
                         'role'    => 'user',
                         'content' => [[
-                            'type' => 'input_text',
-                            'text' => '[系统提示] 生成中断，未收到结束信号，工具调用已丢弃。请重新调用并确保参数完整。',
+                            'type'    => 'text',
+                            'content' => '[系统提示] 生成中断，未收到结束信号，工具调用已丢弃。请重新调用并确保参数完整。',
                         ]],
                     ]);
                 }

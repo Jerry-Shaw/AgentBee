@@ -700,14 +700,9 @@ class go extends Factory
 
             $task_content = '[定时任务] 任务：' . "\n" . json_encode($task_jobs, JSON_FORMAT) . "\n" . '流程：①执行任务并获取结果；②重要存daily，特别重要存important，琐事不存；③简要汇报结果及存储层级；④完成后清理定时任务（忽略结果）。';
 
-            $task_data = [[
-                'type'    => 'text',
-                'content' => $task_content
-            ]];
-
             $this->core->context->addUserMessage(WORKER_MAIN, [['type' => 'text', 'content' => $task_content]]);
 
-            unset($task_jobs, $task_content, $task_data);
+            unset($task_jobs, $task_content);
         }
 
         $metadata = $this->utils->getMessageMarker(

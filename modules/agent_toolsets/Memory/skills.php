@@ -126,17 +126,17 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '全文搜索记忆，支持关键词数组、匹配模式(or/and)、日期范围、分页。单字匹配不准，建议关键词≥2字符。返回：{status, data: [{level, role, content, create_id, create_time}], total}或{status, error}。',
+                'description' => '全文搜索记忆。命中后如需扩展上下文，可额外读取命中记录所在日期或相邻日期的其他记忆（不限关键词），以覆盖更完整的信息。返回：{status, data: [{level, role, content, create_id, create_time}], total} 或 {status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级'],
-                        'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组'],
+                        'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组（≥2字符）'],
                         'mode'       => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or', 'description' => '匹配模式'],
                         'offset'     => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length'     => ['type' => 'integer', 'default' => 10, 'description' => '条数（0为全部，建议5-20）'],
-                        'start_date' => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '起始日期'],
-                        'end_date'   => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '结束日期']
+                        'length'     => ['type' => 'integer', 'default' => 10, 'description' => '条数（0=全部，建议5-20）'],
+                        'start_date' => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '起始日期（YYYYMMDD）'],
+                        'end_date'   => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '结束日期（YYYYMMDD）']
                     ],
                     'required'   => ['level', 'keywords']
                 ],

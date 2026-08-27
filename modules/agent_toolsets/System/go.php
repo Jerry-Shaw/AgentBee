@@ -129,6 +129,110 @@ class go extends Factory
     }
 
     /**
+     * @param string $title
+     * @param string $message
+     * @param string $level
+     *
+     * @return string
+     */
+    public function notification(string $title, string $message, string $level = 'info'): string
+    {
+        switch (PHP_OS) {
+            case 'WINNT':
+                $title   = str_replace(["\r\n", "\n", "\r", "'"], ['\n', '\n', '\n', "''"], $title);
+                $message = str_replace(["\r\n", "\n", "\r", "'"], ['\n', '\n', '\n', "''"], $message);
+
+                $colors = [
+                    'info'    => '#4285F4',
+                    'error'   => '#EA4335',
+                    'warning' => '#FBBC05',
+                    'success' => '#34A853',
+                ];
+
+                $bg_color   = $colors[$level] ?? $colors['info'];
+                $fore_color = ('#FBBC05' === $bg_color) ? '#000000' : '#FFFFFF';
+
+                $cmd = 'start /b powershell -NoP -Exec Bypass -Command "'
+                    . 'Add-Type -AssemblyName System.Windows.Forms; '
+                    . 'Add-Type -AssemblyName System.Drawing; '
+                    . '$f = New-Object Windows.Forms.Form; '
+                    . '$f.Width = 360; '
+                    . '$f.FormBorderStyle = \'None\'; '
+                    . '$f.BackColor = \'White\'; '
+                    . '$f.TopMost = $true; '
+                    . '$f.StartPosition = \'Manual\'; '
+                    . '$p = New-Object Windows.Forms.Panel; '
+                    . '$p.BackColor = \'' . $bg_color . '\'; '
+                    . '$p.Height = 30; '
+                    . '$p.Dock = \'Top\'; '
+                    . '$f.Controls.Add($p); '
+                    . '$l = New-Object Windows.Forms.Label; '
+                    . '$l.Text = \'' . $title . '\'; '
+                    . '$l.Font = \'Microsoft YaHei, 11, style=Bold\'; '
+                    . '$l.ForeColor = \'' . $fore_color . '\'; '
+                    . '$l.Location = \'15, 5\'; '
+                    . '$l.AutoSize = $true; '
+                    . '$p.Controls.Add($l); '
+                    . '$m = New-Object Windows.Forms.Label; '
+                    . '$m.Text = \'' . $message . '\'; '
+                    . '$m.Text = $m.Text -replace \'\\\\n\', [char]10; '
+                    . '$m.Location = \'15, 55\'; '
+                    . '$m.Width = 330; '
+                    . '$m.Font = \'Microsoft YaHei, 10\'; '
+                    . '$f.Controls.Add($m); '
+                    . '$prefSize = $m.GetPreferredSize([System.Drawing.Size]::new(330, 0)); '
+                    . '$m.Height = $prefSize.Height; '
+                    . '$f.Height = 55 + $m.Height + 28 + 10; '
+                    . '$b = New-Object Windows.Forms.Button; '
+                    . '$b.Text = \'OK\'; '
+                    . '$b.Font = \'Microsoft YaHei, 9\'; '
+                    . '$b.Height = 28; '
+                    . '$b.Width = 70; '
+                    . '$b.Location = New-Object Drawing.Point(270, (55 + $m.Height)); '
+                    . '$b.Add_Click({ $f.Close() }); '
+                    . '$f.Controls.Add($b); '
+                    . '$scr = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea; '
+                    . '$f.Location = New-Object Drawing.Point(($scr.Width - $f.Width - 20), ($scr.Height - $f.Height - 20)); '
+                    . '$path = New-Object System.Drawing.Drawing2D.GraphicsPath; '
+                    . '$radius = 10; '
+                    . '$rect = New-Object System.Drawing.Rectangle(0, 0, $f.Width, $f.Height); '
+                    . '$path.AddArc($rect.X, $rect.Y, $radius*2, $radius*2, 180, 90); '
+                    . '$path.AddArc($rect.Right - $radius*2, $rect.Y, $radius*2, $radius*2, 270, 90); '
+                    . '$path.AddArc($rect.Right - $radius*2, $rect.Bottom - $radius*2, $radius*2, $radius*2, 0, 90); '
+                    . '$path.AddArc($rect.X, $rect.Bottom - $radius*2, $radius*2, $radius*2, 90, 90); '
+                    . '$path.CloseAllFigures(); '
+                    . '$f.Region = New-Object System.Drawing.Region($path); '
+                    . '$f.ControlBox = $false; '
+                    . '$f.ShowDialog() | Out-Null"';
+
+                unset($colors, $bg_color, $fore_color);
+                break;
+
+            case 'Linux':
+                $title   = escapeshellarg($title);
+                $message = escapeshellarg($message);
+
+                $cmd = 'notify-send -- ' . $title . ' ' . $message . ' -t 86400000 > /dev/null 2>&1 &';
+                break;
+
+            case 'Darwin':
+                $title   = str_replace(['\\', '"'], ['\\\\', '\"'], $title);
+                $message = str_replace(['\\', '"'], ['\\\\', '\"'], $message);
+
+                $cmd = 'osascript -e \'display notification "' . $message . '" with title "' . $title . '"\' > /dev/null 2>&1 &';
+                break;
+
+            default:
+                return '不支持的操作系统：' . PHP_OS;
+        }
+
+        pclose(popen($cmd, 'r'));
+
+        unset($title, $message, $level, $cmd);
+        return '通知已成功发送。';
+    }
+
+    /**
      * @param string       $program
      * @param array|string $argv
      * @param int          $timeout

@@ -59,6 +59,22 @@ class skills
         [
             'type'     => 'function',
             'function' => [
+                'name'        => 'notification',
+                'description' => '发送桌面通知，仅在需要主动提醒用户时调用。如：重要事件、错误告警、任务完成、定时提醒、一般提醒等。返回：通知结果。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'title'   => ['type' => 'string', 'description' => '通知标题，简洁醒目，建议不超过20个字符。'],
+                        'message' => ['type' => 'string', 'description' => '通知正文内容，清晰说明事件或提醒信息。'],
+                        'level'   => ['type' => 'string', 'description' => '提醒级别（仅Windows有效）：info(蓝)、warning(黄)、error(红)、success(绿)，默认info。']
+                    ],
+                    'required'   => ['title', 'message']
+                ]
+            ]
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
                 'name'        => 'exec',
                 'description' => '执行系统命令（仅当无专用工具时可用）。program必须为可执行文件或脚本，不支持cmd内部命令（如dir、echo）。argv为参数数组，timeout为超时时长（默认30秒，0禁用超时），descriptor为I/O类型（默认"socket"），work_path为程序运行时的当前工作目录（需根据程序需求设置，留空则使用默认工作区）。返回：{output, error}。',
                 'parameters'  => [

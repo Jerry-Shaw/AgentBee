@@ -350,9 +350,16 @@ class go extends Factory
             $timestamp = time();
         }
 
+        $weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        $weekday  = $weekdays[date('w', $timestamp)];
+
         $datetime = date('Y-m-d H:i:s', $timestamp);
 
-        return ['datetime' => $datetime, 'timestamp' => $timestamp];
+        return [
+            'weekday'   => '周' . $weekday,
+            'datetime'  => $datetime,
+            'timestamp' => $timestamp
+        ];
     }
 
     /**

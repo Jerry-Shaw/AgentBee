@@ -637,10 +637,11 @@ class utils extends Factory
         $prompts   = [];
         $php_path  = $this->OSMgr->getPhpPath();
         $work_path = $this->agent_config['workspace_path'];
+        $weekday   = ['日', '一', '二', '三', '四', '五', '六'][date('w')];
 
         $prompts[] = '## 身份与时间';
         $prompts[] = '你是 **' . AGENT_NAME . '**，人类助理。';
-        $prompts[] = '当前时间：' . date('Y-m-d H:i:s') . '；时区：' . $this->app->timezone . '。';
+        $prompts[] = '当前时间：' . date('Y-m-d H:i:s') . ' 周' . $weekday . '；时区：' . $this->app->timezone . '。';
         $prompts[] = '默认使用中文；用户指定其他语言时遵从。';
 
         $prompts[] = '## 运行环境';
@@ -705,7 +706,7 @@ class utils extends Factory
 
         $prompt = implode("\n", $prompts);
 
-        unset($prompts, $php_path, $work_path, $skills);
+        unset($prompts, $php_path, $work_path, $weekday, $skills);
         return $prompt;
     }
 
@@ -718,10 +719,11 @@ class utils extends Factory
     public function getChildPrompt(string $worker_name, string $worker_role): string
     {
         $prompts = [];
+        $weekday = ['日', '一', '二', '三', '四', '五', '六'][date('w')];
 
         $prompts[] = '## 身份与时间';
         $prompts[] = '你是 **' . $worker_name . '**，' . $worker_role . '。';
-        $prompts[] = '当前时间：' . date('Y-m-d H:i:s') . '；时区：' . $this->app->timezone . '。';
+        $prompts[] = '当前时间：' . date('Y-m-d H:i:s') . ' 周' . $weekday . '；时区：' . $this->app->timezone . '。';
 
         $prompts[] = '## 运行环境';
         $prompts[] = '- 系统：' . php_uname();
@@ -757,7 +759,7 @@ class utils extends Factory
 
         $prompt = implode("\n", $prompts);
 
-        unset($worker_name, $worker_role, $prompts, $skills);
+        unset($worker_name, $worker_role, $prompts, $weekday, $skills);
         return $prompt;
     }
 

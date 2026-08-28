@@ -47,6 +47,7 @@ class utils extends Factory
 
     public string $memory_buffer = '';
 
+    public array $program_list    = [];
     public array $child_workers   = [];
     public array $socket_session  = [];
     public array $stream_buffers  = [];
@@ -351,6 +352,10 @@ class utils extends Factory
      */
     public function fetchPrograms(): array
     {
+        if ([] !== $this->program_list) {
+            return $this->program_list;
+        }
+
         $available = [];
         $name_list = ['7z', 'git', 'curl', 'php', 'python', 'pip', 'uv', 'node', 'npm', 'npx', 'ffmpeg'];
 
@@ -361,6 +366,8 @@ class utils extends Factory
                 $available[] = $name;
             }
         }
+
+        $this->program_list = $available;
 
         unset($name_list, $name, $paths);
         return $available;

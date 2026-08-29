@@ -200,7 +200,7 @@ class messages extends stream
 
         if (isset($data['error'])) {
             $this->finish_reason = 'error';
-            $this->output('stream', 'error', $metadata, $data['error']);
+            $this->output('stream', 'error', $metadata, ['message' => $data['error']]);
             return;
         }
 
@@ -309,7 +309,12 @@ class messages extends stream
 
             case 'error':
                 $this->finish_reason = 'error';
-                $this->output('stream', 'error', $metadata, $chunk['error'] ?? ['message' => 'Unknown error']);
+                $this->output(
+                    'stream',
+                    'error',
+                    $metadata,
+                    isset($chunk['error']) ? ['message' => $chunk['error']] : ['message' => 'Unknown error']
+                );
                 break;
         }
 

@@ -151,7 +151,7 @@ class responses extends stream
         if (isset($data['error'])) {
             $this->finish_reason = 'error';
             unset($this->options['previous_response_id']);
-            $this->output('stream', 'error', $metadata, $data['error']);
+            $this->output('stream', 'error', $metadata, ['message' => $data['error']]);
             return;
         }
 

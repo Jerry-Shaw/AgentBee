@@ -323,8 +323,13 @@ class go extends Factory
                                 $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'ready');
                             }
 
-                            unset($this->utils->stream_buffers[$ext_id]);
-                            $this->core->sendMessage($message['socket_id'], ['type' => 'error'] + $payload['data']);
+                            $error = ['type' => 'error'];
+                            $error += is_array($payload['data'])
+                                ? $payload['data']
+                                : ['message' => $payload['data']];
+
+                            $this->core->sendMessage($message['socket_id'], $error);
+                            unset($this->utils->stream_buffers[$ext_id], $error);
                             break;
 
                         default:

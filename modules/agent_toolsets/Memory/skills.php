@@ -29,57 +29,12 @@ class skills
         [
             'type'     => 'function',
             'function' => [
-                'name'        => 'addTask',
-                'description' => '添加定时任务，设置任务提示词、执行时间戳，可设重复及间隔。返回：{status, create_id}或{status, error}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'task_prompt'     => ['type' => 'string', 'description' => '任务提示词'],
-                        'run_at'          => ['type' => 'integer', 'description' => '执行时间戳(秒)'],
-                        'repeat'          => ['type' => 'boolean', 'default' => false, 'description' => '是否重复'],
-                        'repeat_interval' => ['type' => 'integer', 'default' => 0, 'description' => '重复间隔(秒)，repeat=true时有效']
-                    ],
-                    'required'   => ['task_prompt', 'run_at']
-                ],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'removeTask',
-                'description' => '按create_id删除定时任务。返回：{status, message}或{status, error}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'create_id' => ['type' => 'integer', 'description' => '任务ID(微秒)']
-                    ],
-                    'required'   => ['create_id']
-                ],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'listTasks',
-                'description' => '列出所有任务详情。返回：{status, tasks: [{create_id, run_at, repeat, interval, prompt, run_time, create_time}]}。'
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'runTask',
-                'description' => '执行所有到期任务，返回提示词索引数组。返回：提示词数组。',
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
                 'name'        => 'save',
-                'description' => '新增记忆。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(由系统记录)；role按来源：system/user/assistant/tool。内容需压缩提炼。返回：{status, create_id}或{status, error}。',
+                'description' => '新增记忆。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)；role按来源：system/user/assistant/tool。内容需压缩提炼。返回：{status, create_id}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'level'   => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc'], 'description' => '层级'],
+                        'level'   => ['type' => 'string', 'enum' => ['system', 'important', 'daily'], 'description' => '层级'],
                         'role'    => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool'], 'description' => '来源角色'],
                         'content' => ['type' => 'string', 'description' => '记忆内容']
                     ],
@@ -91,7 +46,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'update',
-                'description' => '更新已有记忆（按create_id），可改层级、角色、内容、过期时间（可选）。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时)；role按来源：system/user/assistant/tool。expire_at为时间戳(秒)，0表示永不过期，默认0。仅内容有实质变化时调用，新内容需压缩提炼。返回：{status, affected_rows}或{status, error}。',
+                'description' => '更新已有记忆（按create_id），可改层级、角色、内容、过期时间（可选）。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时)；role按来源：system/user/assistant/tool。expire_at为时间字符串，留空表示永不过期，默认空。仅内容有实质变化时调用，新内容需压缩提炼。返回：{status, affected_rows}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -99,7 +54,7 @@ class skills
                         'level'     => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc'], 'description' => '新层级'],
                         'role'      => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool'], 'description' => '新角色'],
                         'content'   => ['type' => 'string', 'description' => '新内容'],
-                        'expire_at' => ['type' => 'integer', 'default' => 0, 'description' => '过期时间戳(秒)，0表示永不过期']
+                        'expire_at' => ['type' => 'string', 'default' => '', 'description' => '过期时间，格式为YYYY-mm-dd HH:ii:ss']
                     ],
                     'required'   => ['create_id', 'level', 'role', 'content']
                 ],
@@ -159,6 +114,51 @@ class skills
                     ],
                     'required'   => ['level']
                 ],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'addTask',
+                'description' => '添加定时任务，设置任务提示词、执行时间字符串，可设重复及间隔。返回：{status, create_id, run_time}或{status, error}。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'task_prompt'     => ['type' => 'string', 'description' => '任务提示词'],
+                        'run_at'          => ['type' => 'string', 'description' => '执行时间，格式为YYYY-mm-dd HH:ii:ss'],
+                        'repeat'          => ['type' => 'boolean', 'default' => false, 'description' => '是否重复'],
+                        'repeat_interval' => ['type' => 'integer', 'default' => 0, 'description' => '重复间隔(秒)，repeat=true时有效']
+                    ],
+                    'required'   => ['task_prompt', 'run_at']
+                ],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'removeTask',
+                'description' => '按create_id删除定时任务。返回：{status, message}或{status, error}。',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'create_id' => ['type' => 'integer', 'description' => '任务ID(微秒)']
+                    ],
+                    'required'   => ['create_id']
+                ],
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'listTasks',
+                'description' => '列出所有任务详情。返回：{status, tasks: [{create_id, run_at, repeat, interval, prompt, run_time, create_time}]}。'
+            ],
+        ],
+        [
+            'type'     => 'function',
+            'function' => [
+                'name'        => 'runTask',
+                'description' => '执行所有到期任务，返回提示词索引数组。返回：提示词数组。',
             ],
         ]
     ];

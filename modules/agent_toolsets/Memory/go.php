@@ -124,15 +124,15 @@ class go extends Factory
     public function save(string $level, string $role, string $content): array
     {
         if ('' === trim($content)) {
-            return ['status' => 'error', 'error' => 'Empty content'];
+            return ['status' => 'error', 'error' => '内容为空'];
         }
 
         if (!in_array($level, self::LEVELS)) {
-            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
+            return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily'];
         }
 
         if (!in_array($role, self::ROLES)) {
-            return ['status' => 'error', 'error' => 'Invalid role: ' . $role];
+            return ['status' => 'error', 'error' => '无效角色：' . $role . '，可用：user/assistant/system/tool'];
         }
 
         $date_key  = (int)date('Ymd');
@@ -165,23 +165,33 @@ class go extends Factory
      * @param string $level
      * @param string $role
      * @param string $content
-     * @param int    $expire_at
+     * @param string $expire_at
      *
      * @return array|string[]
      * @throws \ReflectionException
      */
-    public function update(int $create_id, string $level, string $role, string $content, int $expire_at = 0): array
+    public function update(int $create_id, string $level, string $role, string $content, string $expire_at = ''): array
     {
         if ('' === trim($content)) {
-            return ['status' => 'error', 'error' => 'Empty content'];
+            return ['status' => 'error', 'error' => '内容为空'];
         }
 
         if (!in_array($level, self::LEVELS)) {
-            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
+            return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily'];
         }
 
         if (!in_array($role, self::ROLES)) {
-            return ['status' => 'error', 'error' => 'Invalid role: ' . $role];
+            return ['status' => 'error', 'error' => '无效角色：' . $role . '，可用：user/assistant/system/tool'];
+        }
+
+        if ('' === $expire_at) {
+            $expire_at = 0;
+        } else {
+            $expire_at = strtotime($expire_at);
+
+            if (false === $expire_at) {
+                return ['status' => 'error', 'error' => '过期时间格式无效，请使用YYYY-mm-dd HH:ii:ss'];
+            }
         }
 
         $record = $this->libSQLite->table('agent_memory')
@@ -190,7 +200,7 @@ class go extends Factory
             ->fetch();
 
         if ([] === $record) {
-            return ['status' => 'error', 'error' => 'Record not found: ' . $create_id];
+            return ['status' => 'error', 'error' => '记录不存在：' . $create_id];
         }
 
         $this->libSQLite->table('agent_memory')
@@ -217,10 +227,10 @@ class go extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    public function read(string $level, int $offset = 0, int $length = 100, int $date = 0): array
+    public function read(string $level, int $offset = 0, int $length = 10, int $date = 0): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
-            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
+            return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
         }
 
         $query = $this->libSQLite
@@ -266,10 +276,10 @@ class go extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    public function search(string $level, array $keywords, string $mode = 'or', int $offset = 0, int $length = 100, string $start_date = '', string $end_date = ''): array
+    public function search(string $level, array $keywords, string $mode = 'or', int $offset = 0, int $length = 10, string $start_date = '', string $end_date = ''): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
-            return ['status' => 'error', 'error' => 'Invalid level: ' . $level];
+            return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
         }
 
         $keywords = array_filter(
@@ -334,7 +344,7 @@ class go extends Factory
     public function delete(string $level, array $create_ids = [], int $start_time = 0, int $end_time = 0, array $keywords = [], string $mode = 'or'): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
-            $result = ['status' => 'error', 'error' => 'Invalid level: ' . $level];
+            $result = ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
 
             unset($level, $create_ids, $start_time, $end_time, $keywords, $mode);
             return $result;
@@ -352,7 +362,7 @@ class go extends Factory
             $valid_ids = array_map('intval', $valid_ids);
 
             if ([] === $valid_ids) {
-                $result = ['status' => 'error', 'error' => 'Invalid create_ids (must be positive integers)'];
+                $result = ['status' => 'error', 'error' => 'create_ids有误，须为正整数'];
             } else {
                 $query = $this->libSQLite->table('agent_memory');
 
@@ -370,7 +380,7 @@ class go extends Factory
             unset($valid_ids);
         } elseif (0 < $start_time || 0 < $end_time || [] !== $keywords) {
             if (0 < $start_time && 0 < $end_time && $start_time > $end_time) {
-                $result = ['status' => 'error', 'error' => 'start_time cannot be greater than end_time'];
+                $result = ['status' => 'error', 'error' => '起始时间不能大于结束时间'];
             } else {
                 $query = $this->libSQLite->table('agent_memory');
 
@@ -414,7 +424,7 @@ class go extends Factory
                 $result = ['status' => 'success', 'deleted' => $this->libSQLite->getAffectedRows()];
             }
         } else {
-            $result = ['status' => 'error', 'error' => 'No deletion criteria provided.'];
+            $result = ['status' => 'error', 'error' => '缺少删除条件，请补充必要条件后重试'];
         }
 
         unset($level, $create_ids, $start_time, $end_time, $keywords, $mode, $query);
@@ -427,36 +437,42 @@ class go extends Factory
 
     /**
      * @param string $task_prompt
-     * @param int    $run_at
+     * @param string $run_at
      * @param bool   $repeat
      * @param int    $repeat_interval
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function addTask(string $task_prompt, int $run_at, bool $repeat = false, int $repeat_interval = 0): array
+    public function addTask(string $task_prompt, string $run_at, bool $repeat = false, int $repeat_interval = 0): array
     {
-        $now = time();
-        if ($run_at < $now) {
-            $run_at = $now;
+        $now    = time();
+        $run_at = strtotime($run_at);
+
+        if (false === $run_at) {
+            return ['status' => 'error', 'error' => '执行时间格式无效，请使用YYYY-mm-dd HH:ii:ss'];
         }
+
+        if ($run_at < $now) {
+            return ['status' => 'error', 'error' => '执行时间不能早于当前时间，请重新设置'];
+        }
+
         if ($repeat && 0 >= $repeat_interval) {
-            unset($now);
-            return ['status' => 'error', 'error' => 'repeat_interval must be positive when repeat is enabled'];
+            return ['status' => 'error', 'error' => '重复间隔必须大于0'];
         }
 
         $create_id = $this->generateMicroTimestamp('agent_task');
         $this->libSQLite->table('agent_task')->replace([
             'create_id' => $create_id,
             'run_at'    => $run_at,
-            'repeat'    => (int)$repeat,
+            'repeat'    => $repeat ? 1 : 0,
             'interval'  => $repeat_interval,
             'prompt'    => $task_prompt
         ])->execute();
 
-        $result = ['status' => 'success', 'create_id' => $create_id];
+        $result = ['status' => 'success', 'create_id' => $create_id, 'run_time' => date('Y-m-d H:i:s', $run_at)];
 
-        unset($now, $create_id, $run_at, $repeat, $repeat_interval);
+        unset($task_prompt, $run_at, $repeat, $repeat_interval, $now, $create_id);
         return $result;
     }
 
@@ -472,8 +488,8 @@ class go extends Factory
         $affected = $this->libSQLite->getAffectedRows();
 
         $result = 0 < $affected
-            ? ['status' => 'success', 'message' => $affected . ' task(s) were removed.']
-            : ['status' => 'error', 'error' => 'Task not found.'];
+            ? ['status' => 'success', 'message' => '已删除' . $affected . '个任务']
+            : ['status' => 'error', 'error' => '任务不存在'];
 
         unset($create_id, $affected);
         return $result;

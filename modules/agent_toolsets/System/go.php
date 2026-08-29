@@ -137,10 +137,16 @@ class go extends Factory
      */
     public function notification(string $title, string $message, string $level = 'info'): string
     {
+        $skips   = ['`', ';', '&', '|', '$', '(', ')', '<', '>', '\\'];
+        $title   = str_replace($skips, '', $title);
+        $message = str_replace($skips, '', $message);
+        $title   = str_replace(["\r\n", "\r"], "\n", $title);
+        $message = str_replace(["\r\n", "\r"], "\n", $message);
+
         switch (PHP_OS) {
             case 'WINNT':
-                $title   = str_replace(["\r\n", "\n", "\r", "'"], ['\n', '\n', '\n', "''"], $title);
-                $message = str_replace(["\r\n", "\n", "\r", "'"], ['\n', '\n', '\n', "''"], $message);
+                $title   = str_replace(["\n", "'"], ['\n', "''"], $title);
+                $message = str_replace(["\n", "'"], ['\n', "''"], $message);
 
                 $colors = [
                     'info'    => '#4285F4',
@@ -216,10 +222,10 @@ class go extends Factory
                 break;
 
             case 'Darwin':
-                $title   = str_replace(['\\', '"'], ['\\\\', '\"'], $title);
-                $message = str_replace(['\\', '"'], ['\\\\', '\"'], $message);
+                $title   = str_replace('"', '\"', $title);
+                $message = str_replace('"', '\"', $message);
 
-                $cmd = 'osascript -e \'display notification "' . $message . '" with title "' . $title . '"\' > /dev/null 2>&1 &';
+                $cmd = 'osascript -e \'display dialog "' . $message . '" with title "' . $title . '" buttons {"OK"} default button "OK"\' > /dev/null 2>&1 &';
                 break;
 
             default:
@@ -228,7 +234,7 @@ class go extends Factory
 
         pclose(popen($cmd, 'r'));
 
-        unset($title, $message, $level, $cmd);
+        unset($title, $message, $level, $skips, $cmd);
         return '通知已成功发送。';
     }
 

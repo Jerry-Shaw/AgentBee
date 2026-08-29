@@ -485,7 +485,7 @@ class go extends Factory
                     }
 
                     $new_messages  = $this->core->context->refreshHistory($payload['workerName']);
-                    $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['workerName'], 'output');
+                    $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['workerName']);
 
                     switch ($payload_type) {
                         case 'tools':

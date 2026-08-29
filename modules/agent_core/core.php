@@ -75,12 +75,11 @@ final class core extends Factory
     /**
      * @param string $type
      * @param string $worker_name
-     * @param string $token_type
      *
      * @return int
      * @throws \ReflectionException
      */
-    public function getMaxTokens(string $type, string $worker_name, string $token_type = 'input'): int
+    public function getMaxTokens(string $type, string $worker_name): int
     {
         $llm_tools  = [] !== $this->llm_tools ? $this->llm_tools : [];
         $llm_params = $this->utils->getChildWorker($type, $worker_name, 'llm_params');
@@ -117,14 +116,14 @@ final class core extends Factory
             $outputs = 12288;
             $this->context->removeHistory($worker_name);
             $this->utils->debug('System: Context forcibly cleaned due to token overflow.', 'trace');
-            $this->utils->message_buffers[] = ['type' => 'error', 'message' => '抱歉，因对话内容过长（Token超出限制），系统已自动清空上下文。咱两重新开始吧。'];
+            $this->utils->message_buffers[] = ['type' => 'error', 'message' => '抱歉，因对话内容过长（Token超出限制），系统已自动清空上下文，咱两重新开始吧。别担心，你继续说就行，我会跟上的。'];
         }
 
         $llm_params['max_tokens'] = max(0, $outputs);
 
         $this->utils->setChildWorker($type, $worker_name, 'llm_params', $llm_params);
 
-        unset($type, $worker_name, $token_type, $llm_tools, $llm_params, $history, $key, $item, $contents, $context, $compressed, $context_len, $ratio, $inputs);
+        unset($type, $worker_name, $llm_tools, $llm_params, $history, $key, $item, $contents, $context, $compressed, $context_len, $ratio, $inputs);
         return $outputs;
     }
 

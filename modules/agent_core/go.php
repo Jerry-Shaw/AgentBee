@@ -487,7 +487,7 @@ class go extends Factory
                     $new_messages  = $this->core->context->refreshHistory($payload['workerName']);
                     $remain_tokens = $this->core->countTokens($payload['sender'], $payload['workerName'], 'output');
 
-                    if (0 === $remain_tokens) {
+                    if (0 >= $remain_tokens) {
                         $this->core->context->removeHistory($payload['workerName']);
                         $this->utils->debug('System: Context forcibly cleaned due to token overflow.', 'trace');
                         $this->core->sendMessage($payload['socket_id'], ['type' => 'error', 'error' => '抱歉，因对话内容过长（Token超出限制），系统已自动清空上下文。咱两重新开始吧。']);

@@ -64,7 +64,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'read',
-                'description' => '读取记忆，按层级分页，可指定日期（格式YYYYMMDD）。返回：{status, data: [{level, role, content, create_id, create_time}], total}或{status, error}。',
+                'description' => '读取记忆，按层级分页，可指定日期（格式YYYYMMDD）。若指定日期无记录，可向前回溯，禁止重复读取。返回：{status, data: [{level, role, content, create_id, create_time}], total}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

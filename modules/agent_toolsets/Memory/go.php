@@ -276,7 +276,7 @@ class go extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    public function search(string $level, array $keywords, string $mode = 'or', int $offset = 0, int $length = 10, string $start_date = '', string $end_date = ''): array
+    public function search(string $level, array $keywords, string $mode = 'and', int $offset = 0, int $length = 10, string $start_date = '', string $end_date = ''): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
             return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
@@ -333,21 +333,41 @@ class go extends Factory
     /**
      * @param string $level
      * @param array  $create_ids
-     * @param int    $start_time
-     * @param int    $end_time
+     * @param string $start_time
+     * @param string $end_time
      * @param array  $keywords
      * @param string $mode
      *
      * @return array|string[]
      * @throws \ReflectionException
      */
-    public function delete(string $level, array $create_ids = [], int $start_time = 0, int $end_time = 0, array $keywords = [], string $mode = 'or'): array
+    public function delete(string $level, array $create_ids = [], string $start_time = '', string $end_time = '', array $keywords = [], string $mode = 'and'): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
             $result = ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
 
             unset($level, $create_ids, $start_time, $end_time, $keywords, $mode);
             return $result;
+        }
+
+        if ('' === $start_time) {
+            $start_time = 0;
+        } else {
+            $start_time = strtotime($start_time);
+
+            if (false === $start_time) {
+                return ['status' => 'error', 'error' => '开始时间格式无效，请使用YYYY-mm-dd HH:ii:ss'];
+            }
+        }
+
+        if ('' === $end_time) {
+            $end_time = 0;
+        } else {
+            $end_time = strtotime($end_time);
+
+            if (false === $end_time) {
+                return ['status' => 'error', 'error' => '结束时间格式无效，请使用YYYY-mm-dd HH:ii:ss'];
+            }
         }
 
         if ([] !== $create_ids) {

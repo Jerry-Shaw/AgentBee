@@ -46,7 +46,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'update',
-                'description' => '更新已有记忆（按create_id），可改层级、角色、内容、过期时间（可选）。level按内容：system(人设/规则)、important(事实/偏好)、daily(日常/结果)、misc(临时)；role按来源：system/user/assistant/tool。expire_at为时间字符串，留空表示永不过期，默认空。仅内容有实质变化时调用，新内容需压缩提炼。返回：{status, affected_rows}或{status, error}。',
+                'description' => '更新记忆(按create_id)，可改level/role/content/expire_at。仅实质变化时调用，内容需压缩提炼。返回：{status, affected_rows}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -64,7 +64,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'read',
-                'description' => '读取记忆，按层级分页，可指定日期（格式YYYYMMDD）。若指定日期无记录，可向前回溯，禁止重复读取。返回：{status, data: [{level, role, content, create_id, create_time}], total}或{status, error}。',
+                'description' => '读取记忆。level指定层级；date(YYYYMMDD)按日读取，不传取最新；offset起始位置、length条数（0=全部）。返回：{status, data: [{level, role, content, create_id, create_time}], total}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -81,13 +81,13 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '全文搜索记忆。命中后如需扩展上下文，可额外读取命中记录所在日期或相邻日期的其他记忆（不限关键词），以覆盖更完整的信息。返回：{status, data: [{level, role, content, create_id, create_time}], total} 或 {status, error}。',
+                'description' => '全文关键词搜索记忆。关键词为1-5个辨识词，mode=and(全部命中)/or(任一命中)；level指定范围或all全层级；支持start_date/end_date限定时间窗。返回：{status, data: [{...}], total}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级'],
                         'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组（≥2字符）'],
-                        'mode'       => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or', 'description' => '匹配模式'],
+                        'mode'       => ['type' => 'string', 'enum' => ['and', 'or'], 'default' => 'and', 'description' => '匹配模式'],
                         'offset'     => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
                         'length'     => ['type' => 'integer', 'default' => 10, 'description' => '条数（0=全部，建议5-20）'],
                         'start_date' => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '起始日期（YYYYMMDD）'],
@@ -101,16 +101,16 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'delete',
-                'description' => '删除记忆。提供create_ids则按ID+层级精确删除（忽略其他参数）；否则按层级+时间范围(秒)+关键词组合删除（匹配模式由mode控制）。返回：{status, deleted}或{status, error}。',
+                'description' => '删除记忆。传create_ids按ID精确删；否则按层级+时间字符串(start/end_time)+关键词组合删。返回：{status, deleted}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级'],
                         'create_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => '微秒ID数组（优先）'],
-                        'start_time' => ['type' => 'integer', 'description' => '起始时间戳(秒，0不限)'],
-                        'end_time'   => ['type' => 'integer', 'description' => '结束时间戳(秒，0不限)'],
+                        'start_time' => ['type' => 'string', 'description' => '开始时间，格式为YYYY-mm-dd HH:ii:ss'],
+                        'end_time'   => ['type' => 'string', 'description' => '结束时间，格式为YYYY-mm-dd HH:ii:ss'],
                         'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组（与时间范围AND）'],
-                        'mode'       => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or', 'description' => '关键词匹配模式']
+                        'mode'       => ['type' => 'string', 'enum' => ['and', 'or'], 'default' => 'and', 'description' => '关键词匹配模式']
                     ],
                     'required'   => ['level']
                 ],

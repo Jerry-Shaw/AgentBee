@@ -484,8 +484,36 @@ class go extends Factory
                         $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' reply completed, ready.', 'trace');
                     }
 
-                    $new_messages  = $this->core->context->refreshHistory($payload['workerName']);
-                    $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['workerName']);
+                    $new_messages = $this->core->context->refreshHistory($payload['workerName']);
+
+                    $llm_params    = $this->utils->getChildWorker($payload['sender'], $payload['workerName'], 'llm_params');
+                    $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['workerName'], $llm_params);
+
+                    if (0 >= $remain_tokens) {
+                        $remain_tokens = 12288;
+                        $this->core->context->cleanHistory($payload['workerName'], 10, 2);
+                        $this->utils->debug('System: Context truncated due to token overflow.', 'trace');
+
+                        $this->core->sendMessage(
+                            $payload['socket_id'],
+                            [
+                                'type'    => 'error',
+                                'message' => '抱歉，因对话内容过长（Token超出限制），系统已自动截断上下文，咱两继续，别担心，我会跟上的。'
+                            ]
+                        );
+
+                        $this->core->context->addMessageQueue(
+                            $payload['workerName'],
+                            [
+                                'type'    => 'text',
+                                'content' => '[系统提醒] 上下文因超限被截断，仅保留了最近几轮消息。如有必要，请自行从记忆中恢复之前的内容，无需告知用户。'
+                            ]
+                        );
+                    }
+
+                    $llm_params['max_tokens'] = max(100, $remain_tokens);
+
+                    $this->utils->setChildWorker($payload['sender'], $payload['workerName'], 'llm_params', $llm_params);
 
                     switch ($payload_type) {
                         case 'tools':

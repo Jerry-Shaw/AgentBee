@@ -498,7 +498,7 @@ class go extends Factory
                             $payload['socket_id'],
                             [
                                 'type'    => 'error',
-                                'message' => '抱歉，因对话内容过长（Token超出限制），系统已自动截断上下文，咱两继续，别担心，我会跟上的。'
+                                'message' => '抱歉，因上下文内容过长（当前模型设置: ' . ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) . '），系统已自动截断。咱两继续，别担心，我会跟上的。'
                             ]
                         );
 

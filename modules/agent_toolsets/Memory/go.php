@@ -223,11 +223,12 @@ class go extends Factory
      * @param int    $offset
      * @param int    $length
      * @param int    $date
+     * @param int    $create_id
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function read(string $level, int $offset = 0, int $length = 10, int $date = 0): array
+    public function read(string $level, int $offset = 0, int $length = 10, int $date = 0, int $create_id = 0): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
             return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
@@ -239,6 +240,10 @@ class go extends Factory
 
         if ('all' !== $level) {
             $query->where(['level', '=', $level]);
+        }
+
+        if (0 < $create_id) {
+            $query->where(['create_id', '<', $create_id]);
         }
 
         if (0 < $date) {

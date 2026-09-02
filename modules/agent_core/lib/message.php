@@ -154,12 +154,7 @@ class message extends Factory
 
         switch ($act) {
             case 'read':
-                $content        = $data_content['memory']->read(
-                    $data_content['level'] ?? 'all',
-                    $data_content['offset'] ?? 0,
-                    $data_content['length'] ?? 20,
-                    $data_content['date'] ?? 0
-                );
+                $content        = $data_content['memory']->read('misc', 0, $data_content['length'], 0, $data_content['create_id'] ?? 0);
                 $content['act'] = $act;
                 break;
             case 'delete':

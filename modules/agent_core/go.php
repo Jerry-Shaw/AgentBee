@@ -688,7 +688,7 @@ class go extends Factory
             isset($this->utils->agent_config['agent_server']['ws_token'])
             && !in_array($this->utils->agent_config['agent_server']['ws_token'], ['', $ws_protocol], true)
         ) {
-            $this->utils->debug('Socket: Client reject, protocol error: ' . $ws_protocol, 'trace');
+            $this->utils->debug('Socket: Client reject, protocol error: ' . ('' !== $ws_protocol ? $ws_protocol : 'None'), 'trace');
             return false;
         }
 

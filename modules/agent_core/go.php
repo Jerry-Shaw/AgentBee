@@ -684,6 +684,14 @@ class go extends Factory
      */
     public function onHandshake(string $socket_id, string $ws_protocol): bool
     {
+        if (
+            isset($this->utils->agent_config['agent_server']['ws_token'])
+            && $this->utils->agent_config['agent_server']['ws_token'] !== $ws_protocol
+        ) {
+            $this->utils->debug('Socket: Client reject, protocol error: ' . $ws_protocol, 'trace');
+            return false;
+        }
+
         $this->utils->debug('Socket: New client: ' . $socket_id, 'trace');
         $this->utils->socket_session[$socket_id] = 'ready';
 

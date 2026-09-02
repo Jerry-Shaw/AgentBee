@@ -158,10 +158,10 @@ class message extends Factory
                 $content['act'] = $act;
                 break;
             case 'delete':
-                $content        = $data_content['memory']->delete(
-                    $data_content['level'] ?? 'none',
-                    $data_content['create_ids'] ?? []
-                );
+                $content = [] !== $data_content['create_ids']
+                    ? $data_content['memory']->delete('misc', $data_content['create_ids'])
+                    : ['status' => 'error', 'error' => '缺少目标记忆ID'];
+
                 $content['act'] = $act;
                 break;
 

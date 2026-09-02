@@ -205,16 +205,16 @@ final class core extends Factory
             return;
         }
 
-        $microtime = (int)(microtime(true) * 1000);
+        $microtime = (int)(microtime(true) * 1000000);
 
         if ([] !== $this->flush_buffers) {
             if (
-                $microtime - $this->flush_time_at > $this->flush_interval
+                $microtime - $this->flush_time_at > $this->flush_interval * 1000
                 || !isset($message['messageId'])
                 || $message['type'] !== $this->flush_buffers['type']
                 || $message['messageId'] !== $this->flush_buffers['messageId']
             ) {
-                $buffers = ['create_id' => $microtime * 1000] + $this->flush_buffers;
+                $buffers = ['create_id' => $microtime] + $this->flush_buffers;
                 $success = $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode($buffers, JSON_FORMAT)));
 
                 if (!$success) {
@@ -241,7 +241,7 @@ final class core extends Factory
             return;
         }
 
-        $buffers = ['create_id' => $microtime * 1000] + $message;
+        $buffers = ['create_id' => $microtime] + $message;
         $success = $this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode($buffers, JSON_FORMAT)));
 
         if (!$success) {

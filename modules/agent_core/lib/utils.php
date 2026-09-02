@@ -497,7 +497,7 @@ class utils extends Factory
 
             $md_meta = $this->getSkillMeta($md_file);
 
-            if ([] === $md_meta['skill_name'] || $md_meta['skill_name'] !== $item['name']) {
+            if (!isset($md_meta['skill_name']) || $md_meta['skill_name'] !== $item['name']) {
                 continue;
             }
 

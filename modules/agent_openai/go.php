@@ -109,7 +109,6 @@ class go extends Factory
     public function reload(): void
     {
         $this->init(true);
-        $this->setShmop($this->utils->procMgr->getPid($this->utils->main_idx));
         $this->utils->procMgr->writeProc($this->utils->main_idx, self::CMD_RELOAD);
     }
 
@@ -120,20 +119,6 @@ class go extends Factory
     public function getModels(): array
     {
         return $this->libOpenAI->listModels();
-    }
-
-    /**
-     * @param int $worker_pid
-     *
-     * @return $this
-     */
-    public function setShmop(int $worker_pid): static
-    {
-        $shm_key = crc32($worker_pid) & 0x7FFFFFFF;
-        $this->libOpenAI->openShmop($shm_key);
-
-        unset($worker_pid, $shm_key);
-        return $this;
     }
 
     /**
@@ -149,7 +134,16 @@ class go extends Factory
      */
     public function talkTo(string $type, string $system, string $receiver, int $proc_idx, string $cmd, array $metadata): void
     {
-        $this->libOpenAI->resumeStream();
+        if (WORKER_MAIN === $type) {
+            $main_pid = $this->utils->getChildWorker(WORKER_MAIN, WORKER_MAIN, 'worker_pid');
+
+            if (is_int($main_pid)) {
+                $this->libOpenAI->resumeStream($main_pid);
+            }
+
+            unset($main_pid);
+        }
+
         $this->utils->procMgr->writeProc(
             $proc_idx,
             json_encode([
@@ -167,15 +161,17 @@ class go extends Factory
     /**
      * Abort current LLM request (for procWorker).
      *
-     * @param string $socket_id
-     *
      * @return void
-     * @throws \Exception
      */
-    public function abort(string $socket_id): void
+    public function abort(): void
     {
-        $this->libOpenAI->abortStream();
-        unset($socket_id);
+        $main_pid = $this->utils->getChildWorker(WORKER_MAIN, WORKER_MAIN, 'worker_pid');
+
+        if (is_int($main_pid)) {
+            $this->libOpenAI->abortStream($main_pid);
+        }
+
+        unset($main_pid);
     }
 
     /**
@@ -189,7 +185,6 @@ class go extends Factory
         ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
 
         $this->initMain();
-        $this->setShmop(getmypid());
 
         $context   = context::new();
         $llm_tools = $this->core->llm_tools;
@@ -207,7 +202,6 @@ class go extends Factory
 
             if (self::CMD_RELOAD === $job_line) {
                 $this->initMain(true);
-                $this->setShmop(getmypid());
                 continue;
             }
 
@@ -241,7 +235,6 @@ class go extends Factory
         ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
 
         $this->initChild();
-        $this->setShmop(getmypid());
 
         $socket_id = '';
         $context   = context::new();

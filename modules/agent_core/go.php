@@ -138,7 +138,6 @@ class go extends Factory
 
         if (WORKER_MAIN === $worker_type) {
             $this->utils->debug('Create shared memory for ' . $worker_type, 'debug');
-            $this->openai->setShmop($worker_pid);
         }
 
         unset($worker_type, $worker_name, $output_handler, $worker_status, $worker_pid);
@@ -815,8 +814,8 @@ class go extends Factory
 
             if ('stop' === $data['type']) {
                 $this->setStatus(self::STATUS_IDLE);
-                $this->openai->abort($socket_id);
                 $this->utils->debug('User: Abort signal sent. Cancelling task.', 'trace');
+                $this->openai->abort();
                 continue;
             }
 

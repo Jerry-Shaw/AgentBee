@@ -279,6 +279,18 @@ class go extends Factory
 
                     switch ($payload_type) {
                         case 'length':
+                            $llm_params    = $this->utils->getChildWorker($payload['sender'], $payload['workerName'], 'llm_params');
+                            $tool_count    = $this->core->context->countHistory($payload['workerName'], 'tool');
+                            $history_count = $this->core->context->countHistory($payload['workerName']);
+
+                            $this->core->context->cleanHistory($payload['workerName'], ceil($history_count * 0.6), ceil($tool_count * 0.4));
+
+                            $this->utils->debug('System: Context auto-truncated to resume (length limit reached).', 'trace');
+
+                            $llm_params['max_tokens'] = 12288;
+
+                            $this->utils->setChildWorker($payload['sender'], $payload['workerName'], 'llm_params', $llm_params);
+
                             $metadata = $this->utils->getMessageMarker(
                                 $payload['sender'],
                                 $payload['workerName'],
@@ -315,6 +327,8 @@ class go extends Factory
                                     );
                                 }
                             }
+
+                            unset($llm_params, $tool_count, $history_count);
                             break;
 
                         case 'error':
@@ -662,7 +676,7 @@ class go extends Factory
                             break;
                     }
 
-                    unset($new_messages);
+                    unset($new_messages, $llm_params, $remain_tokens);
                     break;
             }
         }

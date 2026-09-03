@@ -173,7 +173,7 @@ class completions extends stream
 
         if (isset($data['error'])) {
             $this->finish_reason = 'error';
-            $this->output('stream', 'error', $metadata, ['message' => $data['error']]);
+            $this->output('stream', 'error', $metadata, $data['error']);
             return;
         }
 

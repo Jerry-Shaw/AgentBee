@@ -313,7 +313,7 @@ class messages extends stream
                     'stream',
                     'error',
                     $metadata,
-                    isset($chunk['error']) ? ['message' => $chunk['error']] : ['message' => 'Unknown error']
+                    $chunk['error'] ?? ['message' => 'Unknown error']
                 );
                 break;
         }

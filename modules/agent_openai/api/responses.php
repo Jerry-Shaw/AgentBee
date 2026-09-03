@@ -20,6 +20,7 @@
 
 namespace modules\agent_openai\api;
 
+use modules\agent_core\lib\config;
 use modules\agent_openai\lib\stream;
 
 class responses extends stream
@@ -65,6 +66,20 @@ class responses extends stream
                     $messages[] = ['role' => 'user', 'content' => $contents];
                     break;
 
+                case 'assistant':
+                    if (isset($event['tool_calls']) && [] !== $event['tool_calls']) {
+                        foreach ($event['tool_calls'] as $tool_call) {
+                            $messages[] = [
+                                'type'      => 'function_call',
+                                'id'        => $tool_call['id'],
+                                'call_id'   => $tool_call['id'],
+                                'name'      => $tool_call['name'],
+                                'arguments' => $tool_call['arguments']
+                            ];
+                        }
+                    }
+                    break;
+
                 case 'tool':
                     $messages[] = [
                         'type'    => 'function_call_output',
@@ -75,7 +90,7 @@ class responses extends stream
             }
         }
 
-        unset($events, $event, $contents, $content);
+        unset($events, $event, $contents, $content, $tool_call);
         return $messages;
     }
 
@@ -151,7 +166,7 @@ class responses extends stream
         if (isset($data['error'])) {
             $this->finish_reason = 'error';
             unset($this->options['previous_response_id']);
-            $this->output('stream', 'error', $metadata, ['message' => $data['error']]);
+            $this->output('stream', 'error', $metadata, $data['error']);
             return;
         }
 
@@ -178,12 +193,13 @@ class responses extends stream
      * @param array $metadata
      *
      * @return void
+     * @throws \ReflectionException
      */
     private function handleChunk(array $chunk, array $metadata): void
     {
         switch ($chunk['type']) {
             case 'response.completed':
-                if (isset($chunk['response']['id'])) {
+                if (isset($chunk['response']['id']) && (config::new()->config['agent_llm']['keep_response_id'] ?? false)) {
                     $this->options['previous_response_id'] = $chunk['response']['id'];
                 }
 

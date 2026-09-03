@@ -15,6 +15,7 @@
     "timeout": 3600,
     "hw_hash": "",
     "keep_reasons": false,
+    "keep_response_id": false,
     "params": {
       "max_tokens": 12288,
       "temperature": 0.6,

@@ -160,6 +160,68 @@ class go extends Factory
     }
 
     /**
+     * @param string $html
+     * @param array  $remove_tags
+     * @param bool   $remove_comments
+     * @param bool   $extract_text
+     *
+     * @return string
+     */
+    private function cleanHtml(string $html, array $remove_tags = [], bool $remove_comments = true, bool $extract_text = false): string
+    {
+        $dom = new \DOMDocument();
+
+        $xml_errors = libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        libxml_use_internal_errors($xml_errors);
+
+        foreach ($dom->childNodes as $node) {
+            if ($node->nodeType === XML_PI_NODE) {
+                $dom->removeChild($node);
+                break;
+            }
+        }
+
+        $dom->encoding = 'UTF-8';
+        $xpath         = new \DOMXPath($dom);
+
+        if (!empty($remove_tags)) {
+            foreach ($remove_tags as $tag) {
+                $nodes = $xpath->query("//$tag");
+
+                foreach ($nodes as $node) {
+                    $node->parentNode->removeChild($node);
+                }
+            }
+
+            unset($tag, $nodes, $node);
+        }
+
+        if ($remove_comments) {
+            $comments = $xpath->query('//comment()');
+
+            foreach ($comments as $comment) {
+                $comment->parentNode->removeChild($comment);
+            }
+
+            unset($comments, $comment);
+        }
+
+        if ($extract_text) {
+            $result = trim(preg_replace('/\s+/', ' ', $dom->textContent));
+        } else {
+            $result = '';
+
+            foreach ($dom->childNodes as $node) {
+                $result .= $dom->saveHTML($node);
+            }
+        }
+
+        unset($html, $remove_tags, $remove_comments, $extract_text, $dom, $xml_errors, $node, $xpath);
+        return $result;
+    }
+
+    /**
      * @param string $url
      * @param int    $timeout
      * @param array  $headers
@@ -216,9 +278,7 @@ class go extends Factory
 
         $body = mb_scrub($body, 'UTF-8');
 
-        $clean_body = preg_replace('/<(script|style|head)[^>]*>.*?<\/\1>/is', '', $body);
-        $clean_body = preg_replace('/<!--.*?-->/s', '', $clean_body);
-        $text       = trim(preg_replace('/\s+/', ' ', strip_tags($clean_body)));
+        $text = $this->cleanHtml($body, ['script', 'style', 'head'], true, true);
 
         $result = [
             'status'    => 'success',
@@ -227,7 +287,7 @@ class go extends Factory
             'http_text' => $text
         ];
 
-        unset($url, $timeout, $res, $body, $clean_body, $text);
+        unset($url, $timeout, $res, $body, $text);
         return $result;
     }
 
@@ -259,11 +319,12 @@ class go extends Factory
         $body = mb_scrub($body, 'UTF-8');
 
         preg_match('/<title>(.*?)<\/title>/is', $body, $title_match);
+        $title = trim($title_match[1] ?? 'No Title');
 
-        $title      = trim($title_match[1] ?? 'No Title');
-        $clean_body = preg_replace('/<(script|style|nav|footer|header)[^>]*>.*?<\/\1>/is', '', $body);
-        $clean_body = preg_replace('/<!--.*?-->/s', '', $clean_body);
-        $content    = trim(strip_tags($clean_body));
+        $clean_html = $this->cleanHtml($body, ['script', 'style', 'nav', 'footer', 'header'], true, false);
+
+        $content = trim(strip_tags($clean_html));
+        $content = trim(preg_replace('/\s+/', ' ', $content));
 
         $result = [
             'status'       => 'success',
@@ -273,7 +334,7 @@ class go extends Factory
             'http_content' => $content,
         ];
 
-        unset($url, $timeout, $res, $body, $title_match, $title, $clean_body, $content);
+        unset($url, $timeout, $res, $body, $title_match, $title, $clean_html, $content);
         return $result;
     }
 

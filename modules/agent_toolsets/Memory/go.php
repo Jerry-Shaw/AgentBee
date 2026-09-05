@@ -220,15 +220,15 @@ class go extends Factory
 
     /**
      * @param string $level
+     * @param int    $date
      * @param int    $offset
      * @param int    $length
-     * @param int    $date
      * @param int    $create_id
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function read(string $level, int $offset = 0, int $length = 10, int $date = 0, int $create_id = 0): array
+    public function read(string $level, int $date = 0, int $offset = 0, int $length = 10, int $create_id = 0): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
             return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
@@ -242,12 +242,12 @@ class go extends Factory
             $query->where(['level', '=', $level]);
         }
 
-        if (0 < $create_id) {
-            $query->where(['create_id', '<', $create_id]);
-        }
-
         if (0 < $date) {
             $query->where(['date_key', '=', $date]);
+        }
+
+        if (0 < $create_id) {
+            $query->where(['create_id', '<', $create_id]);
         }
 
         $query->order(['create_id' => 'DESC']);
@@ -270,18 +270,18 @@ class go extends Factory
     }
 
     /**
-     * @param string $level
      * @param array  $keywords
+     * @param string $level
      * @param string $mode
+     * @param int    $date_start
+     * @param int    $date_end
      * @param int    $offset
      * @param int    $length
-     * @param string $start_date
-     * @param string $end_date
      *
-     * @return array
+     * @return array|string[]
      * @throws \ReflectionException
      */
-    public function search(string $level, array $keywords, string $mode = 'and', int $offset = 0, int $length = 10, string $start_date = '', string $end_date = ''): array
+    public function search(array $keywords, string $level = 'all', string $mode = 'or', int $date_start = 0, int $date_end = 0, int $offset = 0, int $length = 20): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
             return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
@@ -316,8 +316,8 @@ class go extends Factory
         }
 
         $result = $this->fts_enabled && $use_fts
-            ? $this->searchViaFts($level, $keywords, $mode, $offset, $length, $start_date, $end_date)
-            : $this->searchViaLike($level, $keywords, $mode, $offset, $length, $start_date, $end_date);
+            ? $this->searchViaFts($keywords, $level, $mode, $date_start, $date_end, $offset, $length)
+            : $this->searchViaLike($keywords, $level, $mode, $date_start, $date_end, $offset, $length);
 
         if (isset($result['data'])) {
             foreach ($result['data'] as &$msg) {
@@ -331,7 +331,7 @@ class go extends Factory
 
         $result['status'] = 'success';
 
-        unset($level, $keywords, $mode, $offset, $length, $start_date, $end_date, $use_fts, $word, $msg);
+        unset($level, $keywords, $mode, $offset, $length, $date_start, $date_end, $use_fts, $word, $msg);
         return $result;
     }
 
@@ -758,18 +758,18 @@ class go extends Factory
     }
 
     /**
-     * @param string $level
      * @param array  $keywords
+     * @param string $level
      * @param string $mode
+     * @param int    $date_start
+     * @param int    $date_end
      * @param int    $offset
      * @param int    $length
-     * @param string $start_date
-     * @param string $end_date
      *
      * @return array
      * @throws \ReflectionException
      */
-    private function searchViaFts(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
+    private function searchViaFts(array $keywords, string $level, string $mode, int $date_start, int $date_end, int $offset, int $length): array
     {
         $keywords = array_map([$this, 'buildTokens'], $keywords);
         $keywords = array_filter($keywords, 'strlen');
@@ -798,9 +798,6 @@ class go extends Factory
             ? implode(' AND ', $keywords)
             : implode(' OR ', $keywords);
 
-        $start_date_int = ('' !== $start_date) ? (int)$start_date : 0;
-        $end_date_int   = ('' !== $end_date) ? (int)$end_date : 0;
-
         $query = $this->libSQLite
             ->table('agent_memory')
             ->join('agent_memory_fts', 'INNER')
@@ -811,12 +808,12 @@ class go extends Factory
             $query->where(['agent_memory.level', '=', $level]);
         }
 
-        if (0 !== $start_date_int && 0 !== $end_date_int) {
-            $query->where(['agent_memory.date_key', 'BETWEEN', [$start_date_int, $end_date_int]]);
-        } elseif (0 !== $start_date_int) {
-            $query->where(['agent_memory.date_key', '>=', $start_date_int]);
-        } elseif (0 !== $end_date_int) {
-            $query->where(['agent_memory.date_key', '<=', $end_date_int]);
+        if (0 < $date_start && 0 < $date_end) {
+            $query->where(['agent_memory.date_key', 'BETWEEN', [$date_start, $date_end]]);
+        } elseif (0 < $date_start) {
+            $query->where(['agent_memory.date_key', '>=', $date_start]);
+        } elseif (0 < $date_end) {
+            $query->where(['agent_memory.date_key', '<=', $date_end]);
         }
 
         $query->match(['agent_memory_fts', $kw_string])->order(['agent_memory.create_id' => 'ASC']);
@@ -828,23 +825,23 @@ class go extends Factory
         $data  = $query->fetchAll();
         $total = $query->getLastFoundRows();
 
-        unset($level, $keywords, $mode, $offset, $length, $start_date, $end_date, $kw_string, $start_date_int, $end_date_int, $query);
+        unset($level, $keywords, $mode, $offset, $length, $date_start, $date_end, $kw_string, $query);
         return ['data' => $data, 'total' => $total];
     }
 
     /**
-     * @param string $level
      * @param array  $keywords
+     * @param string $level
      * @param string $mode
+     * @param int    $date_start
+     * @param int    $date_end
      * @param int    $offset
      * @param int    $length
-     * @param string $start_date
-     * @param string $end_date
      *
      * @return array
      * @throws \ReflectionException
      */
-    private function searchViaLike(string $level, array $keywords, string $mode, int $offset, int $length, string $start_date, string $end_date): array
+    private function searchViaLike(array $keywords, string $level, string $mode, int $date_start, int $date_end, int $offset, int $length): array
     {
         $query = $this->libSQLite
             ->table('agent_memory')
@@ -854,15 +851,12 @@ class go extends Factory
             $query->where(['level', '=', $level]);
         }
 
-        $start_date_int = ('' !== $start_date) ? (int)$start_date : 0;
-        $end_date_int   = ('' !== $end_date) ? (int)$end_date : 0;
-
-        if (0 !== $start_date_int && 0 !== $end_date_int) {
-            $query->where(['date_key', 'BETWEEN', [$start_date_int, $end_date_int]]);
-        } elseif (0 !== $start_date_int) {
-            $query->where(['date_key', '>=', $start_date_int]);
-        } elseif (0 !== $end_date_int) {
-            $query->where(['date_key', '<=', $end_date_int]);
+        if (0 < $date_start && 0 < $date_end) {
+            $query->where(['date_key', 'BETWEEN', [$date_start, $date_end]]);
+        } elseif (0 < $date_start) {
+            $query->where(['date_key', '>=', $date_start]);
+        } elseif (0 < $date_end) {
+            $query->where(['date_key', '<=', $date_end]);
         }
 
         if ([] !== $keywords) {
@@ -889,7 +883,7 @@ class go extends Factory
         $data   = $query->fetchAll();
         $result = ['data' => $data, 'total' => $query->getLastFoundRows()];
 
-        unset($query, $data, $keywords, $mode, $offset, $length, $start_date_int, $end_date_int);
+        unset($query, $data, $keywords, $mode, $offset, $length);
         return $result;
     }
 }

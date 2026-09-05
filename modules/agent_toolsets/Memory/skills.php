@@ -54,7 +54,7 @@ class skills
                         'level'     => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc'], 'description' => '新层级'],
                         'role'      => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool'], 'description' => '新角色'],
                         'content'   => ['type' => 'string', 'description' => '新内容'],
-                        'expire_at' => ['type' => 'string', 'default' => '', 'description' => '过期时间，格式为YYYY-mm-dd HH:ii:ss']
+                        'expire_at' => ['type' => 'string', 'default' => '', 'description' => '过期时间：YYYY-mm-dd HH:ii:ss']
                     ],
                     'required'   => ['create_id', 'level', 'role', 'content']
                 ],
@@ -69,9 +69,9 @@ class skills
                     'type'       => 'object',
                     'properties' => [
                         'level'  => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级(含all)'],
+                        'date'   => ['type' => 'integer', 'default' => 0, 'description' => '指定日期：YYYYMMDD (0=不限)'],
                         'offset' => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length' => ['type' => 'integer', 'default' => 10, 'description' => '条数（0为全部，建议5-20）'],
-                        'date'   => ['type' => 'integer', 'default' => 0, 'description' => 'YYYYMMDD(0=不限)']
+                        'length' => ['type' => 'integer', 'default' => 10, 'description' => '条数（0为全部，建议5-20）']
                     ],
                     'required'   => ['level']
                 ],
@@ -81,17 +81,17 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '全文关键词搜索记忆。关键词为1-5个辨识词，mode=and(全部命中)/or(任一命中)；level指定范围或all全层级；支持start_date/end_date限定时间窗。返回：{status, data: [{...}], total}或{status, error}。',
+                'description' => '全文搜索记忆。关键词数量不限，建议用3-5个特征词，mode控制匹配逻辑（or任一/and全中），level指定层级或all全搜。返回结果过多时，可用date_start/date_end缩小时间窗范围。返回：{status, data: [{...}], total}或{status, error}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级'],
                         'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组（≥2字符）'],
-                        'mode'       => ['type' => 'string', 'enum' => ['and', 'or'], 'default' => 'and', 'description' => '匹配模式'],
+                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'default' => 'all', 'description' => '层级，默认all，除非用户指定'],
+                        'mode'       => ['type' => 'string', 'enum' => ['or', 'and'], 'default' => 'or', 'description' => '关键词匹配模式'],
+                        'date_start' => ['type' => 'integer', 'default' => 0, 'description' => '起始日期：YYYYMMDD (0=不限)'],
+                        'date_end'   => ['type' => 'integer', 'default' => 0, 'description' => '结束日期：YYYYMMDD (0=不限)'],
                         'offset'     => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length'     => ['type' => 'integer', 'default' => 10, 'description' => '条数（0=全部，建议5-20）'],
-                        'start_date' => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '起始日期（YYYYMMDD）'],
-                        'end_date'   => ['type' => 'string', 'default' => '', 'pattern' => '^\d{8}$', 'description' => '结束日期（YYYYMMDD）']
+                        'length'     => ['type' => 'integer', 'default' => 20, 'description' => '条数（0=全部，建议10-30）']
                     ],
                     'required'   => ['level', 'keywords']
                 ],
@@ -107,8 +107,8 @@ class skills
                     'properties' => [
                         'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级'],
                         'create_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => '微秒ID数组（优先）'],
-                        'start_time' => ['type' => 'string', 'description' => '开始时间，格式为YYYY-mm-dd HH:ii:ss'],
-                        'end_time'   => ['type' => 'string', 'description' => '结束时间，格式为YYYY-mm-dd HH:ii:ss'],
+                        'start_time' => ['type' => 'string', 'description' => '开始时间：YYYY-mm-dd HH:ii:ss'],
+                        'end_time'   => ['type' => 'string', 'description' => '结束时间：YYYY-mm-dd HH:ii:ss'],
                         'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组（与时间范围AND）'],
                         'mode'       => ['type' => 'string', 'enum' => ['and', 'or'], 'default' => 'and', 'description' => '关键词匹配模式']
                     ],
@@ -125,7 +125,7 @@ class skills
                     'type'       => 'object',
                     'properties' => [
                         'task_prompt'     => ['type' => 'string', 'description' => '任务提示词'],
-                        'run_at'          => ['type' => 'string', 'description' => '执行时间，格式为YYYY-mm-dd HH:ii:ss'],
+                        'run_at'          => ['type' => 'string', 'description' => '执行时间：YYYY-mm-dd HH:ii:ss'],
                         'repeat'          => ['type' => 'boolean', 'default' => false, 'description' => '是否重复'],
                         'repeat_interval' => ['type' => 'integer', 'default' => 0, 'description' => '重复间隔(秒)，repeat=true时有效']
                     ],

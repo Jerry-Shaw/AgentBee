@@ -214,6 +214,8 @@ class go extends Factory
             $body = mb_convert_encoding($body, 'UTF-8', $charset);
         }
 
+        $body = mb_scrub($body, 'UTF-8');
+
         $clean_body = preg_replace('/<(script|style|head)[^>]*>.*?<\/\1>/is', '', $body);
         $clean_body = preg_replace('/<!--.*?-->/s', '', $clean_body);
         $text       = trim(preg_replace('/\s+/', ' ', strip_tags($clean_body)));
@@ -253,6 +255,8 @@ class go extends Factory
         if ('UTF-8' !== $charset) {
             $body = mb_convert_encoding($body, 'UTF-8', $charset);
         }
+
+        $body = mb_scrub($body, 'UTF-8');
 
         preg_match('/<title>(.*?)<\/title>/is', $body, $title_match);
 

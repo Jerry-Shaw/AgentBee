@@ -208,7 +208,7 @@ class go extends Factory
     public function getSystemPrompt(): string
     {
         $system_default = $this->utils->getMainPrompt();
-        $system_memory  = $this->memory->read('system', 0, 0);
+        $system_memory  = $this->memory->read('system');
 
         if ([] !== $system_memory['data']) {
             $memory = ['## 角色与行为设定'];

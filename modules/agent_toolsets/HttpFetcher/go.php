@@ -214,7 +214,7 @@ class go extends Factory
             $body = mb_convert_encoding($body, 'UTF-8', $charset);
         }
 
-        $clean_body = preg_replace('/<(script|style|head).*?<\/(\1)>/is', '', $body);
+        $clean_body = preg_replace('/<(script|style|head)[^>]*>.*?<\/\1>/is', '', $body);
         $clean_body = preg_replace('/<!--.*?-->/s', '', $clean_body);
         $text       = trim(preg_replace('/\s+/', ' ', strip_tags($clean_body)));
 
@@ -257,7 +257,7 @@ class go extends Factory
         preg_match('/<title>(.*?)<\/title>/is', $body, $title_match);
 
         $title      = trim($title_match[1] ?? 'No Title');
-        $clean_body = preg_replace('/<(script|style|nav|footer|header).*?<\/(\1)>/is', '', $body);
+        $clean_body = preg_replace('/<(script|style|nav|footer|header)[^>]*>.*?<\/\1>/is', '', $body);
         $clean_body = preg_replace('/<!--.*?-->/s', '', $clean_body);
         $content    = trim(strip_tags($clean_body));
 

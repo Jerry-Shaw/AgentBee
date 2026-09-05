@@ -5,6 +5,7 @@
   "author": "秋水之冰",
   "email": "27206617@qq.com",
   "entry": "go.php",
+  "config": "Browser.json",
   "repo": "",
   "dependencies": {},
   "requires": {

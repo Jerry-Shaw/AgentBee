@@ -32,6 +32,7 @@ class handler extends Factory
 
     public string $curr_id = '';
 
+    public array $config       = [];
     public array $tab_list     = [];
     public array $browser_data = [];
 
@@ -57,6 +58,42 @@ class handler extends Factory
     ];
 
     /**
+     * @param agent_core $agent_core
+     *
+     * @return array
+     * @throws \Exception
+     */
+    private function loadConfig(agent_core $agent_core): array
+    {
+        if ([] !== $this->config) {
+            return $this->config;
+        }
+
+        $config_path = $agent_core->utils->config->config_dir . DIRECTORY_SEPARATOR . 'Browser.json';
+
+        if (!is_file($config_path)) {
+            throw new \Exception('配置文件不存在：' . $config_path);
+        }
+
+        $config = json_decode(file_get_contents($config_path), true);
+
+        if (!is_array($config)) {
+            throw new \Exception('配置文件JSON格式错误：' . $config_path);
+        }
+
+        foreach (['chrome_path', 'chrome_timeout'] as $value) {
+            if (!isset($config[$value]) || '' === $config[$value]) {
+                throw new \Exception('配置项[' . $value . ']缺失或为空。请检查文件：' . $config_path);
+            }
+        }
+
+        $this->config = $config;
+
+        unset($agent_core, $config_path);
+        return $config;
+    }
+
+    /**
      * @param array      $payload_data
      * @param agent_core $agent_core
      *
@@ -77,13 +114,14 @@ class handler extends Factory
             $start_args[] = '--headless=new';
         }
 
+        $config       = $this->loadConfig($agent_core);
         $data_dir     = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . 'BrowserData';
         $start_args[] = '--user-data-dir=' . $data_dir;
 
         $browser_idx = $agent_core->utils
             ->procMgr->command(
                 [
-                    $agent_core->utils->agent_config['chrome_path'],
+                    $config['chrome_path'],
                     ...$start_args
                 ]
             )->run($agent_core->utils->getProcIDX());
@@ -1249,6 +1287,7 @@ class handler extends Factory
      * @return array|string[]
      * @throws \Random\RandomException
      * @throws \ReflectionException
+     * @throws \Exception
      */
     public function sendCommand(agent_core $agent_core, array $payload_data, string $action): array
     {
@@ -1325,8 +1364,9 @@ class handler extends Factory
             return ['status' => 'error', 'error' => '标签页`' . $target_id . '`已失效，已自动移除。请创建或切换新标签页。'];
         }
 
+        $config        = $this->loadConfig($agent_core);
         $socketMgr     = SocketMgr::new('browser');
-        $this->timeout = $agent_core->utils->agent_config['chrome_timeout'] ?? $this->timeout;
+        $this->timeout = $config['chrome_timeout'] ?? $this->timeout;
 
         try {
             $agent_core->utils->debug('Browser: working on ' . $action . '.', 'trace');

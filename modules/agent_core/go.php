@@ -518,6 +518,8 @@ class go extends Factory
                     $llm_params    = $this->utils->getChildWorker($payload['sender'], $payload['workerName'], 'llm_params');
                     $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['workerName'], $llm_params);
 
+                    $this->utils->debug('System: API Token remains ' . $remain_tokens . '.', 'trace');
+
                     if (0 >= $remain_tokens) {
                         $remain_tokens = 12288;
                         $this->core->context->cleanHistory($payload['workerName'], 10, 2);

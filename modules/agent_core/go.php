@@ -152,11 +152,24 @@ class go extends Factory
      */
     public function start(): void
     {
-        $boot_now  = $this->utils->OSMgr->getBootInfo();
         $boot_file = $this->utils->config->config_dir . DIRECTORY_SEPARATOR . '.Boot';
-        $kill_pid  = !is_file($boot_file) || file_get_contents($boot_file) === $boot_now;
+        $flock_fp  = fopen($boot_file, 'c+');
 
-        $this->utils->cleanPids($kill_pid);
+        if (!flock($flock_fp, LOCK_EX | LOCK_NB)) {
+            $this->utils->debug('AgentBee already running, exit!', 'trace');
+            return;
+        }
+
+        register_shutdown_function(
+            function () use ($flock_fp): void
+            {
+                flock($flock_fp, LOCK_UN);
+            }
+        );
+
+        $boot_time = $this->utils->OSMgr->getBootInfo();
+
+        $this->utils->cleanPids(fgets($flock_fp) === $boot_time);
 
         $occupied_pids = $this->core->OSMgr->findPidsByPortState($this->utils->agent_config['agent_server']['port'], 'LISTEN');
 
@@ -165,11 +178,13 @@ class go extends Factory
             return;
         }
 
+        rewind($flock_fp);
+        ftruncate($flock_fp, 0);
+        fwrite($flock_fp, $boot_time);
+
         $memory_limit = $this->utils->agent_config['memory_limit'] ?? '4G';
 
         ini_set('memory_limit', $memory_limit);
-
-        file_put_contents($boot_file, $boot_now);
 
         $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
         $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');

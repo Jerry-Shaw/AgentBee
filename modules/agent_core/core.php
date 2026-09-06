@@ -109,7 +109,7 @@ final class core extends Factory
 
         $ratio   = strlen($compressed) / $context_len;
         $ratio   = min(1.0, max(0.05, $ratio));
-        $inputs  = intval($context_len * (0.8 * $ratio + 0.1));
+        $inputs  = (int)($context_len * (0.8 * $ratio + 0.1) * 2.5);
         $outputs = ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) - $inputs;
 
         unset($type, $worker_name, $llm_params, $llm_tools, $history, $key, $item, $contents, $context, $compressed, $context_len, $ratio, $inputs);

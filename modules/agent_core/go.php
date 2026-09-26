@@ -150,7 +150,7 @@ class go extends Factory
         $flock_fp  = fopen($boot_file, 'c+');
 
         if (!flock($flock_fp, LOCK_EX | LOCK_NB)) {
-            $this->utils->debug('AgentBee already running, exit!', 'trace');
+            $this->utils->debug('AgentBee already running, exit!', 'debug');
             return;
         }
 

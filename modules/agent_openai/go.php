@@ -187,6 +187,10 @@ class go extends Factory
 
             $this->core->context->messageOnSend($session_id, false);
         } catch (\Throwable $throwable) {
+            if (WORKER_MAIN === $worker) {
+                $this->utils->setStatus($session_id, utils::STATUS_IDLE);
+            }
+
             $this->core->context->messageOnSend($session_id, true);
             $this->core->error->exceptionHandler($throwable, false, false);
             $this->utils->debug('Status: #' . $session_id . ' busy: ' . $throwable->getMessage(), 'trace');

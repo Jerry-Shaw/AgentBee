@@ -236,9 +236,16 @@ message 事件时主动收尾该轮次——后端对这种 `need_llm = false` �
 `SessionPanel`——桌面侧栏和移动抽屉共用 `App.vue` 里的 `sessionPanelBindings`，
 不给移动端单独写一份列表，避免「手机上少做了某个操作」。
 
-- **入口位置**：按钮放在 `.brand` 里而不是 `.topbar`。矮屏（横屏手机）下
-  `@container app-viewport (max-height: 420px)` 会把 `.topbar` 整体 `display: none`，
-  入口跟着消失就没法开抽屉了；`.brand` 在任何姿态下都在。
+- **入口位置**：按钮放在 `.brand` 里而不是 `.topbar`。移动端聊天页的 `.topbar` 是隐藏的
+  （`@media` 里 `.main:has(.composer) .topbar { display: none }`，矮屏容器查询
+  `@container app-viewport (max-height: 420px)` 还会再隐藏一次），入口跟着消失就没法开抽屉了；`.brand` 在任何姿态下都在。
+- **移动端聊天页没有顶栏**：会话标题已经让位给 `.brand`（`activeSessionTitle`），
+  顶栏再留一条只是白吃高度，所以聊天视图下整体 `display: none`。
+  **判据是「有 `.composer` = 聊天页」**——设置页必须留着顶栏，因为「关闭设置」按钮
+  只长在 `.topbar-actions` 里，一起藏掉就出不了设置页了。
+  ⚠️ 顶栏隐藏后 `.main` 只剩两个子项，`grid-template-rows` 必须同步改成
+  `minmax(0, 1fr) auto`，否则 chat-shell 会掉进 `auto` 行被压扁在顶部。
+  代价：`.topbar-actions` 里的 `SubAgentMenu` 在移动端聊天页不可达（子代理切换只在桌面/设置页可用）。
 - **JS / CSS 必须同一个断点**：`App.vue` 的 `MOBILE_MEDIA_QUERY` 就是
   `(max-width: 820px), (hover: none) and (pointer: coarse)`，与 `base.css` 的媒体查询一字不差。
   `isMobileLayout` 同时控制入口按钮和抽屉的渲染；转回桌面布局时会自动收起抽屉，

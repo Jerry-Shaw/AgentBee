@@ -2933,8 +2933,21 @@ body:has(.login-window-backdrop) {
     min-height: 0;
   }
 
+  /* 聊天页不要顶栏：会话标题已经让位给 `.brand`（移动端那一行就是头部），
+     再留一条只是白吃高度。设置页要留着——「关闭设置」按钮只长在顶栏里，
+     所以判据跟矮屏容器查询一致：有 composer 就是聊天页。
+     ⚠️ 顶栏一 `display: none`，`.main` 就只剩两个子项，行模板必须同时改成两行，
+     否则 chat-shell 会掉进 `auto` 那一行、被压扁在顶部。 */
+  .main:has(.composer) {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .main:has(.composer) .topbar {
+    display: none;
+  }
+
+  /* 移动端留下来的顶栏只剩设置页那一条，尺寸照旧收窄。 */
   .topbar {
-    /* display: none; */
     align-items: center;
     flex-direction: row;
     min-height: 44px;

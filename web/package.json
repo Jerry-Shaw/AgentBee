@@ -1,7 +1,7 @@
 {
   "name": "beeweb",
   "private": true,
-  "version": "0.1.27",
+  "version": "0.1.28",
   "type": "module",
   "scripts": {
     "predev": "node scripts/check-node.cjs",

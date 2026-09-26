@@ -1750,7 +1750,8 @@ function redactConnectionUrl(value: string): string {
       <div class="brand">
         <!--
           移动端的会话入口。放在 `.brand`（移动端这一行就是「头部」）而不是 `.topbar`：
-          矮屏（横屏手机）下 `.topbar` 会被容器查询整体隐藏，入口跟着消失就没法开抽屉了。
+          移动端聊天页的 `.topbar` 本来就是隐藏的（矮屏容器查询还会再隐藏一次），
+          入口放进去就会跟着消失，没法开抽屉。
         -->
         <button
           v-if="isMobileLayout"

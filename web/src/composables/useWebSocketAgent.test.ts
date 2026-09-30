@@ -197,6 +197,66 @@ describe('close event handling', () => {
   });
 });
 
+describe('abort event handling', () => {
+  // 服务端停止生成后的回执（原样取自后端）：
+  // {"create_id":…,"type":"abort","data":{"message":"已停止生成"},"sessionId":…,"messageId":…}
+  function abortEvent(messageId: string, sessionId: string) {
+    return {
+      create_id: 1790668633450829,
+      type: 'abort',
+      data: { message: '已停止生成' },
+      sender: 'AgentBee',
+      isSubTalk: 0,
+      workerName: 'AgentBee',
+      workerRole: 'Assistant',
+      sessionId,
+      messageId,
+      WindowName: '蜂小秘 - AgentBee',
+      socket_id: 'sock_74',
+    };
+  }
+
+  it('finishes the aborted turn as stopped instead of dumping the raw payload', () => {
+    const { assistantOf, emit, sendUserText, session } = setupAgent();
+    const messageId = sendUserText('要停的问题');
+
+    emit({ type: 'content', messageId, data: '流到一半的回答' });
+    // tool_result 会先把缓冲的 content 同步 flush 出来。
+    emit({ type: 'tool_result', messageId, data: { name: 'X', content: 'ok' } });
+
+    const before = session.messages.length;
+    emit(abortEvent(messageId, session.id));
+
+    expect(assistantOf(messageId)?.content).toBe('流到一半的回答');
+    expect(assistantOf(messageId)?.status).toBe('stopped');
+    // 兜底分支会把整包 JSON 当正文再推一条 assistant 消息。
+    expect(session.messages).toHaveLength(before);
+    expect(assistantOf(messageId)?.content).not.toContain('已停止生成');
+  });
+
+  it('drops the empty shell when the turn never produced anything', () => {
+    const { assistantOf, emit, sendUserText, session } = setupAgent();
+    const messageId = sendUserText('立刻停掉');
+
+    expect(assistantOf(messageId)).toBeTruthy();
+    emit(abortEvent(messageId, session.id));
+
+    expect(assistantOf(messageId)).toBeUndefined();
+  });
+
+  it('routes the abort receipt to the session that owns the turn', () => {
+    const { assistantOf, createSession, emit, sendUserText, session, switchTo } = setupAgent();
+    const messageId = sendUserText('第一个会话的问题');
+    emit({ type: 'content', messageId, data: 'half' });
+
+    switchTo(createSession('session-2').id);
+    emit(abortEvent(messageId, session.id));
+
+    expect(assistantOf(messageId, session.id)?.status).toBe('stopped');
+    expect(assistantOf(messageId, 'session-2')).toBeUndefined();
+  });
+});
+
 describe('stream content without a message id', () => {
   it('does not create a ghost assistant message when no turn is pending', () => {
     const { agent, emit, session, sendUserText } = setupAgent();

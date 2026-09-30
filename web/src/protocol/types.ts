@@ -21,7 +21,8 @@ export type ServerEventType =
   | 'end'
   | 'done'
   | 'finish'
-  | 'close';
+  | 'close'
+  | 'abort';
 
 export interface ChatMessage {
   id: string;

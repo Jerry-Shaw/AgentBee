@@ -2471,6 +2471,7 @@ body:has(.login-window-backdrop) {
 .attachment-list {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 7px;
 }
 
@@ -2497,6 +2498,135 @@ body:has(.login-window-backdrop) {
   border: 0;
   color: var(--muted);
   background: transparent;
+}
+
+/* 图片附件：缩略图 + 文件名 + 右上角移除角标。
+   缩略图是固定尺寸，配合移动端的横向排布，附件再多也只占一行。 */
+.attachment-item {
+  position: relative;
+  width: 68px;
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.attachment-thumb {
+  width: 68px;
+  height: 68px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  cursor: zoom-in;
+}
+
+.attachment-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-caption {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  background: color-mix(in srgb, #101113 72%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.attachment-remove:hover {
+  background: color-mix(in srgb, var(--danger) 82%, #101113 18%);
+}
+
+/* 灯箱。用 --app-height 而不是 100vh：移动端键盘弹出时可视区比布局视口矮，
+   用 vh 会把图片和说明顶到键盘后面。 */
+.attachment-preview-backdrop {
+  position: fixed;
+  top: var(--app-offset-top, 0px);
+  right: 0;
+  left: 0;
+  z-index: 140;
+  height: var(--app-height, 100%);
+  display: grid;
+  place-items: center;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+/* 图片和说明作为**一整块**居中，说明紧贴在图片下方；
+   img 的 max-height 留出说明那一行（约 20px）加 gap，免得两者挤在一起溢出。 */
+.attachment-preview {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  max-width: min(100%, 1000px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.attachment-preview img {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: calc(100% - 40px);
+  border-radius: 12px;
+  background: var(--surface);
+  object-fit: contain;
+}
+
+.attachment-preview figcaption {
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.attachment-preview-close {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
 }
 
 .file-input {
@@ -2819,7 +2949,14 @@ body:has(.login-window-backdrop) {
   }
 }
 
-@media (max-width: 820px), (hover: none) and (pointer: coarse) {
+/* 移动端布局。
+   第二个判据是**设备能力**，必须永远留一个宽度出口：`(hover: none)` / `(pointer: coarse)`
+   看的是「主指针」，Windows 触屏本上拖动窗口宽度就会把它翻成粗指针；而这条查询是
+   OR，翻过去之后窗口拉多宽都还会命中——表现就是「变成移动端 UI 后再也回不去 PC」。
+   所以再要求 `(any-hover: none)`：只要这台机器还有**任何**能 hover 的指针（鼠标 /
+   触摸板），能力判据恒为假，布局只由宽度决定。手机 / 平板没有精确指针，行为不变。 */
+@media (max-width: 820px),
+       (hover: none) and (pointer: coarse) and (any-hover: none) {
   html,
   body {
     height: 100%;
@@ -3015,7 +3152,9 @@ body:has(.login-window-backdrop) {
   }
 }
 
-@media (max-width: 820px), (hover: none) and (pointer: coarse) {
+/* 判据与上方移动端主媒体查询一致（含 `(any-hover: none)`，理由见那里）。 */
+@media (max-width: 820px),
+       (hover: none) and (pointer: coarse) and (any-hover: none) {
   .composer textarea {
     min-height: 44px;
     font-size: 16px;
@@ -3074,6 +3213,49 @@ body:has(.login-window-backdrop) {
     max-width: none;
     font-size: 16px;
   }
+
+  /* 附件区改成**一行横滑**，不再一条一行往下堆——十几个附件会把聊天区整个顶掉。
+     注意 overflow-x 会把 overflow-y 也变成 auto，所以移除角标必须留在缩略图内部。
+
+     滚动条整条隐掉：Windows 上是常驻的经典滚动条，会正好画在文件名下面，
+     看起来像给每个文件名加了条下划线。能横滑的提示交给那个被裁掉一半的缩略图。 */
+  .attachment-list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .attachment-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .attachment-item,
+  .attachment-thumb {
+    flex: 0 0 auto;
+  }
+
+  .attachment-item,
+  .attachment-thumb {
+    width: 72px;
+  }
+
+  .attachment-thumb {
+    height: 72px;
+  }
+
+  .attachment-chip {
+    flex: 0 0 auto;
+    max-width: 60vw;
+  }
+
+  .attachment-remove {
+    top: 2px;
+    right: 2px;
+    width: 26px;
+    height: 26px;
+  }
 }
 
 @container app-viewport (max-height: 420px) {
@@ -3090,7 +3272,8 @@ body:has(.login-window-backdrop) {
   }
 }
 
-@media (hover: none) {
+/* 用 any-hover 而不是 hover：触屏本上主指针一翻，tooltip 会被永久藏掉。 */
+@media (any-hover: none) {
   .composer [data-tooltip]::before,
   .composer [data-tooltip]::after {
     display: none;

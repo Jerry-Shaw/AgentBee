@@ -699,7 +699,10 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
       return finishAssistantMessage(messageId, 'error', msg);
     }
     if (['end', 'done', 'finish'].includes(type)) return finishAssistantMessage(messageId, 'done', msg);
-    if (type === 'close') return closeAssistantMessage(messageId);
+    // `abort` 是服务端「已停止生成」的回执（`{ type:'abort', data:{ message:'已停止生成' }, sessionId, messageId }`），
+    // 语义和 `close` 一样是「放弃这一轮」：保留已经流出来的内容并按 stopped 收尾，
+    // 什么都没产出的空壳则删掉。不能落到下面的兜底分支——那会把整包 JSON 当正文画进气泡。
+    if (type === 'close' || type === 'abort') return closeAssistantMessage(messageId);
 
     queueAssistantContent(messageId, JSON.stringify(msg, null, 2), msg);
   }
@@ -897,7 +900,8 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
   }
 
   /**
-   * 后端 `close` 的语义是「放弃这一轮」，但它并不总是针对正在流式输出的那一轮：
+   * 后端 `close`（以及 `abort`，见 handleServerMessage）的语义是「放弃这一轮」，
+   * 但它并不总是针对正在流式输出的那一轮：
    * go.php 会在处理下一条用户消息前，对残留的 `curr_message_id` 补发一次 close，
    * 而 `curr_message_id` 只有在最后一次 content/think 缓冲 flush 成功时才会被清空——
    * 一旦那次 flush 失败（或该轮没有 content/think），close 就会指向一个**早已结束并渲染好**的轮次。

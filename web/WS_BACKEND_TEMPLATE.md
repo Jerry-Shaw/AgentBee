@@ -120,6 +120,29 @@ The frontend sends JSON strings ending with one newline character (`\n`).
 
 All server messages should be JSON strings.
 
+### Abort Receipt
+
+`type: "abort"` 是服务端「已停止生成」的回执。前端收到后按「放弃这一轮」收尾：
+保留已经流出来的内容并把状态置为 stopped，什么都没产出的空壳则删掉。
+`sessionId` / `messageId` 必须带上——前者用来把回执路由回真正在跑的那个会话，
+后者用来认出是哪一轮。
+
+```json
+{
+  "create_id": 1790668633450829,
+  "type": "abort",
+  "data": { "message": "已停止生成" },
+  "sender": "AgentBee",
+  "isSubTalk": 0,
+  "workerName": "AgentBee",
+  "workerRole": "Assistant",
+  "sessionId": "3523ec6d-9746-4d66-bf76-ae7af38dfe7c",
+  "messageId": "e30827b6-cd13-4ab7-81c7-b405f36caedb",
+  "WindowName": "蜂小秘 - AgentBee",
+  "socket_id": "sock_74"
+}
+```
+
 ### Sub-Agent Support
 
 Messages can be marked as sub-agent messages by adding the `isSubTalk` field. Sub-agent messages are displayed in a separate panel on the right side instead of the main chat area.

@@ -282,7 +282,9 @@ onBeforeUnmount(closePicker);
   outline-offset: -2px;
 }
 
-@media (max-width: 820px), (hover: none) and (pointer: coarse) {
+/* 判据同 base.css 的移动端主媒体查询（含 `(any-hover: none)`）。 */
+@media (max-width: 820px),
+       (hover: none) and (pointer: coarse) and (any-hover: none) {
   .model-picker-dialog[open] {
     align-items: end;
   }

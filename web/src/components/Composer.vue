@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowUp, LoaderCircle, Paperclip, Plus, RotateCcw, Square, X } from 'lucide-vue-next';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import ModelPicker from './ModelPicker.vue';
 import type { ClientAttachment } from '../protocol/types';
 import { shouldIgnoreCompositionEnter } from '../utils/composerKeyboard';
@@ -45,6 +45,44 @@ const canSubmit = computed(() => (
   !isComposing.value &&
   (Boolean(text.value.trim()) || attachments.value.length > 0)
 ));
+
+/**
+ * 图片附件就地预览。
+ *
+ * 待发送的附件还没有 workspace 路径，走不了侧栏那个 FilePreviewPanel（它要
+ * workspacePath / workspaceUrl），所以这里只做一个轻量灯箱：点缩略图看大图，
+ * 点遮罩 / 关闭按钮 / Esc 退出。Teleport 到 body，免得被 .composer-panel 裁掉。
+ */
+const previewAttachment = ref<ClientAttachment | null>(null);
+const previewCloseButton = ref<HTMLButtonElement | null>(null);
+
+/** 只有拿得到字节的图片才给缩略图，其它（pdf / 文本…）继续走原来的胶囊。 */
+function isImageAttachment(attachment: ClientAttachment): boolean {
+  return Boolean(attachment.base64) && (attachment.type || '').startsWith('image/');
+}
+
+function attachmentSrc(attachment: ClientAttachment): string {
+  return 'data:' + (attachment.type || 'image/png') + ';base64,' + (attachment.base64 || '');
+}
+
+function openAttachmentPreview(attachment: ClientAttachment) {
+  if (!isImageAttachment(attachment)) return;
+  previewAttachment.value = attachment;
+}
+
+function closeAttachmentPreview() {
+  previewAttachment.value = null;
+}
+
+function onAttachmentPreviewKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  closeAttachmentPreview();
+}
+
+watch(previewAttachment, (next) => {
+  if (next) nextTick(() => previewCloseButton.value?.focus());
+});
 
 function submit() {
   if (!canSubmit.value) return;
@@ -288,14 +326,44 @@ function formatLabel(template: string, values: Record<string, string>) {
         <span v-for="(warning, index) in uploadWarnings" :key="`${index}-${warning}`">{{ warning }}</span>
       </div>
       <div v-if="attachments.length" class="attachment-list" :aria-label="labels.attachedFiles">
-        <span v-for="attachment in attachments" :key="attachment.id" class="attachment-chip">
-          <Paperclip :size="13" aria-hidden="true" />
-          <span class="attachment-name">{{ attachment.name }}</span>
-          <span class="attachment-size">{{ formatSize(attachment.size) }}</span>
-          <button type="button" :title="labels.removeFile" @click="removeAttachment(attachment.id)">
-            <X :size="13" aria-hidden="true" />
-          </button>
-        </span>
+        <template v-for="attachment in attachments" :key="attachment.id">
+          <figure v-if="isImageAttachment(attachment)" class="attachment-item">
+            <button
+              type="button"
+              class="attachment-thumb"
+              :title="labels.preview + ': ' + attachment.name"
+              :aria-label="labels.preview + ': ' + attachment.name"
+              @click="openAttachmentPreview(attachment)"
+            >
+              <img :src="attachmentSrc(attachment)" :alt="attachment.name" decoding="async" />
+            </button>
+            <figcaption class="attachment-caption" :title="attachment.name">
+              {{ attachment.name }}
+            </figcaption>
+            <button
+              type="button"
+              class="attachment-remove"
+              :title="labels.removeFile"
+              :aria-label="labels.removeFile"
+              @click="removeAttachment(attachment.id)"
+            >
+              <X :size="12" aria-hidden="true" />
+            </button>
+          </figure>
+          <span v-else class="attachment-chip">
+            <Paperclip :size="13" aria-hidden="true" />
+            <span class="attachment-name">{{ attachment.name }}</span>
+            <span class="attachment-size">{{ formatSize(attachment.size) }}</span>
+            <button
+              type="button"
+              :title="labels.removeFile"
+              :aria-label="labels.removeFile"
+              @click="removeAttachment(attachment.id)"
+            >
+              <X :size="13" aria-hidden="true" />
+            </button>
+          </span>
+        </template>
       </div>
       <div class="composer-input">
         <textarea
@@ -383,5 +451,36 @@ function formatLabel(template: string, values: Record<string, string>) {
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="previewAttachment"
+        class="attachment-preview-backdrop"
+        @click.self="closeAttachmentPreview"
+        @keydown="onAttachmentPreviewKeydown"
+      >
+        <figure
+          class="attachment-preview"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="previewAttachment.name"
+        >
+          <img :src="attachmentSrc(previewAttachment)" :alt="previewAttachment.name" />
+          <figcaption>
+            {{ previewAttachment.name }} · {{ formatSize(previewAttachment.size) }}
+          </figcaption>
+        </figure>
+        <button
+          ref="previewCloseButton"
+          type="button"
+          class="attachment-preview-close"
+          :title="labels.close"
+          :aria-label="labels.close"
+          @click="closeAttachmentPreview"
+        >
+          <X :size="18" aria-hidden="true" />
+        </button>
+      </div>
+    </Teleport>
   </footer>
 </template>

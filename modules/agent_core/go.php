@@ -219,25 +219,33 @@ class go extends Factory
      */
     public function getSystemPrompt(string $session_id): string
     {
+        $now_time = time();
+        $weekday  = ['日', '一', '二', '三', '四', '五', '六'][date('w', $now_time)];
+
         $system_default = $this->utils->getMainPrompt();
         $system_memory  = $this->memory->read('system');
 
         if ([] !== $system_memory['data']) {
-            $memory = ['## 角色与行为设定'];
+            $memory = ['## 用户与人物设定'];
 
             foreach ($system_memory['data'] as $content) {
                 $memory[] = '- ' . $content['content'];
             }
 
-            $system_default .= "\n" . implode("\n", $memory);
+            $system_default .= "\n\n" . implode("\n", $memory);
         }
 
         $system_default .= "\n\n" . '---' . "\n\n";
         $system_default .= '' === $session_id
-            ? '【会话ID】未分配，本次禁止存取 daily/misc 记忆。'
-            : '【会话ID】`' . $session_id . '`，操作存取记忆时必传。';
+            ? '【会话ID】未分配，本次禁止读写`daily`/`misc`记忆。'
+            : '【会话ID】`' . $session_id . '`，读写记忆时必传。';
 
-        unset($system_memory, $memory, $content);
+        $system_default .= "\n\n" . '---' . "\n\n";
+        $system_default .= '【时间·最高优先级】当前：' . date('Y-m-d H:i:s', $now_time) . ' 周' . $weekday . '，时区' . $this->core->app->timezone . '。唯一权威，禁止读取/推测上下文/历史/记忆/工具中的时间，冲突以此为准。';
+
+        var_dump($system_default);
+
+        unset($session_id, $now_time, $weekday, $system_memory, $memory, $content);
         return $system_default;
     }
 

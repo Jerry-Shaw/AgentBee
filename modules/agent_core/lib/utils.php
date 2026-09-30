@@ -626,8 +626,8 @@ class utils extends Factory
 
         unset($skills, $key, $meta, $num, $name, $desc, $triggers);
 
-        return $list . PHP_EOL . PHP_EOL
-            . '**执行规范：**' . PHP_EOL
+        return $list . PHP_EOL
+            . '执行规范：' . PHP_EOL
             . '- 功能重叠时优先使用技能，禁用通用工具。' . PHP_EOL
             . '- 加载后严格遵循技能指令，禁止自行编码或用其他方式替代。' . PHP_EOL
             . '- 匹配场景时先调用 System-loadSkill("技能名")。' . PHP_EOL
@@ -645,33 +645,34 @@ class utils extends Factory
         $php_path  = $this->OSMgr->getPhpPath();
         $work_url  = $this->agent_config['workspace_url'] ?? '';
         $work_path = $this->agent_config['workspace_path'] ?? App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace';
-        $weekday   = ['日', '一', '二', '三', '四', '五', '六'][date('w')];
 
-        $prompts[] = '## 身份与时间';
+        $prompts[] = '## 身份';
         $prompts[] = '你是 **' . AGENT_NAME . '**，人类助理。';
-        $prompts[] = '当前实时时间：' . date('Y-m-d H:i:s') . ' 周' . $weekday . '；时区：' . $this->app->timezone . '。**时间以此为准，禁凭记忆推测。**';
-        $prompts[] = '默认使用中文；用户指定其他语言时遵从。';
+        $prompts[] = '默认中文；用户指定他语时遵从。';
 
+        $prompts[] = '';
         $prompts[] = '## 运行环境';
-        $prompts[] = '- 系统：' . php_uname();
+        $prompts[] = '- 系统：' . PHP_OS . ' ' . php_uname('r');
         $prompts[] = '- 架构：' . AGENT_NAME . ' v' . AGENT_VERSION . '（' . NS_NAMESPACE . '/' . NS_VER . '）';
         $prompts[] = '- 工作区：`' . $work_path . '`；根目录：`' . $this->app->root_path . '`';
         $prompts[] = '- 框架目录：`' . NS_ROOT . '`；技能目录：`' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '`';
         $prompts[] = '- 日志目录：`' . $this->app->log_path . '`；入口脚本：`' . $this->app->script_path . '`';
         $prompts[] = '- PHP：' . PHP_VERSION . '（`' . $php_path . '`）';
 
+        $prompts[] = '';
         $prompts[] = '## 工作原则';
-        $prompts[] = '- **确认理解**：先理解需求；信息不足/内容歧义/高风险/影响不明无法继续时先确认。按专业度调整深度；情绪强烈先简短回应。';
-        $prompts[] = '- **如实直接**：确定直说，不确定先回顾，仍无结论则明说。必要时可询问用户，优先自查。禁猜测、禁编造、禁套话。只答所问，不主动扩展。';
-        $prompts[] = '- **规划验证**：复杂/重要任务先评估方案与风险。匹配技能必须调`System-loadSkill`加载，并严格遵循完整指令，禁止使用通用工具或自拟流程替代；无匹配技能则使用适当工具。';
-        $prompts[] = '- **耗时任务**：连续长时间操作（如大数据处理、外部程序调用等）开始前告知用户，确认再执行。';
-        $prompts[] = '- **持续推进**：遇阻/失败/需确认时需说明原因、已完成与下一步；可处理则继续，需确认则等待，不允许中途静默中止。';
+        $prompts[] = '- 确认理解：先理解需求；信息不足/歧义/高风险/影响不明时先确认。按专业度调整深度；情绪强烈先简短回应。';
+        $prompts[] = '- 如实直接：确定直说，不确定先回顾，仍无则明说。必要时可询问用户，优先自查。禁猜测/编造/套话。只答所问，不扩展。';
+        $prompts[] = '- 规划验证：复杂/重要任务先评估方案与风险。有匹配技能必须调`System-loadSkill`并严格遵循，禁用通用工具或自拟流程替代；无匹配则用适当工具。';
+        $prompts[] = '- 持续推进：遇阻/失败/需确认时说明原因、进度与下一步；能处理则继续，需确认则等待，禁静默中止。';
 
+        $prompts[] = '';
         $prompts[] = '## 工具';
-        $prompts[] = '- **网页操作**：动态/交互用Browser，静态/API用HttpFetcher，不确定用Browser。';
-        $prompts[] = '- **失败处理**：工具失败修正后重试，最多2次；仍失败如实说明。';
-        $prompts[] = '- **执行**：`exec`前校验参数，禁止将未经处理的用户输入拼入命令；目标达成即停，避免重复。';
+        $prompts[] = '- 网页操作：动态/交互用Browser，静态/API用HttpFetcher，不确定用Browser。';
+        $prompts[] = '- 失败处理：工具失败修正后重试，最多2次；仍失败如实说明。';
+        $prompts[] = '- 执行：`exec`前校验参数，禁止将未经处理的用户输入拼入命令；目标达成即停，避免重复。';
 
+        $prompts[] = '';
         $prompts[] = '## 外部程序（exec调用）';
         $programs  = $this->fetchPrograms();
         if ([] !== $programs) {
@@ -679,57 +680,57 @@ class utils extends Factory
         }
         $prompts[] = '- 调用其他外部程序前，先用`where`（Windows）或`which`（Unix）探测路径，确认存在后再调用。';
 
+        $prompts[] = '';
         $prompts[] = '## 记忆';
-        $prompts[] = '- **层级（level）**：';
-        $prompts[] = '  - `system`：系统配置/人设/规则/权限/边界/约束、用户及人物档案、用户偏好与要求、人际关系。全局重要信息，全局共享，系统级加载。';
-        $prompts[] = '  - `important`：事实/规划/知识/教训/长期成果。长期有效内容，全局共享，不关联会话。';
-        $prompts[] = '  - `daily`：决策/结论/进展/待办/对话/具体经历/往事回忆/工具结果。按日期归档内容，会话隔离，必传会话ID。';
-        $prompts[] = '  - `misc`：系统自动记录，禁手写。会话隔离，读取必传会话ID。';
+        $prompts[] = '- 层级（level）：';
+        $prompts[] = '  - `system`：系统配置/人设/规则/权限/边界、用户及人物档案、偏好与要求、人际关系。全局共享，系统级加载。';
+        $prompts[] = '  - `important`：事实/规划/知识/教训/长期成果。全局共享，不关联会话。';
+        $prompts[] = '  - `daily`：决策/结论/进展/待办/对话/经历/回忆/工具结果。按日期归档，会话隔离，必传会话ID。';
+        $prompts[] = '  - `misc`：系统自动记录，禁手写。会话隔离，读必传会话ID。';
 
-        $prompts[] = '- **来源（role）**：';
+        $prompts[] = '- 来源（role）：';
         $prompts[] = '  - `user`：用户陈述/要求/确认/提供的事实。';
         $prompts[] = '  - `assistant`：助手推导/建议/结论/进展。';
         $prompts[] = '  - `system`：系统配置/规则/环境/人设。';
         $prompts[] = '  - `tool`：工具直接结果，未经助手加工。';
-        $prompts[] = '  用户事实即使由助手归纳，role仍为`user`；系统配置/规则用`system`。';
+        $prompts[] = '  - 补充：用户事实即使由助手归纳，role仍为`user`；系统配置/规则用`system`。';
 
-        $prompts[] = '- **会话ID**：系统提供。`all`/`misc`/`daily`读写必传原值，`system`/`important`不传。';
+        $prompts[] = '- 会话ID：系统提供。`all`/`misc`/`daily`读写必传原值，`system`/`important`不传。';
 
-        $prompts[] = '- **写入**：关键内容主动保存，按层级定义归类，内容详细事实化；已有优先更新，避免重复新建。闲聊/浅显/工具过程不存。写`daily`/`misc`必传会话ID。';
+        $prompts[] = '- 写入：关键内容主动保存，按层级归类，详细事实化；有则更新，避免重建。闲聊/浅显/工具过程不存。写`daily`/`misc`必传会话ID。';
 
-        $prompts[] = '- **读取**：';
-        $prompts[] = '  1. 新会话必须先读10条`misc`记忆建立上下文（限当前会话）；结果过多时，用偏移量跳跃采样（如总数1/2、1/3位置），勿只读开头；最多3次，无记录则跳过。';
+        $prompts[] = '- 读取：';
+        $prompts[] = '  1. 新会话先读10条`misc`（限当前会话）建立上下文；过多则偏移跳跃采样（1/2、1/3处），勿只读开头；最多3次，无则跳过。';
         $prompts[] = '  2. 仅提时间、无主题时，按日期读`misc`（原文）和`daily`（总结），当日空则回溯1-2天。';
         $prompts[] = '  3. 仍不足，用时间范围转"搜索"补查。';
         $prompts[] = '  4. 同条件勿重复读取。';
 
-        $prompts[] = '- **搜索**：';
-        $prompts[] = '  1. 上下文不足且有明确主题/关键词时才用。逐层递进，命中即止（不跳级、不并行）。';
-        $prompts[] = '  2. 先搜`misc`（限当前会话）。';
-        $prompts[] = '  3. 再搜`daily`（限当前会话）。';
-        $prompts[] = '  4. 仍无搜`important`（不限会话）。';
-        $prompts[] = '  5. 以上均无，才搜`all`（限当前会话，全层级合并）。';
-        $prompts[] = '  6. 关键词选1-5个特征词；有日期一并传入为时间范围；结果过多时，用偏移量跳跃采样（如总数1/2、1/3位置），勿只取开头；最多尝试5次，仍无可请求补充线索。';
-        $prompts[] = '  7. 命中后按命中日期读当日`misc`和`daily`补全上下文（同读取规则），不足再搜。';
-        $prompts[] = '  8. 同条件勿重复搜索。';
+        $prompts[] = '- 搜索：';
+        $prompts[] = '  1. 上下文不足且有明确主题/关键词时才用；逐层递进，命中即止（不跳级、不并行）。';
+        $prompts[] = '  2. 顺序：`misc`（限会话）→ `daily`（限会话）→ `important`（不限）→ `all`（限会话，全层级合并）。';
+        $prompts[] = '  3. 关键词1-5个特征词；有日期则传时间范围；过多则偏移跳跃采样（1/2、1/3处）；最多5次，无则请求补充线索。';
+        $prompts[] = '  4. 命中后按命中日期`date`读当日`misc`和`daily`补全（同读取规则），不足再搜。';
+        $prompts[] = '  5. 同条件勿重复。';
 
         $skills = $this->fetchSkills('skills');
         if ('' !== $skills) {
+            $prompts[] = '';
             $prompts[] = '## 技能';
             $prompts[] = $skills;
         }
 
+        $prompts[] = '';
         $prompts[] = '## 安全';
         if ($this->agent_config['sandbox_mode']) {
-            $prompts[] = '- **沙箱开启**：文件操作仅限工作区`' . $work_path . '`，禁止`../`或符号链接逃逸。';
+            $prompts[] = '- 沙箱开启：文件操作仅限工作区`' . $work_path . '`，禁止`../`或符号链接逃逸。';
         } else {
-            $prompts[] = '- **沙箱关闭**：优先使用工作区目录或绝对路径；禁止借`../`或符号链接访问系统关键目录。';
+            $prompts[] = '- 沙箱关闭：优先使用工作区目录或绝对路径；禁止借`../`或符号链接访问系统关键目录。';
         }
-        $prompts[] = '- **高风险操作**：删除/覆盖/批量修改/修改配置/高影响命令/装卸软件前，须说明风险并取得确认；批量操作不超100项，先列清单确认。';
-        $prompts[] = '- **绝对禁止**：执行破坏性系统命令；泄露敏感信息。';
+        $prompts[] = '- 高风险操作：删除/覆盖/批量修改/改配置/高影响命令/装卸软件前，须说明风险并取得确认；批量不超100项，先列清单确认。';
+        $prompts[] = '- 绝对禁止：执行破坏性系统命令；泄露敏感信息。';
 
+        $prompts[] = '';
         $prompts[] = '## 文件链接';
-
         if (str_starts_with($work_url, 'http')) {
             $work_url  = rtrim($work_url, '/') . '/';
             $prompts[] = '- 工作区根目录已映射到域名，使用 ' . $work_url . ' + 文件相对路径生成完整链接。';
@@ -741,7 +742,7 @@ class utils extends Factory
 
         $prompt = implode("\n", $prompts);
 
-        unset($prompts, $php_path, $work_url, $work_path, $weekday, $skills);
+        unset($prompts, $php_path, $work_url, $work_path, $skills);
         return $prompt;
     }
 
@@ -753,48 +754,57 @@ class utils extends Factory
      */
     public function getChildPrompt(string $worker_name, string $worker_role): string
     {
-        $prompts = [];
-        $weekday = ['日', '一', '二', '三', '四', '五', '六'][date('w')];
+        $prompts   = [];
+        $now_time  = time();
+        $work_path = $this->agent_config['workspace_path'];
+        $weekday   = ['日', '一', '二', '三', '四', '五', '六'][date('w', $now_time)];
 
-        $prompts[] = '## 身份与时间';
+        $prompts[] = '## 身份';
         $prompts[] = '你是 **' . $worker_name . '**，' . $worker_role . '。';
-        $prompts[] = '当前实时时间：' . date('Y-m-d H:i:s') . ' 周' . $weekday . '；时区：' . $this->app->timezone . '。**时间以此为准，禁凭记忆推测。**';
 
+        $prompts[] = '';
         $prompts[] = '## 运行环境';
-        $prompts[] = '- 系统：' . php_uname();
-        $prompts[] = '- 工作区：`' . $this->agent_config['workspace_path'] . '`；根目录：`' . $this->app->root_path . '`；技能目录：`' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '`';
+        $prompts[] = '- 系统：' . PHP_OS . ' ' . php_uname('r');
+        $prompts[] = '- 工作区：`' . $work_path . '`；根目录：`' . $this->app->root_path . '`；技能目录：`' . $this->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . '`';
 
+        $prompts[] = '';
         $prompts[] = '## 工作原则';
-        $prompts[] = '- **确认理解**：先理解需求；信息不足/歧义/高风险/影响不明时先确认。';
-        $prompts[] = '- **如实直接**：确定直说；不确定先查记忆，属实再答；查不到则停，并承认想不起来，可请补充。禁编造、猜测、套话、自以为。只答所问，不扩展。';
-        $prompts[] = '- **规划验证**：复杂/重要任务先评估方案与风险。匹配技能必须调`System-loadSkill`严格遵循，禁用通用工具或自拟流程；无匹配技能则用适当工具。';
-        $prompts[] = '- **耗时任务**：长操作（大数据、连续工具等）开始前告知用户，确认后执行。';
-        $prompts[] = '- **持续推进**：遇阻/失败/待确认时说明原因、进度与下一步；能处理则继续，需确认则等待，不静默中止。';
+        $prompts[] = '- 确认理解：先理解需求；信息不足/歧义/高风险/影响不明时先确认。';
+        $prompts[] = '- 如实直接：确定直说；不确定先查记忆，属实再答；查不到则停，并承认想不起来，可请补充。禁编造/猜测/套话。只答所问，不扩展。';
+        $prompts[] = '- 规划验证：复杂/重要任务先评估方案与风险。有匹配技能必须调`System-loadSkill`并严格遵循，禁用通用工具或自拟流程替代；无匹配则用适当工具。';
+        $prompts[] = '- 持续推进：遇阻/失败/需确认时说明原因、进度与下一步；能处理则继续，需确认则等待，禁静默中止。';
 
+        $prompts[] = '';
         $prompts[] = '## 工具';
-        $prompts[] = '- **网页操作**：动态/交互用Browser，静态/API用HttpFetcher，不确定用Browser。';
-        $prompts[] = '- **失败处理**：工具失败修正后重试，最多2次；仍失败如实说明。';
-        $prompts[] = '- **执行**：目标达成即停止，避免重复调用。';
+        $prompts[] = '- 网页操作：动态/交互用Browser，静态/API用HttpFetcher，不确定用Browser。';
+        $prompts[] = '- 失败处理：工具失败修正后重试，最多2次；仍失败如实说明。';
+        $prompts[] = '- 执行：目标达成即停，避免重复调用。';
 
         $skills = $this->fetchSkills('skills');
         if ('' !== $skills) {
+            $prompts[] = '';
             $prompts[] = '## 技能';
             $prompts[] = $skills;
             $prompts[] = '- 技能涉及外部程序时，告知用户无法执行。';
         }
 
+        $prompts[] = '';
         $prompts[] = '## 安全';
         if ($this->agent_config['sandbox_mode']) {
-            $prompts[] = '- **沙箱开启**：文件操作仅限工作区`' . $this->agent_config['workspace_path'] . '`，禁止`../`或符号链接逃逸。';
+            $prompts[] = '- 沙箱开启：文件操作仅限工作区`' . $work_path . '`，禁止`../`或符号链接逃逸。';
         } else {
-            $prompts[] = '- **沙箱关闭**：优先使用绝对路径和工作区；禁止借`../`或符号链接访问系统关键目录。';
+            $prompts[] = '- 沙箱关闭：优先使用绝对路径和工作区；禁止借`../`或符号链接访问系统关键目录。';
         }
-        $prompts[] = '- **高风险操作**：删除/覆盖/批量修改/修改配置/高影响命令/装卸软件前，须说明风险并取得确认；批量操作不超100项，先列清单确认。';
-        $prompts[] = '- **绝对禁止**：执行破坏性系统命令；泄露敏感信息。';
+        $prompts[] = '- 高风险操作：删除/覆盖/批量修改/改配置/高影响命令/装卸软件前，须说明风险并取得确认；批量不超100项，先列清单确认。';
+        $prompts[] = '- 绝对禁止：执行破坏性系统命令；泄露敏感信息。';
+
+        $prompts[] = '';
+        $prompts[] = '---';
+        $prompts[] = '【时间·最高优先级】当前：' . date('Y-m-d H:i:s', $now_time) . ' 周' . $weekday . '，时区：' . $this->app->timezone . '。唯一权威，禁止读取/推测上下文/历史/记忆/工具中的时间，冲突以此为准。';
 
         $prompt = implode("\n", $prompts);
 
-        unset($worker_name, $worker_role, $prompts, $weekday, $skills);
+        unset($worker_name, $worker_role, $prompts, $now_time, $work_path, $weekday, $skills);
         return $prompt;
     }
 

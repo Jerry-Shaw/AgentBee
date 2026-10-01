@@ -204,7 +204,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'listTasks',
-                'description' => '列出当前会话所有任务详情。返回：{status, tasks: [{create_id, session_id, run_at, repeat, interval, prompt, run_time, create_time}]}。',
+                'description' => '列出当前会话所有任务详情。返回：{status, tasks: [{create_id, repeat, interval, prompt, run_time, create_time}]}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [

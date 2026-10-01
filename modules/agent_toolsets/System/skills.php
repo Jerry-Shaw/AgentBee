@@ -93,22 +93,6 @@ class skills
         [
             'type'     => 'function',
             'function' => [
-                'name'        => 'getTime',
-                'description' => '获取系统时间。传入datetime时，解析对应时间戳，不传则返回当前时间。返回：{datetime, timestamp}。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'datetime' => [
-                            'type'        => 'string',
-                            'description' => '日期时间字符串（如"2026-10-01 14:30:00"），不传则返回当前时间',
-                        ],
-                    ],
-                ],
-            ],
-        ],
-        [
-            'type'     => 'function',
-            'function' => [
                 'name'        => 'readImage',
                 'description' => '读取图片，返回元信息，并将图片Data-URL附于上下文。rendering设为true时，图片会展示在前端。返回：{status, message, width, height, filename, mime_type}。',
                 'parameters'  => [

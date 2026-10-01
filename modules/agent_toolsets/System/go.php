@@ -344,31 +344,6 @@ class go extends Factory
     }
 
     /**
-     * @param string $datetime
-     *
-     * @return array
-     */
-    public function getTime(string $datetime = ''): array
-    {
-        if ('' !== $datetime) {
-            $timestamp = strtotime($datetime) ?: time();
-        } else {
-            $timestamp = time();
-        }
-
-        $weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-        $weekday  = $weekdays[date('w', $timestamp)];
-
-        $datetime = date('Y-m-d H:i:s', $timestamp);
-
-        return [
-            'weekday'   => '周' . $weekday,
-            'datetime'  => $datetime,
-            'timestamp' => $timestamp
-        ];
-    }
-
-    /**
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $file_path

@@ -168,17 +168,19 @@ class go extends Factory
     }
 
     /**
-     * @param int $session_status 0：全部；1：启用；2：禁用
+     * @param int  $session_status 0：全部；1：启用；2：禁用
+     * @param bool $keep_datetime
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function readSession(int $session_status = 1): array
+    public function readSession(int $session_status = 1, bool $keep_datetime = false): array
     {
         if (!in_array($session_status, [0, 1, 2], true)) {
             $session_status = 0;
         }
 
+        $now   = time();
         $query = $this->libSQLite
             ->table('agent_session')
             ->select('session_id', 'session_name', 'session_status', 'create_time');
@@ -190,7 +192,10 @@ class go extends Factory
         $sessions = $query->order(['last_time' => 'DESC'])->fetchAll();
 
         foreach ($sessions as $id => $session) {
-            $sessions[$id]['create_time']    = date('Y-m-d H:i:s', $session['create_time']);
+            $sessions[$id]['create_time'] = $keep_datetime
+                ? date('Y-m-d H:i', $session['create_time'])
+                : $this->formatMicroTime($session['create_time'], $now);
+
             $sessions[$id]['session_status'] = match ($session['session_status']) {
                 1 => '启用',
                 default => '已删除'
@@ -201,7 +206,7 @@ class go extends Factory
 
         $result = ['status' => 'success', 'sessions' => $sessions];
 
-        unset($session_status, $sessions, $id, $session);
+        unset($session_status, $keep_datetime, $now, $query, $sessions, $id, $session);
         return $result;
     }
 
@@ -395,11 +400,20 @@ class go extends Factory
      * @param int    $length
      * @param string $session_id
      * @param int    $create_id
+     * @param bool   $keep_datetime
      *
      * @return array|string[]
      * @throws \ReflectionException
      */
-    public function read(string $level, int $date = 0, int $offset = 0, int $length = 10, string $session_id = '', int $create_id = 0): array
+    public function read(
+        string $level,
+        int    $date = 0,
+        int    $offset = 0,
+        int    $length = 10,
+        string $session_id = '',
+        int    $create_id = 0,
+        bool   $keep_datetime = false
+    ): array
     {
         if (!in_array($level, self::ALL_LEVELS)) {
             return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
@@ -440,16 +454,19 @@ class go extends Factory
             $query->limit($offset, $length);
         }
 
+        $now  = time();
         $data = $query->fetchAll();
         $data = array_reverse($data);
 
         foreach ($data as &$item) {
-            $item['create_time'] = $this->formatMicroTime($item['create_id']);
+            $item['create_time'] = $keep_datetime
+                ? date('Y-m-d H:i:s', (int)($item['create_id'] / 1000000))
+                : $this->formatMicroTime($item['create_id'], $now);
         }
 
         $result = ['status' => 'success', 'data' => $data, 'total' => $query->getLastFoundRows()];
 
-        unset($level, $date, $offset, $length, $session_id, $create_id, $query, $data, $item);
+        unset($level, $date, $offset, $length, $session_id, $create_id, $keep_datetime, $query, $now, $data, $item);
         return $result;
     }
 
@@ -504,13 +521,15 @@ class go extends Factory
             : $this->searchViaLike($keywords, $level, $date_start, $date_end, $offset, $length, $session_id);
 
         if (isset($result['data'])) {
+            $now = time();
+
             foreach ($result['data'] as &$msg) {
                 if (isset($msg['create_id'])) {
-                    $msg['create_time'] = $this->formatMicroTime($msg['create_id']);
+                    $msg['create_time'] = $this->formatMicroTime($msg['create_id'], $now);
                 }
             }
 
-            unset($msg);
+            unset($now, $msg);
         }
 
         $result['status'] = 'success';
@@ -691,7 +710,11 @@ class go extends Factory
             'prompt'     => $task_prompt
         ])->execute();
 
-        $result = ['status' => 'success', 'create_id' => $create_id, 'run_time' => date('Y-m-d H:i:s', $run_at)];
+        $result = [
+            'status'    => 'success',
+            'create_id' => $create_id,
+            'run_time'  => $this->formatMicroTime($run_at, $now),
+        ];
 
         unset($task_prompt, $run_at, $repeat, $repeat_interval, $now, $create_id);
         return $result;
@@ -724,19 +747,20 @@ class go extends Factory
      */
     public function listTasks(string $session_id): array
     {
+        $now   = time();
         $tasks = $this->libSQLite
             ->table('agent_task')
-            ->select('*')
+            ->select('create_id', 'repeat', 'interval', 'prompt', 'run_at AS run_time')
             ->where(['session_id', $session_id])
             ->order(['run_at' => 'ASC'])
             ->fetchAll();
 
         foreach ($tasks as &$task) {
-            $task['run_time']    = date('Y-m-d H:i:s', $task['run_at']);
-            $task['create_time'] = date('Y-m-d H:i:s', (int)($task['create_id'] / 1000000));
+            $task['run_time']    = $this->formatMicroTime($task['run_time'], $now);
+            $task['create_time'] = $this->formatMicroTime($task['create_id'], $now);
         }
 
-        unset($session_id, $task);
+        unset($session_id, $now, $task);
         return ['status' => 'success', 'tasks' => $tasks];
     }
 
@@ -902,13 +926,85 @@ class go extends Factory
     }
 
     /**
-     * @param int $micro
+     * @param int $timestamp
+     * @param int $now_time
      *
      * @return string
      */
-    private function formatMicroTime(int $micro): string
+    private function formatMicroTime(int $timestamp, int $now_time): string
     {
-        return date('Y-m-d H:i:s', (int)($micro / 1000000));
+        $seconds = $timestamp > 100000000000
+            ? (int)($timestamp / 1000000)
+            : $timestamp;
+
+        $char = $seconds < $now_time ? '前' : '后';
+        $diff = abs($now_time - $seconds);
+
+        if ($diff < 10) {
+            return $seconds < $now_time ? '刚刚' : '马上';
+        }
+
+        if ($diff < 60) {
+            return $diff . '秒' . $char;
+        }
+
+        if ($diff < 3600) {
+            $minute = floor($diff / 60);
+            $second = $diff % 60;
+
+            return 0 < $second
+                ? $minute . '分钟' . $second . '秒' . $char
+                : $minute . '分钟' . $char;
+        }
+
+        if ($diff < 86400) {
+            $hour   = floor($diff / 3600);
+            $minute = floor(($diff % 3600) / 60);
+            $second = $diff % 60;
+
+            if (0 < $minute) {
+                return 0 < $second
+                    ? $hour . '小时' . $minute . '分钟' . $second . '秒' . $char
+                    : $hour . '小时' . $minute . '分钟' . $char;
+            }
+
+            return $hour . '小时' . $char;
+        }
+
+        if ($diff < 2592000) {
+            $day    = floor($diff / 86400);
+            $hour   = floor(($diff % 86400) / 3600);
+            $minute = floor(($diff % 3600) / 60);
+
+            if (0 < $hour) {
+                return 0 < $minute
+                    ? $day . '天' . $hour . '小时' . $minute . '分钟' . $char
+                    : $day . '天' . $hour . '小时' . $char;
+            }
+
+            return $day . '天' . $char;
+        }
+
+        if ($diff < 31536000) {
+            $month = floor($diff / 2592000);
+            $day   = floor(($diff % 2592000) / 86400);
+
+            return 0 < $day
+                ? $month . '个月' . $day . '天' . $char
+                : $month . '个月' . $char;
+        }
+
+        $year  = floor($diff / 31536000);
+        $month = floor(($diff % 31536000) / 2592000);
+        $day   = floor(($diff % 2592000) / 86400);
+
+        if (0 < $month) {
+            return 0 < $day
+                ? $year . '年' . $month . '个月' . $day . '天' . $char
+                : $year . '年' . $month . '个月' . $char;
+        }
+
+        return $year . '年' . $char;
     }
 
     /**

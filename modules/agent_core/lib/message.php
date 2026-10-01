@@ -155,7 +155,7 @@ class message extends Factory
 
         switch ($act) {
             case 'read':
-                $content = $data_content['memory']->read('misc', 0, 0, $data_content['length'], $session_id, $data_content['create_id'] ?? 0);
+                $content = $data_content['memory']->read('misc', 0, 0, $data_content['length'], $session_id, $data_content['create_id'] ?? 0, true);
 
                 $content['act'] = $act;
                 break;
@@ -169,7 +169,7 @@ class message extends Factory
                 break;
 
             case 'readSession':
-                $content = $data_content['memory']->readSession(1);
+                $content = $data_content['memory']->readSession(1, true);
 
                 $content['act'] = $act;
                 break;

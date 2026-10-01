@@ -953,36 +953,26 @@ class go extends Factory
             $second = $diff % 60;
 
             return 0 < $second
-                ? $minute . '分钟' . $second . '秒' . $char
+                ? $minute . '分' . $second . '秒' . $char
                 : $minute . '分钟' . $char;
         }
 
         if ($diff < 86400) {
             $hour   = floor($diff / 3600);
             $minute = floor(($diff % 3600) / 60);
-            $second = $diff % 60;
 
-            if (0 < $minute) {
-                return 0 < $second
-                    ? $hour . '小时' . $minute . '分钟' . $second . '秒' . $char
-                    : $hour . '小时' . $minute . '分钟' . $char;
-            }
-
-            return $hour . '小时' . $char;
+            return 0 < $minute
+                ? $hour . '小时' . $minute . '分钟' . $char
+                : $hour . '小时' . $char;
         }
 
         if ($diff < 2592000) {
-            $day    = floor($diff / 86400);
-            $hour   = floor(($diff % 86400) / 3600);
-            $minute = floor(($diff % 3600) / 60);
+            $day  = floor($diff / 86400);
+            $hour = floor(($diff % 86400) / 3600);
 
-            if (0 < $hour) {
-                return 0 < $minute
-                    ? $day . '天' . $hour . '小时' . $minute . '分钟' . $char
-                    : $day . '天' . $hour . '小时' . $char;
-            }
-
-            return $day . '天' . $char;
+            return 0 < $hour
+                ? $day . '天' . $hour . '小时' . $char
+                : $day . '天' . $char;
         }
 
         if ($diff < 31536000) {
@@ -996,15 +986,10 @@ class go extends Factory
 
         $year  = floor($diff / 31536000);
         $month = floor(($diff % 31536000) / 2592000);
-        $day   = floor(($diff % 2592000) / 86400);
 
-        if (0 < $month) {
-            return 0 < $day
-                ? $year . '年' . $month . '个月' . $day . '天' . $char
-                : $year . '年' . $month . '个月' . $char;
-        }
-
-        return $year . '年' . $char;
+        return 0 < $month
+            ? $year . '年' . $month . '个月' . $char
+            : $year . '年' . $char;
     }
 
     /**

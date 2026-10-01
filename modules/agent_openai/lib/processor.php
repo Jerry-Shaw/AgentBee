@@ -35,6 +35,7 @@ class processor extends Factory
         'completions' => [
             'max_tokens'           => 'max_completion_tokens',
             'temperature'          => 'temperature',
+            'reasoning'            => 'reasoning_effort',
             'min_p'                => 'min_p',
             'top_p'                => 'top_p',
             'top_k'                => 'top_k',
@@ -54,6 +55,7 @@ class processor extends Factory
         'responses' => [
             'max_tokens'           => 'max_output_tokens',
             'temperature'          => 'temperature',
+            'reasoning'            => 'reasoning.effort',
             'min_p'                => null,
             'top_p'                => 'top_p',
             'top_k'                => null,
@@ -73,6 +75,7 @@ class processor extends Factory
         'messages' => [
             'max_tokens'           => 'max_tokens',
             'temperature'          => 'temperature',
+            'reasoning'            => null,
             'min_p'                => null,
             'top_p'                => 'top_p',
             'top_k'                => 'top_k',
@@ -113,7 +116,19 @@ class processor extends Factory
         foreach ($params as $key => $value) {
             if (array_key_exists($key, $config)) {
                 if (null !== $config[$key]) {
-                    $result[$config[$key]] = $value;
+                    if (!str_contains($config[$key], '.')) {
+                        $result[$config[$key]] = $value;
+                    } else {
+                        $keys = explode('.', $config[$key]);
+                        $ref  = &$result;
+
+                        foreach ($keys as $k) {
+                            $ref = &$ref[$k];
+                        }
+
+                        $ref = $value;
+                        unset($keys, $ref, $k);
+                    }
                 }
             } else {
                 $result[$key] = $value;

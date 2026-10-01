@@ -176,6 +176,7 @@ class config extends Factory
                 'params'           => [
                     'max_tokens'           => 12288,
                     'temperature'          => 0.6,
+                    'reasoning'            => 'medium',
                     'min_p'                => 0.05,
                     'top_p'                => 0.95,
                     'top_k'                => 20,

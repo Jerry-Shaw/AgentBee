@@ -123,6 +123,14 @@ class message extends Factory
                 $content['act'] = $act;
                 break;
 
+            case 'reasoningEfforts':
+                $content        = [
+                    'status' => 'success',
+                    'data'   => ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
+                ];
+                $content['act'] = $act;
+                break;
+
             default:
                 $content = [
                     'status' => 'error',

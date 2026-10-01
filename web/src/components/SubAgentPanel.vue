@@ -10,6 +10,8 @@ const props = defineProps<{
   labels: Record<string, string>;
   messages: AgentChatMessage[];
   showDebugInfo: boolean;
+  /** 装在移动端抽屉里时，高度交给外层 flex 分配，不再自己撑满 100%。 */
+  embedded?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -80,7 +82,11 @@ function getAgentStatusLabel(status: string) {
 </script>
 
 <template>
-  <aside class="subagent-panel" :aria-label="`${labels.subAgent}: ${agent.name}`">
+  <aside
+    class="subagent-panel"
+    :class="{ 'is-embedded': embedded }"
+    :aria-label="`${labels.subAgent}: ${agent.name}`"
+  >
     <header class="subagent-header">
       <span class="subagent-avatar" aria-hidden="true">
         {{ getAgentInitial(agent.name) }}
@@ -124,6 +130,11 @@ function getAgentStatusLabel(status: string) {
   display: flex;
   flex-direction: column;
   background: var(--surface);
+}
+
+.subagent-panel.is-embedded {
+  height: auto;
+  flex: 1;
 }
 
 .subagent-header {

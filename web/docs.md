@@ -247,9 +247,17 @@ message 事件时主动收尾该轮次——后端对这种 `need_llm = false` �
   只长在 `.topbar-actions` 里，一起藏掉就出不了设置页了。
   ⚠️ 顶栏隐藏后 `.main` 只剩两个子项，`grid-template-rows` 必须同步改成
   `minmax(0, 1fr) auto`，否则 chat-shell 会掉进 `auto` 行被压扁在顶部。
-  代价：`.topbar-actions` 里的 `SubAgentMenu` 在移动端聊天页不可达（子代理切换只在桌面/设置页可用）。
+  代价：`.topbar-actions` 里的 `SubAgentMenu` 在移动端聊天页不可达——所以子 Agent 的入口
+  单独补在了头部（见下一节），不再依赖顶栏。
+- **子 Agent 用右侧抽屉**：顶栏在移动端聊天页是隐藏的，`SubAgentMenu` 因此够不着；
+  入口按钮改放头部那一行的 `.sidebar-body`（只在 `isMobileLayout && subAgents.length` 时渲染，
+  带一个数量角标），内容交给 `components/SubAgentDrawer.vue`——从**右侧**滑出，
+  没选 Agent 时是列表、选中后就地换成 `SubAgentPanel`（`embedded` 模式，高度由抽屉的 flex 分配）。
+  列表本身抽成了 `components/SubAgentList.vue`，桌面下拉和移动抽屉共用同一份，
+  和会话列表同样的思路。选中项在关抽屉时一起清掉，否则下次打开会直接进上一个 Agent、换不了人。
+  移动端 `.chat-shell` 不再加 `has-subagent`、也不在聊天区渲染那份面板。
 - **JS / CSS 必须同一个断点**：`App.vue` 的 `MOBILE_MEDIA_QUERY` 就是
-  `(max-width: 820px), (hover: none) and (pointer: coarse)`，与 `base.css` 的媒体查询一字不差。
+  `(max-width: 820px), (hover: none) and (pointer: coarse) and (any-hover: none)`，与 `base.css` 的媒体查询一字不差。
   `isMobileLayout` 同时控制入口按钮和抽屉的渲染；转回桌面布局时会自动收起抽屉，
   不留一个盖住界面的浮层。
 - **层级**：抽屉 `z-index: 110` < `ConfirmDialog` 的 120 < toast 的 130。

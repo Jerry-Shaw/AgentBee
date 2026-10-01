@@ -681,6 +681,135 @@ body:has(.login-window-backdrop) {
 }
 
 /* --------------------------------------------------------------------------
+   移动端子 Agent 抽屉。
+   入口按钮在头部那一行（`.sidebar-body`），内容从**右侧**滑出：
+   没选 Agent 时是列表（和桌面下拉共用 `SubAgentList`），选中后换成 `SubAgentPanel`。
+   z-index 与左侧会话抽屉同为 110——两者互斥，不会同时打开。
+   -------------------------------------------------------------------------- */
+.brand-subagent-trigger {
+  position: relative;
+  /* 头部那一行是 `align-items: stretch`，固定高度的按钮会被顶到行首；
+     居中之后右上角那个计数角标才不会顶出视口被裁掉。 */
+  align-self: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  margin-right: 2px;
+}
+
+.subagent-trigger-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--accent-strong);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.subagent-drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.subagent-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+}
+
+.subagent-drawer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(88vw, 400px);
+  height: 100%;
+  min-height: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  border-left: 1px solid var(--line);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: subagent-drawer-in 0.18s ease-out;
+}
+
+.subagent-drawer:focus {
+  outline: none;
+}
+
+@keyframes subagent-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagent-drawer {
+    animation: none;
+  }
+}
+
+.subagent-drawer-head {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto 32px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+.subagent-drawer-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-drawer-count {
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--accent-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.subagent-drawer-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+}
+
+/* --------------------------------------------------------------------------
    操作结果提示（toast）：删除 / 重命名的成功与失败。
    固定在右下角——避开头部的 topbar 和底部的输入框，窄屏时靠 max-width 自适应。
    z-index 取 130，高于 ConfirmDialog 的 120：删除失败时确认框可能还开着，

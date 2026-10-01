@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Bot, ChevronDown, Trash2, UsersRound } from 'lucide-vue-next';
+import { ChevronDown, UsersRound } from 'lucide-vue-next';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import SubAgentList from './SubAgentList.vue';
 
 export interface SubAgentSummary {
   count: number;
@@ -28,26 +29,13 @@ function toggleMenu() {
   isOpen.value = !isOpen.value;
 }
 
-function selectAgent(agentName: string) {
+function onSelectAgent(agentName: string) {
   emit('selectAgent', agentName);
   isOpen.value = false;
 }
 
-function deleteSubAgent(agentName: string) {
+function onDeleteSubAgent(agentName: string) {
   emit('deleteSubAgent', agentName);
-}
-
-function getAgentInitial(agentName: string) {
-  return Array.from(agentName.trim())[0]?.toUpperCase() || '?';
-}
-
-function getAgentStatusLabel(status: string, labels: Record<string, string>) {
-  return {
-    loading: labels.subAgentRunning,
-    done: labels.subAgentCompleted,
-    error: labels.subAgentError,
-    stopped: labels.subAgentStopped,
-  }[status] || labels.subAgentCompleted;
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
@@ -93,39 +81,13 @@ onBeforeUnmount(() => {
         <span>{{ agents.length }}</span>
       </div>
       <div class="subagent-menu-list">
-        <div
-          v-for="agent in agents"
-          :key="agent.name"
-          class="subagent-menu-row"
-          :class="{ selected: selectedAgentName === agent.name }"
-        >
-          <button
-            type="button"
-            class="subagent-menu-select"
-            role="menuitem"
-            @click="selectAgent(agent.name)"
-          >
-            <span class="subagent-avatar" aria-hidden="true">
-              {{ getAgentInitial(agent.name) }}
-              <i class="subagent-status-dot" :class="agent.status || 'done'"></i>
-            </span>
-            <span class="subagent-menu-copy">
-              <strong>{{ agent.name }}</strong>
-              <span>
-                {{ agent.role || labels.subAgent }} · {{ getAgentStatusLabel(agent.status, labels) }} · {{ agent.count }} {{ labels.items }}
-              </span>
-            </span>
-            <Bot :size="15" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            class="subagent-menu-delete"
-            :title="labels.deleteSubAgent"
-            @click.stop="deleteSubAgent(agent.name)"
-          >
-            <Trash2 :size="14" aria-hidden="true" />
-          </button>
-        </div>
+        <SubAgentList
+          :agents="agents"
+          :labels="labels"
+          :selected-agent-name="selectedAgentName"
+          @select-agent="onSelectAgent"
+          @delete-sub-agent="onDeleteSubAgent"
+        />
       </div>
     </div>
   </div>
@@ -197,112 +159,5 @@ onBeforeUnmount(() => {
   max-height: min(420px, calc(100vh - 100px));
   overflow-y: auto;
   padding: 6px;
-}
-
-.subagent-menu-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 30px;
-  align-items: center;
-  border-radius: 6px;
-}
-
-.subagent-menu-row:hover,
-.subagent-menu-row.selected {
-  background: var(--surface-soft);
-}
-
-.subagent-menu-select {
-  min-width: 0;
-  min-height: 52px;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 18px;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 6px;
-  text-align: left;
-  color: var(--text);
-  background: transparent;
-  border: 0;
-}
-
-.subagent-menu-select:hover {
-  background: transparent;
-  border-color: transparent;
-}
-
-.subagent-avatar {
-  position: relative;
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: white;
-  background: var(--accent-strong);
-  font-size: 0.82rem;
-  font-weight: 750;
-}
-
-.subagent-status-dot {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--faint);
-}
-
-.subagent-status-dot.loading {
-  background: var(--success);
-}
-
-.subagent-status-dot.error {
-  background: var(--danger);
-}
-
-.subagent-status-dot.stopped {
-  background: var(--warn);
-}
-
-.subagent-menu-copy {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.subagent-menu-copy strong,
-.subagent-menu-copy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.subagent-menu-copy strong {
-  font-size: 0.8rem;
-}
-
-.subagent-menu-copy span {
-  color: var(--muted);
-  font-size: 0.7rem;
-}
-
-.subagent-menu-delete {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: var(--faint);
-  background: transparent;
-  border: 0;
-}
-
-.subagent-menu-delete:hover {
-  color: var(--danger);
-  background: var(--danger-soft);
 }
 </style>

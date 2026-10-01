@@ -6,6 +6,7 @@ import {
   LoaderCircle,
   MessagesSquare,
   RefreshCw,
+  UsersRound,
   X,
 } from 'lucide-vue-next';
 import ChatMessage from './components/ChatMessage.vue';
@@ -19,6 +20,7 @@ import ToastStack from './components/ToastStack.vue';
 import LoginWin from './components/LoginWin.vue';
 import SettingsView from './components/SettingsView.vue';
 import SystemLogGroup from './components/SystemLogGroup.vue';
+import SubAgentDrawer from './components/SubAgentDrawer.vue';
 import SubAgentPanel from './components/SubAgentPanel.vue';
 import SubAgentMenu from './components/SubAgentMenu.vue';
 import type { SubAgentSummary } from './components/SubAgentMenu.vue';
@@ -175,12 +177,20 @@ const MOBILE_MEDIA_QUERY = '(max-width: 820px), (hover: none) and (pointer: coar
 /** 顶栏那个「会话」入口按钮和左侧抽屉都只在移动端出现。 */
 const isMobileLayout = ref(false);
 const sessionDrawerOpen = ref(false);
+/**
+ * 移动端的子 Agent 右侧抽屉。
+ * 桌面端子 Agent 走顶栏的 `SubAgentMenu` + 聊天区右侧面板，不需要这个抽屉。
+ */
+const subAgentDrawerOpen = ref(false);
 let mobileMediaQuery: MediaQueryList | null = null;
 
 function syncMobileLayout(matches: boolean) {
   isMobileLayout.value = matches;
   // 转回桌面布局时把抽屉收起来，否则会留一个盖住整个界面的浮层。
-  if (!matches) sessionDrawerOpen.value = false;
+  if (!matches) {
+    sessionDrawerOpen.value = false;
+    subAgentDrawerOpen.value = false;
+  }
 }
 
 function onMobileMediaQueryChange(event: MediaQueryListEvent) {
@@ -360,6 +370,8 @@ watch(subAgents, (agents) => {
   ) {
     selectedSubAgentName.value = null;
   }
+  // 最后一个子 Agent 没了就把抽屉一起收掉：入口按钮本身也会跟着消失。
+  if (!agents.length) subAgentDrawerOpen.value = false;
 });
 
 watch(chatShell, (nextShell, previousShell) => {
@@ -1111,6 +1123,23 @@ function closeSessionDrawer() {
   sessionDrawerOpen.value = false;
 }
 
+function openSubAgentDrawer() {
+  if (!subAgents.value.length) return;
+  subAgentDrawerOpen.value = true;
+}
+
+/**
+ * 关掉子 Agent 抽屉时把选中项一起清掉。
+ *
+ * 抽屉里「列表 / 面板」是二选一渲染的：如果留着选中项，下次打开会直接进上一个
+ * Agent 的面板，就再也换不了 Agent 了。顺带也走一遍 closeSubAgentPanel，
+ * 让挂起的产物预览能按原逻辑补开。
+ */
+function closeSubAgentDrawer() {
+  subAgentDrawerOpen.value = false;
+  closeSubAgentPanel();
+}
+
 /**
  * 移动端在抽屉里操作完（选会话 / 新建会话）后的收尾：收起抽屉并回到聊天。
  * 桌面端不动 `currentView`——那边侧栏和聊天区是并列的，点会话不该把设置页关掉。
@@ -1816,6 +1845,24 @@ function redactConnectionUrl(value: string): string {
       </div>
 
       <div class="sidebar-body">
+        <!--
+          移动端聊天页的顶栏是隐藏的，而子 Agent 的入口（SubAgentMenu）长在顶栏里，
+          手机上够不着。这里补一个按钮，内容交给右侧的 SubAgentDrawer。
+          没有子 Agent 时按钮本身就不渲染。
+        -->
+        <button
+          v-if="isMobileLayout && subAgents.length"
+          type="button"
+          class="icon-button brand-subagent-trigger"
+          :title="t.subAgents"
+          :aria-label="t.subAgents"
+          :aria-expanded="subAgentDrawerOpen"
+          @click="openSubAgentDrawer"
+        >
+          <UsersRound :size="18" aria-hidden="true" />
+          <span class="subagent-trigger-count">{{ subAgents.length }}</span>
+        </button>
+
         <SessionPanel
           v-bind="sessionPanelBindings"
           @new-session="createSession"
@@ -1872,7 +1919,7 @@ function redactConnectionUrl(value: string): string {
         ref="chatShell"
         class="chat-shell"
         :class="{
-          'has-subagent': selectedSubAgent,
+          'has-subagent': selectedSubAgent && !isMobileLayout,
           'has-preview': previewFile,
           'is-resizing': isSubAgentResizing,
         }"
@@ -1954,8 +2001,9 @@ function redactConnectionUrl(value: string): string {
           @pointercancel="stopSubAgentResize"
         ></div>
 
+        <!-- 移动端这份面板改在右侧抽屉里渲染（见下方 SubAgentDrawer）。 -->
         <SubAgentPanel
-          v-if="selectedSubAgent"
+          v-if="selectedSubAgent && !isMobileLayout"
           :agent="selectedSubAgent"
           :labels="t"
           :messages="subAgentMessages"
@@ -2059,6 +2107,22 @@ function redactConnectionUrl(value: string): string {
       @rename="renameSession"
     />
   </SessionDrawer>
+
+  <SubAgentDrawer
+    v-if="isMobileLayout"
+    :agents="subAgents"
+    :labels="t"
+    :messages="subAgentMessages"
+    :open="subAgentDrawerOpen"
+    :selected-agent-name="selectedSubAgentName"
+    :show-debug-info="showDebugInfo"
+    @close="closeSubAgentDrawer"
+    @delete-sub-agent="deleteSubAgent"
+    @preview-file="openFilePreview"
+    @resend-user-message="resendUserMessage"
+    @select-agent="selectSubAgent"
+    @update-user-message="updateAndResendUserMessage"
+  />
 
   <ToastStack
     :toasts="toasts.toasts.value"

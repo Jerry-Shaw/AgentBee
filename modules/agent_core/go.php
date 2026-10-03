@@ -1029,7 +1029,7 @@ class go extends Factory
             $message_onsend = $this->core->context->isMessageOnSend($session_id);
 
             if (utils::STATUS_IDLE !== $this->utils->wait_status[$session_id] && !$message_onsend) {
-                $this->utils->debug('System: Proc #' . $session_id . ' is BUSY with no message onsend.', 'trace');
+                $this->utils->debug('System: Proc #' . $session_id . ' is BUSY with no message onsend.', 'debug');
                 continue;
             }
 

@@ -7,8 +7,6 @@ use Nervsys\Core\Factory;
 
 class handler extends Factory
 {
-    private string $session_id;
-
     /**
      * @param array      $payload_data
      * @param agent_core $agent_core
@@ -37,8 +35,6 @@ class handler extends Factory
 
             return '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
         }
-
-        $this->session_id = hash('md5', $payload_data['worker_name']);
 
         $proc_idx = $agent_core->runProcWorker(
             $agent_core->utils->getWorkerIDX(),
@@ -69,7 +65,7 @@ class handler extends Factory
 
         $agent_core->utils->addChildWorker(WORKER_CHILD, $payload_data['worker_name'], $worker_info);
         $agent_core->core->context->addUserMessage(
-            $this->session_id,
+            $payload_data['session_id'],
             $payload_data['worker_name'],
             [['type' => 'text', 'content' => '[用户要求] ' . $init_prompt]]
         );
@@ -80,13 +76,13 @@ class handler extends Factory
             $payload_data['worker_role'],
             $payload_data['worker_name'],
             1,
-            $this->session_id
+            $payload_data['session_id']
         );
 
         $agent_core->openai->talkTo(
             WORKER_CHILD,
             $payload_data['worker_name'],
-            $this->session_id,
+            $payload_data['session_id'],
             $proc_idx,
             $agent_core->utils->getChildPrompt(
                 $payload_data['worker_name'],
@@ -140,7 +136,7 @@ class handler extends Factory
             );
 
             $agent_core->core->context->addMessageQueue(
-                $this->session_id,
+                $payload_data['session_id'],
                 $worker_info['worker_name'],
                 [
                     'type'    => 'text',
@@ -154,7 +150,7 @@ class handler extends Factory
         $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');
 
         $agent_core->utils->setChildWorker(WORKER_CHILD, $worker_info['worker_name'], 'status', 'busy');
-        $agent_core->core->context->refreshHistory($this->session_id, $worker_info['worker_name']);
+        $agent_core->core->context->refreshHistory($payload_data['session_id'], $worker_info['worker_name']);
 
         $this->sendMessage(
             $agent_core,
@@ -164,7 +160,7 @@ class handler extends Factory
         );
 
         $agent_core->core->context->addUserMessage(
-            $this->session_id,
+            $payload_data['session_id'],
             $worker_info['worker_name'],
             [['type' => 'text', 'content' => $payload_data['content']]]
         );
@@ -175,13 +171,13 @@ class handler extends Factory
             $worker_info['worker_role'],
             $worker_info['worker_name'],
             1,
-            $this->session_id
+            $payload_data['session_id']
         );
 
         $agent_core->openai->talkTo(
             WORKER_CHILD,
             $worker_info['worker_name'],
-            $this->session_id,
+            $payload_data['session_id'],
             $worker_info['proc_idx'],
             $agent_core->utils->getChildPrompt(
                 $worker_info['worker_name'],
@@ -213,7 +209,7 @@ class handler extends Factory
             $agent_core->utils->debug('WorkerBee closed: ' . $worker_info['worker_name'] . ' (WorkerID:' . $worker_info['proc_idx'] . ', ' . $worker_info['worker_role'] . ')', 'trace');
 
             $agent_core->utils->procMgr->close($worker_info['proc_idx']);
-            $agent_core->core->context->removeHistory($this->session_id, $worker_info['worker_name']);
+            $agent_core->core->context->removeHistory($payload_data['session_id'], $worker_info['worker_name']);
             $agent_core->utils->removeChildWorker(WORKER_CHILD, $worker_info['worker_name']);
 
             $this->sendMessage(

@@ -321,10 +321,6 @@ class context extends Factory
             $this->addUserMessage($session_id, $worker_name, $messages);
         }
 
-        if ($this->message_onsend[$session_id] ?? false) {
-            $count_messages = 1;
-        }
-
         unset($session_id, $worker_name, $messages, $message);
         return $count_messages;
     }
@@ -492,6 +488,16 @@ class context extends Factory
     {
         $this->message_onsend[$session_id] = $on_send;
         unset($session_id, $on_send);
+    }
+
+    /**
+     * @param string $session_id
+     *
+     * @return bool
+     */
+    public function isMessageOnSend(string $session_id): bool
+    {
+        return $this->message_onsend[$session_id] ?? false;
     }
 
     /**

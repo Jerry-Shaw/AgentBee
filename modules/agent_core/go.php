@@ -1026,17 +1026,20 @@ class go extends Factory
                 $this->core->context->removeSessionList($session_id);
             }
 
-            if (utils::STATUS_IDLE !== $this->utils->wait_status[$session_id]) {
+            $message_onsend = $this->core->context->isMessageOnSend($session_id);
+
+            if (utils::STATUS_IDLE !== $this->utils->wait_status[$session_id] && !$message_onsend) {
+                $this->utils->debug('System: Proc #' . $session_id . ' is BUSY with no message onsend.', 'trace');
                 continue;
             }
 
             $new_messages = $this->core->context->refreshHistory($session_id, WORKER_MAIN);
 
-            if (0 === $new_messages) {
+            if (0 === $new_messages && !$message_onsend) {
                 continue;
             }
 
-            $this->utils->debug('System: Sending ' . $new_messages . ' message(s) to ' . $session_id, 'trace');
+            $this->utils->debug('System: Sending ' . $new_messages . ' message(s) to #' . $session_id, 'trace');
 
             $metadata = $this->utils->getMarker(
                 WORKER_MAIN,
@@ -1059,7 +1062,7 @@ class go extends Factory
             );
         }
 
-        unset($socket_id, $buffer, $now_time, $session_list, $session_id, $active_time, $new_messages, $metadata);
+        unset($socket_id, $buffer, $now_time, $session_list, $session_id, $active_time, $message_onsend, $new_messages, $metadata);
         return [];
     }
 

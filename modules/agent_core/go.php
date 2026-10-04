@@ -408,18 +408,20 @@ class go extends Factory
                     break;
 
                 case 'memory':
-                    if ('' !== ($payload['data'] ?? '')) {
-                        switch ($payload_type) {
-                            case 'add':
-                                $this->utils->memory_buffer .= $payload['data'];
-                                break;
+                    if (WORKER_MAIN !== $payload['sender'] || '' === ($payload['data'] ?? '')) {
+                        break;
+                    }
 
-                            case 'save':
-                                $this->utils->memory_buffer .= $payload['data'];
-                                $this->memory->save('misc', 'assistant', $this->utils->memory_buffer, 0, $payload['sessionId']);
-                                $this->utils->memory_buffer = '';
-                                break;
-                        }
+                    switch ($payload_type) {
+                        case 'add':
+                            $this->utils->memory_buffer .= $payload['data'];
+                            break;
+
+                        case 'save':
+                            $this->utils->memory_buffer .= $payload['data'];
+                            $this->memory->save('misc', 'assistant', $this->utils->memory_buffer, 0, $payload['sessionId']);
+                            $this->utils->memory_buffer = '';
+                            break;
                     }
                     break;
 

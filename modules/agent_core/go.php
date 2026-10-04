@@ -918,8 +918,17 @@ class go extends Factory
                     // Reload config
                     case 'saveConfig':
                         $this->init(true);
+
+                        $this->utils->setChildWorker(
+                            WORKER_MAIN,
+                            WORKER_MAIN,
+                            'llm_params',
+                            $this->utils->agent_config['agent_llm']['params']
+                        );
+
                         $this->openai->reload();
                         $this->openai->getModels(true);
+
                         $this->utils->debug('User: ' . $data['type'] . '->reloaded', 'trace');
                         break;
                 }

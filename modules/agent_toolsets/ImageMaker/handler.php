@@ -59,7 +59,7 @@ class handler extends Factory
             throw new \Exception('配置文件JSON格式错误：' . $config_path);
         }
 
-        foreach (['org_id', 'api_url', 'api_key', 'model_id', 'type'] as $value) {
+        foreach (['api_url', 'api_key', 'model_id', 'type'] as $value) {
             if (!isset($config[$value]) || '' === $config[$value]) {
                 throw new \Exception('配置项[' . $value . ']缺失或为空。请检查文件：' . $config_path);
             }

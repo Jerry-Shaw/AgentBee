@@ -59,7 +59,7 @@ class handler extends Factory
             throw new \Exception('配置文件JSON格式错误：' . $config_path);
         }
 
-        foreach (['model_id', 'base_url', 'api_key'] as $value) {
+        foreach (['org_id', 'api_url', 'api_key', 'model_id', 'type'] as $value) {
             if (!isset($config[$value]) || '' === $config[$value]) {
                 throw new \Exception('配置项[' . $value . ']缺失或为空。请检查文件：' . $config_path);
             }
@@ -94,7 +94,7 @@ class handler extends Factory
         $this->format = $payload_data['output_format'];
 
         $config   = $this->loadConfig($agent_core);
-        $openai   = libOpenAI::new($config['base_url'], $config['api_key'], '/ImageCreator');
+        $openai   = libOpenAI::new($config['api_url'], $config['api_key'], '/ImageCreator')->setOrgId($config['org_id'] ?? '');
         $response = $openai->createImage(
             $payload_data['prompt'],
             $config['model_id'],
@@ -130,7 +130,7 @@ class handler extends Factory
         $this->format = $payload_data['output_format'];
 
         $config  = $this->loadConfig($agent_core);
-        $openai  = libOpenAI::new($config['base_url'], $config['api_key'], '/ImageEditor');
+        $openai  = libOpenAI::new($config['api_url'], $config['api_key'], '/ImageEditor')->setOrgId($config['org_id'] ?? '');
         $options = [
             'n'               => $payload_data['n'],
             'size'            => $payload_data['size'],

@@ -166,7 +166,7 @@ class processor extends Factory
             $libOpenAI->$api_type(
                 $history,
                 $system,
-                $this->core->utils->agent_config['agent_llm']['model'],
+                $this->core->utils->agent_config['agent_llm']['model_id'],
                 $this->context->api_object->options,
                 $stream_handler
             );

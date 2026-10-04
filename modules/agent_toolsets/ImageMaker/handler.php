@@ -180,7 +180,7 @@ class handler extends Factory
                 throw new \RuntimeException('No image files uploaded.');
             }
 
-            $payload  = ['prompt' => $payload_data['prompt'], 'model' => $config['model_id']];
+            $payload  = ['prompt' => $payload_data['prompt'], 'model_id' => $config['model_id']];
             $payload  = array_merge($payload, $options, $files);
             $response = $openai->sendRequest('/images/edits', $payload);
 

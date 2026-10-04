@@ -806,7 +806,7 @@ const basicSettings = computed<BasicSettings>(() => ({
   apiKey: readString(agentConfig.value, ['agent_llm', 'api_key']),
   apiUrl: readString(agentConfig.value, ['agent_llm', 'api_url']),
   inSandbox: readBoolean(agentConfig.value, ['sandbox_mode'], true),
-  modelName: readString(agentConfig.value, ['agent_llm', 'model']),
+  modelName: readString(agentConfig.value, ['agent_llm', 'model_id']),
   workspacePath: readString(agentConfig.value, ['workspace_path']),
   workspaceUrl: readString(agentConfig.value, ['workspace_url']),
 }));
@@ -816,7 +816,7 @@ function updateBasicSetting(field: keyof BasicSettings, value: boolean | string)
   if (field === 'apiUrl') setNestedValue(nextConfig, ['agent_llm', 'api_url'], String(value));
   if (field === 'apiKey') setNestedValue(nextConfig, ['agent_llm', 'api_key'], String(value));
   if (field === 'inSandbox') setNestedValue(nextConfig, ['sandbox_mode'], Boolean(value));
-  if (field === 'modelName') setNestedValue(nextConfig, ['agent_llm', 'model'], String(value));
+  if (field === 'modelName') setNestedValue(nextConfig, ['agent_llm', 'model_id'], String(value));
   if (field === 'workspacePath') setNestedValue(nextConfig, ['workspace_path'], String(value));
   if (field === 'workspaceUrl') setNestedValue(nextConfig, ['workspace_url'], String(value));
   applyAgentConfig(nextConfig, { syncJson: true });
@@ -873,7 +873,7 @@ function saveAgentConfig(
 function selectComposerModel(modelName: string) {
   if (!modelName || modelName === basicSettings.value.modelName) return;
   const nextConfig = cloneConfig(agentConfig.value);
-  setNestedValue(nextConfig, ['agent_llm', 'model'], modelName);
+  setNestedValue(nextConfig, ['agent_llm', 'model_id'], modelName);
   saveAgentConfig(nextConfig, { reconnect: true, refreshModels: true });
 }
 

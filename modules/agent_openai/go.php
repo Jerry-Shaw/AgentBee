@@ -353,11 +353,11 @@ class go extends Factory
             $llm_params['timeout'] ?? $this->utils->agent_config['agent_llm']['timeout'],
             10,
             1,
-            120
+            $llm_params['low_speed_time'] ?? $this->utils->agent_config['agent_llm']['low_speed_time']
         );
 
         $this->libOpenAI->setOrgId($llm_params['org_id'] ?? $this->utils->agent_config['agent_llm']['org_id']);
-        $this->libOpenAI->setApiModel($llm_params['model'] ?? $this->utils->agent_config['agent_llm']['model']);
+        $this->libOpenAI->setApiModel($llm_params['model_id'] ?? $this->utils->agent_config['agent_llm']['model_id']);
 
         unset($reload, $llm_params);
     }

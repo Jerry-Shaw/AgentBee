@@ -68,7 +68,7 @@ class go extends Factory
         $this->utils->debug('WS-Token: ' . ($this->utils->agent_config['agent_server']['ws_token'] ?? 'NONE'), 'trace');
         $this->utils->debug('API-URL: ' . ($this->utils->agent_config['agent_llm']['api_url'] ?? 'NONE'), 'trace');
         $this->utils->debug('API-Type: ' . $this->utils->agent_config['agent_llm']['api_type'], 'trace');
-        $this->utils->debug('Model-ID: ' . ($this->utils->agent_config['agent_llm']['model'] ?? 'NONE'), 'trace');
+        $this->utils->debug('Model-ID: ' . ($this->utils->agent_config['agent_llm']['model_id'] ?? 'NONE'), 'trace');
         $this->utils->debug('SandBox mode: ' . ($this->utils->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
 
         $workspace_path = $this->utils->agent_config['workspace_path'] ?? '';

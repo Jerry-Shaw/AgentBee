@@ -734,7 +734,8 @@ body:has(.login-window-backdrop) {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  width: min(88vw, 400px);
+  width: 80%;
+  min-width: 0;
   height: 100%;
   min-height: 0;
   padding-top: env(safe-area-inset-top);
@@ -1071,12 +1072,12 @@ body:has(.login-window-backdrop) {
 
 .chat-shell.has-subagent {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) 8px minmax(300px, var(--subagent-pane-width));
+  grid-template-columns: minmax(0, 1fr) 8px clamp(20%, var(--subagent-pane-width), 80%);
 }
 
 .chat-shell.has-preview {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) 8px minmax(340px, var(--subagent-pane-width));
+  grid-template-columns: minmax(0, 1fr) 8px clamp(20%, var(--subagent-pane-width), 80%);
 }
 
 .chat-shell.has-preview .subagent-resizer {
@@ -1155,6 +1156,7 @@ body:has(.login-window-backdrop) {
   height: 100%;
   cursor: col-resize;
   touch-action: none;
+  user-select: none;
   background: var(--surface-soft);
   border-left: 1px solid var(--line-soft);
   border-right: 1px solid var(--line-soft);
@@ -3064,18 +3066,6 @@ body:has(.login-window-backdrop) {
     border-left: 0;
   }
 
-  .chat-shell.has-subagent {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(220px, 1fr) minmax(220px, 0.85fr);
-  }
-
-  .chat-shell.has-subagent .subagent-resizer {
-    display: none;
-  }
-
-  .chat-shell.has-subagent .subagent-panel {
-    border-top: 1px solid var(--line);
-  }
 }
 
 /* 移动端布局。

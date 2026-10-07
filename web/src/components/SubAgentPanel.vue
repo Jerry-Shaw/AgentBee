@@ -190,6 +190,7 @@ function getAgentStatusLabel(status: string) {
 
 <style scoped>
 .subagent-panel {
+  overflow: hidden;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -279,6 +280,7 @@ function getAgentStatusLabel(status: string) {
 
 .subagent-messages {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   padding: 16px;

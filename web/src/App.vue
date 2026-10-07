@@ -97,10 +97,8 @@ let historyRestoreHeight: number | null = null;
 let restoringHistoryScroll = false;
 const appVersion = __APP_VERSION__;
 
-const SUB_AGENT_MIN_WIDTH = 300;
-const SUB_AGENT_MAX_WIDTH = 680;
-const CHAT_PANE_MIN_WIDTH = 360;
-const SUB_AGENT_DIVIDER_WIDTH = 8;
+const SUB_AGENT_MIN_RATIO = 0.2;
+const SUB_AGENT_MAX_RATIO = 0.8;
 const SUB_AGENT_WIDTH_STORAGE_KEY = 'agentbee.subAgentPaneWidth';
 const HISTORY_PAGE_SIZE = 50;
 const MEMORY_PAGE_SIZE = 30;
@@ -185,6 +183,7 @@ const subAgentDrawerOpen = ref(false);
 let mobileMediaQuery: MediaQueryList | null = null;
 
 function syncMobileLayout(matches: boolean) {
+  stopSubAgentResize();
   isMobileLayout.value = matches;
   // 转回桌面布局时把抽屉收起来，否则会留一个盖住整个界面的浮层。
   if (!matches) {
@@ -624,11 +623,12 @@ function closeSubAgentPanel() {
 }
 
 function startSubAgentResize(event: PointerEvent) {
-  if (event.button !== 0 || (!selectedSubAgent.value && !previewFile.value)) return;
+  if (isMobileLayout.value || event.button !== 0 || (!selectedSubAgent.value && !previewFile.value)) return;
   const target = event.currentTarget as HTMLElement;
   resizePointerId = event.pointerId;
   resizeStartX = event.clientX;
-  resizeStartWidth = subAgentPaneWidth.value;
+  resizeStartWidth = clampSubAgentPaneWidth(subAgentPaneWidth.value);
+  subAgentPaneWidth.value = resizeStartWidth;
   isSubAgentResizing.value = true;
   target.setPointerCapture(event.pointerId);
   event.preventDefault();
@@ -641,18 +641,15 @@ function resizeSubAgentPanel(event: PointerEvent) {
   );
 }
 
-function stopSubAgentResize(event: PointerEvent) {
-  if (resizePointerId !== event.pointerId) return;
-  const target = event.currentTarget as HTMLElement;
-  if (target.hasPointerCapture(event.pointerId)) {
-    target.releasePointerCapture(event.pointerId);
-  }
+function stopSubAgentResize(event?: PointerEvent) {
+  if (!isSubAgentResizing.value || (event && resizePointerId !== event.pointerId)) return;
   isSubAgentResizing.value = false;
   resizePointerId = null;
   persistSubAgentPaneWidth();
 }
 
 function resizeSubAgentWithKeyboard(event: KeyboardEvent) {
+  if (isMobileLayout.value) return;
   const steps: Record<string, number> = {
     ArrowLeft: 24,
     ArrowRight: -24,
@@ -661,9 +658,9 @@ function resizeSubAgentWithKeyboard(event: KeyboardEvent) {
   event.preventDefault();
 
   if (event.key === 'Home') {
-    subAgentPaneWidth.value = SUB_AGENT_MIN_WIDTH;
+    subAgentPaneWidth.value = getSubAgentWidthBounds().min;
   } else if (event.key === 'End') {
-    subAgentPaneWidth.value = clampSubAgentPaneWidth(SUB_AGENT_MAX_WIDTH);
+    subAgentPaneWidth.value = getSubAgentWidthBounds().max;
   } else {
     subAgentPaneWidth.value = clampSubAgentPaneWidth(
       subAgentPaneWidth.value + steps[event.key],
@@ -672,15 +669,27 @@ function resizeSubAgentWithKeyboard(event: KeyboardEvent) {
   persistSubAgentPaneWidth();
 }
 
-function clampSubAgentPaneWidth(width: number) {
-  const shellWidth = chatShell.value?.getBoundingClientRect().width || window.innerWidth;
-  const availableWidth = shellWidth - CHAT_PANE_MIN_WIDTH - SUB_AGENT_DIVIDER_WIDTH;
-  const maxWidth = Math.max(
-    SUB_AGENT_MIN_WIDTH,
-    Math.min(SUB_AGENT_MAX_WIDTH, availableWidth),
-  );
-  return Math.round(Math.max(SUB_AGENT_MIN_WIDTH, Math.min(width, maxWidth)));
+// Use the full chat shell (main conversation + divider + side panel).
+function getSubAgentWidthBounds() {
+  const shellWidth = chatShell.value?.clientWidth || window.innerWidth;
+  return {
+    min: shellWidth * SUB_AGENT_MIN_RATIO,
+    max: shellWidth * SUB_AGENT_MAX_RATIO,
+  };
 }
+
+function clampSubAgentPaneWidth(width: number) {
+  const { min, max } = getSubAgentWidthBounds();
+  return Math.max(min, Math.min(width, max));
+}
+
+watch([selectedSubAgent, previewFile, isMobileLayout, chatShell], () => {
+  if (isMobileLayout.value || (!selectedSubAgent.value && !previewFile.value)) {
+    stopSubAgentResize();
+    return;
+  }
+  subAgentPaneWidth.value = clampSubAgentPaneWidth(subAgentPaneWidth.value);
+}, { flush: 'post' });
 
 function persistSubAgentPaneWidth() {
   localStorage.setItem(SUB_AGENT_WIDTH_STORAGE_KEY, String(subAgentPaneWidth.value));
@@ -1583,7 +1592,7 @@ onMounted(() => {
   syncMobileLayout(mobileMediaQuery.matches);
   mobileMediaQuery.addEventListener('change', onMobileMediaQueryChange);
   chatShellResizeObserver = new ResizeObserver(() => {
-    if (!selectedSubAgent.value) return;
+    if (isMobileLayout.value || (!selectedSubAgent.value && !previewFile.value)) return;
     const clampedWidth = clampSubAgentPaneWidth(subAgentPaneWidth.value);
     if (clampedWidth !== subAgentPaneWidth.value) {
       subAgentPaneWidth.value = clampedWidth;
@@ -1602,6 +1611,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopSubAgentResize();
   clearMemoryResponseTimer();
   clearSessionResponseTimer();
   clearSessionDeleteTimer();
@@ -1646,24 +1656,31 @@ function createDefaultAgentConfig(): Record<string, unknown> {
     agent_server: {
       host: '127.0.0.1',
       port: 8686,
+      ws_token: '',
       ping_interval: 60,
     },
     agent_llm: {
-      api_url: 'http://127.0.0.1:1234/v1',
-      api_key: 'sk-lm-ru6XiZDE:WImxJO82hxm5L76fNcaK',
-      model: 'qwen3.6-35b-a3b-genesis-v2-apex',
       org_id: '',
+      api_url: '',
+      api_key: '',
+      api_type: 'completions',
+      model_id: '',
+      model_ctx: 131072,
+      timeout: 3600,
+      low_speed_time: 300,
       hw_hash: '',
-      timeout: 600,
       keep_reasons: false,
+      keep_response_id: false,
       params: {
-        max_completion_tokens: 65536,
-        temperature: 0.8,
-        min_p: 0,
+        max_tokens: 12288,
+        temperature: 0.6,
+        reasoning: 'low',
+        min_p: 0.05,
         top_p: 0.95,
-        top_k: 40,
+        top_k: 20,
+        store: true,
         frequency_penalty: 0,
-        presence_penalty: 1,
+        presence_penalty: 0,
         repetition_penalty: 1,
         enable_thinking: false,
         stop: [
@@ -1677,17 +1694,18 @@ function createDefaultAgentConfig(): Record<string, unknown> {
           enable_thinking: false,
         },
         thinking: {
-          type: 'enable',
+          type: 'disabled',
         },
       },
     },
-    max_ctx_len: 50,
-    memory_limit: '4G',
+    misc_save_len: 100000,
+    misc_keep_days: 365,
     sandbox_mode: false,
-    workspace_path: '',
     workspace_url: '',
+    workspace_path: '',
+    reset_interval: 21600,
+    memory_limit: '4G',
     agent_debug: 'trace',
-    socket_debug: false,
   };
 }
 
@@ -1985,20 +2003,21 @@ function redactConnectionUrl(value: string): string {
         </div>
 
         <div
-          v-if="selectedSubAgent || previewFile"
+          v-if="!isMobileLayout && (selectedSubAgent || previewFile)"
           class="subagent-resizer"
           role="separator"
           tabindex="0"
           aria-orientation="vertical"
           :aria-label="previewFile ? t.resizePreviewPanel : t.resizeSubAgentPanel"
-          :aria-valuemin="SUB_AGENT_MIN_WIDTH"
-          :aria-valuemax="SUB_AGENT_MAX_WIDTH"
+          :aria-valuemin="getSubAgentWidthBounds().min"
+          :aria-valuemax="getSubAgentWidthBounds().max"
           :aria-valuenow="subAgentPaneWidth"
           @keydown="resizeSubAgentWithKeyboard"
           @pointerdown="startSubAgentResize"
           @pointermove="resizeSubAgentPanel"
           @pointerup="stopSubAgentResize"
           @pointercancel="stopSubAgentResize"
+          @lostpointercapture="stopSubAgentResize"
         ></div>
 
         <!-- 移动端这份面板改在右侧抽屉里渲染（见下方 SubAgentDrawer）。 -->

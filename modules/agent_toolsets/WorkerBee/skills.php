@@ -27,13 +27,13 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'start',
-                'description' => '创建异步Worker子进程（无记忆，需主进程总结保存）。进程回复“已就绪”后，才可调用talk进行交互。所有回复异步推送，按需调用talk保持互动，直至完成。适用于对抗式辩论/多进程协作等场景。返回{message}。',
+                'description' => '邀请一位专家协助处理任务（须提供完整背景，我会记住关键信息）。对方回复“已就绪”后可开始交流。交流异步进行，按需保持沟通至完成。适用于辩论/协作。返回{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => '唯一名称'],
-                        'worker_role' => ['type' => 'string', 'description' => '角色，如"代码审查"'],
-                        'init_prompt' => ['type' => 'string', 'description' => '启动后的首条指令，用于验证就绪或设定行为（勿填具体任务）']
+                        'worker_name' => ['type' => 'string', 'description' => '专家唯一名称'],
+                        'worker_role' => ['type' => 'string', 'description' => '专家的角色与领域，如"代码审查"'],
+                        'init_prompt' => ['type' => 'string', 'description' => '邀请时发送的首条指令，用于设定专家方向和行为准则（勿填具体任务）']
                     ],
                     'required'   => ['worker_name', 'worker_role', 'init_prompt']
                 ],
@@ -43,11 +43,11 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'talk',
-                'description' => '向Worker子进程发送消息，回复将异步推送。收到回复后必须根据回复内容判断是否延续对话，期间可处理其他任务，无需等待。长消息建议拆分，禁止重发。返回：{message}。',
+                'description' => '向专家发送消息进行交流，回复异步送达。收到回复后判断任务是否完成，未完成则继续交流；期间可处理其他任务，不必等待。长消息建议拆分，禁止重发。返回{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => 'Worker名称'],
+                        'worker_name' => ['type' => 'string', 'description' => '专家名称'],
                         'content'     => ['type' => 'string', 'description' => '消息内容']
                     ],
                     'required'   => ['worker_name', 'content']
@@ -58,11 +58,11 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'close',
-                'description' => '终止Worker子进程并释放资源。用于任务完成、进程无响应或上下文过长需重置时。大量输出时关闭可能偶发短暂阻塞。如需继续，重新启动并传入摘要。返回 {message}。',
+                'description' => '结束与专家的交流并释放资源。任务完成、对方无响应或上下文过长需重置时调用。如需继续，重新邀请并传入摘要。返回{message}。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'worker_name' => ['type' => 'string', 'description' => 'Worker名称']
+                        'worker_name' => ['type' => 'string', 'description' => '专家名称']
                     ],
                     'required'   => ['worker_name']
                 ],
@@ -72,7 +72,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'list',
-                'description' => '获取所有活跃Worker子进程的状态（ready/busy/streaming/calling_tools）。仅调试用，禁止连续调用影响通信。返回状态列表。'
+                'description' => '查看所有活跃专家的状态（ready/busy/streaming/calling_tools）。仅偶尔查看，禁止连续调用（会阻塞交流）。返回状态列表。'
             ],
         ]
     ];

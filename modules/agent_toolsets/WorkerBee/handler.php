@@ -29,11 +29,11 @@ class handler extends Factory
                 WORKER_MAIN,
                 [
                     'type'    => 'text',
-                    'content' => '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')'
+                    'content' => '[专家] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接交流 (角色: ' . $worker_info['worker_role'] . ')'
                 ]
             );
 
-            return '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接使用 (角色: ' . $worker_info['worker_role'] . ')';
+            return '[专家] "`' . $payload_data['worker_name'] . '`" 已存在。请换名或直接交流 (角色: ' . $worker_info['worker_role'] . ')';
         }
 
         $proc_idx = $agent_core->runProcWorker(
@@ -118,11 +118,11 @@ class handler extends Factory
                 WORKER_MAIN,
                 [
                     'type'    => 'text',
-                    'content' => '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 进程已终止，消息发送失败'
+                    'content' => '[专家] `' . $payload_data['worker_name'] . '` 交流已结束，消息发送失败'
                 ]
             );
 
-            return '[WorkerBee] "`' . $payload_data['worker_name'] . '`" 进程已终止，消息发送失败';
+            return '[专家] "`' . $payload_data['worker_name'] . '`" 交流已结束，消息发送失败';
         }
 
         if ('ready' !== $worker_info['status']) {
@@ -144,7 +144,7 @@ class handler extends Factory
                 ]
             );
 
-            return '[WorkerBee] 消息已发送，当前任务结束。`' . $worker_info['worker_name'] . '`正忙（' . $worker_info['status'] . '），回复将异步推送，无需等待，禁止重发，可继续处理其他任务。';
+            return '[专家] 消息已发送，当前任务结束。`' . $worker_info['worker_name'] . '`正忙（' . $worker_info['status'] . '），回复将异步推送，无需等待，禁止重发，可继续处理其他任务。';
         }
 
         $agent_core->utils->debug('WorkerBee: ' . $worker_info['worker_name'] . ' is working on task.', 'trace');

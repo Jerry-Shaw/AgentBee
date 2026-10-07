@@ -678,7 +678,7 @@ class go extends Factory
                                         WORKER_MAIN,
                                         [
                                             'type'    => 'text',
-                                            'content' => '[WorkerBee] 异步消息' . "\n\n" . '`' . $payload['workerName'] . '`：' . $payload['workerRole'] . "\n\n" . '消息内容：' . "\n" . $payload['data']
+                                            'content' => '[专家消息]' . "\n\n" . '`' . $payload['workerName'] . '`：' . $payload['workerRole'] . "\n\n" . '消息内容：' . "\n" . $payload['data']
                                         ]
                                     );
                                 }
@@ -718,7 +718,7 @@ class go extends Factory
                                             WORKER_MAIN,
                                             [
                                                 'type'    => 'text',
-                                                'content' => '[WorkerBee] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '：上下文已满。请：①生成任务摘要（目标+进度+待办） → ②重启`' . $payload['workerName'] . '` → ③注入任务摘要，继续原有任务，重启过程不汇报。'
+                                                'content' => '[专家] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '：上下文已满。请：①生成任务摘要（目标+进度+待办） → ②结束并重新邀请`' . $payload['workerName'] . '` → ③提供任务摘要，继续原有任务，邀请过程不汇报。'
                                             ]
                                         );
                                     }

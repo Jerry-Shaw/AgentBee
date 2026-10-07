@@ -25,6 +25,13 @@ const PAGE_SIZE = 50;
 const visibleMessageCount = ref(PAGE_SIZE);
 let restoreDistance: number | null = null;
 let restoringScroll = false;
+/**
+ * 「贴底自动跟随」状态：默认 true，即用户没主动往上翻过之前，新消息一律滚到底部。
+ * 和主聊天区（App.vue）的 `shouldAutoScroll` 同一套语义——子 Agent 面板每次打开、
+ * 切换 Agent 时都会重置回 true，所以「有新消息就自动落底」是默认行为；用户手动
+ * 往上翻超过阈值后停止跟随，避免抢滚动位置。
+ */
+let shouldFollowBottom = true;
 
 const allFilteredMessages = computed(() => (
   props.messages.filter((message) => message.WindowName === props.agent.name)
@@ -34,8 +41,54 @@ const filteredMessages = computed(() => (
   allFilteredMessages.value.slice(-visibleMessageCount.value)
 ));
 
+/** 滚到底部：面板内出现新消息、或刚打开时调用。 */
+function scrollToBottom() {
+  const element = messagesElement.value;
+  if (!element) return;
+  element.scrollTop = element.scrollHeight;
+}
+
+const messagesElement = ref<HTMLElement | null>(null);
+
+/**
+ * 面板内容变化（新消息 / 流式更新）后，若用户仍贴着底部就自动滚到底。
+ * `deep: false` 监听的是数组引用：`props.messages` 是 App.vue 里 activeSession
+ * 的 messages 数组切片，新消息进来会生成新的 computed 结果；同一条消息流式增长
+ * （content/status 原地改）时靠下方 watchEffect 兜底。
+ */
+watch(filteredMessages, () => {
+  if (shouldFollowBottom) scrollToBottom();
+});
+
+/**
+ * 流式更新（同一条 assistant 消息 content/think/toolEvents 原地变长）不会改变
+ * `filteredMessages` 的引用，需要单独盯住最后一条消息的内容长度。
+ */
+watch(
+  () => {
+    const last = filteredMessages.value[filteredMessages.value.length - 1];
+    if (!last) return '';
+    return [
+      last.id,
+      last.status || '',
+      last.content?.length ?? 0,
+      last.think?.length ?? 0,
+      last.toolEvents?.length ?? 0,
+    ].join('|');
+  },
+  () => {
+    if (shouldFollowBottom) scrollToBottom();
+  },
+);
+
+/**
+ * 用户手动滚动：滚到顶部附近触发「加载更早消息」；同时判断是否还在贴底，
+ * 决定后续新消息要不要自动跟随。
+ */
 function onScroll(event: Event) {
   const element = event.currentTarget as HTMLElement;
+  shouldFollowBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+
   if (restoringScroll || element.scrollTop >= 80 || allFilteredMessages.value.length <= visibleMessageCount.value) return;
   restoreDistance = element.scrollHeight - element.scrollTop;
   restoringScroll = true;
@@ -49,11 +102,24 @@ function onScroll(event: Event) {
   });
 }
 
-watch(() => props.agent.name, () => {
-  visibleMessageCount.value = PAGE_SIZE;
-  restoreDistance = null;
-  restoringScroll = false;
-});
+/**
+ * 切换 Agent（或面板首次挂载）：重置分页与滚动状态，并直接落底。
+ * `immediate: true` 覆盖「组件一渲染出来就贴底」的场景——移动端每次点开抽屉、
+ * 桌面端从列表选中某个子 Agent，都会走这里。
+ */
+watch(
+  () => props.agent.name,
+  () => {
+    visibleMessageCount.value = PAGE_SIZE;
+    restoreDistance = null;
+    restoringScroll = false;
+    shouldFollowBottom = true;
+    nextTick(() => {
+      window.requestAnimationFrame(scrollToBottom);
+    });
+  },
+  { immediate: true },
+);
 
 function onResendUserMessage(messageId: string) {
   emit('resendUserMessage', messageId);
@@ -104,7 +170,7 @@ function getAgentStatusLabel(status: string) {
       </button>
     </header>
 
-    <div class="subagent-messages" @scroll="onScroll">
+    <div ref="messagesElement" class="subagent-messages" @scroll="onScroll">
       <div v-if="!filteredMessages.length" class="subagent-empty">
         {{ labels.noMessages }}
       </div>

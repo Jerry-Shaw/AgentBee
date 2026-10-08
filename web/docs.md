@@ -247,9 +247,9 @@ message 事件时主动收尾该轮次——后端对这种 `need_llm = false` �
   只长在 `.topbar-actions` 里，一起藏掉就出不了设置页了。
   ⚠️ 顶栏隐藏后 `.main` 只剩两个子项，`grid-template-rows` 必须同步改成
   `minmax(0, 1fr) auto`，否则 chat-shell 会掉进 `auto` 行被压扁在顶部。
-  代价：`.topbar-actions` 里的 `SubAgentMenu` 在移动端聊天页不可达——所以子 Agent 的入口
+  代价：`.topbar-actions` 里的 `SubAgentMenu` 在移动端聊天页不可达——所以专家的入口
   单独补在了头部（见下一节），不再依赖顶栏。
-- **子 Agent 用右侧抽屉**：顶栏在移动端聊天页是隐藏的，`SubAgentMenu` 因此够不着；
+- **专家用右侧抽屉**：顶栏在移动端聊天页是隐藏的，`SubAgentMenu` 因此够不着；
   入口按钮改放头部那一行的 `.sidebar-body`（只在 `isMobileLayout && subAgents.length` 时渲染，
   带一个数量角标），内容交给 `components/SubAgentDrawer.vue`——从**右侧**滑出，
   没选 Agent 时是列表、选中后就地换成 `SubAgentPanel`（`embedded` 模式，高度由抽屉的 flex 分配）。
@@ -270,7 +270,29 @@ message 事件时主动收尾该轮次——后端对这种 `need_llm = false` �
   （iOS 上聚焦字号 <16px 的输入框会把整页放大）。
 - 删除确认框在移动端改成两列等宽 + `min-height: 44px`；
   结果提示抬高到输入框上方（`bottom: calc(78px + env(safe-area-inset-bottom))`），别压住发送按钮。
-- 抽屉宽度 `min(84vw, 320px)`，并处理 `env(safe-area-inset-*)`（刘海屏）。
+- 会话抽屉宽度 `min(84vw, 320px)`，专家抽屉 `80%`，都处理 `env(safe-area-inset-*)`（刘海屏）。
+
+### PC 侧栏收放
+
+侧栏（`.sidebar`）在 PC 上可以整个收起来，把宽度让给聊天区（约 +236~292px）。
+
+- **状态**：`sidebarCollapsed` + `localStorage['agentbee.sidebarCollapsed']`，默认展开；
+  `sidebarIsCollapsed = sidebarCollapsed && !isMobileLayout`——移动端那一行本身就是头部，没有「侧栏」可收。
+- **两个按钮**：收起按钮长在侧栏自己的 `.brand` 里；收起来之后它跟着消失，由顶栏左侧
+  接手的展开按钮负责恢复（`.topbar-sidebar-actions`）。同一个状态，两个入口。
+- **设置入口要补**：齿轮平时长在侧栏的 `ConnectionPanel` 里，收起后会一起藏掉，
+  所以顶栏那组按钮里补了一个齿轮（只在 `currentView === 'chat'` 时显示）。
+- **实现**：`.app.is-sidebar-collapsed { grid-template-columns: 0 minmax(0, 1fr) }`。
+  用类选择器是为了同时盖过 `@media (max-width: 1080px)` 里的列宽；动画复用 `.app` 上
+  已有的 `transition: grid-template-columns`。
+- **可访问性**：宽度塌成 0 之后里面的按钮还在 DOM 里，模板上给 `.sidebar` 绑了 `inert`，
+  否则 Tab 会跑进一条看不见的会话列表。
+
+### 等待中的蜜蜂
+
+assistant 气泡在「等待响应」时显示 `components/BeeLoader.vue`：一只上下起伏、扇翅膀的
+小蜜蜂（纯 SVG 描边 + `currentColor`，跟主题走）。动画只动 transform，
+`prefers-reduced-motion` 下停掉。替换掉了原来的三个跳动小圆点（`.typing-dots`）。
 
 ### `close` 事件不可信（已修复的历史 bug）
 

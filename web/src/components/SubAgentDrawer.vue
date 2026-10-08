@@ -7,10 +7,10 @@ import SubAgentList from './SubAgentList.vue';
 import SubAgentPanel from './SubAgentPanel.vue';
 
 /**
- * 移动端的子 Agent 抽屉：从右侧滑出。
+ * 移动端的专家抽屉：从右侧滑出。
  *
  * 移动端聊天页的 `.topbar` 是隐藏的，而 `SubAgentMenu` 长在 topbar 里，
- * 「子 Agent」这个入口在手机上因此不可达。这里在头部补一个按钮，内容用右侧抽屉承载：
+ * 「专家」这个入口在手机上因此不可达。这里在头部补一个按钮，内容用右侧抽屉承载：
  * 没选 Agent 时显示列表（和桌面下拉是同一份 `SubAgentList`），选中后就地换成
  * `SubAgentPanel`——不用再把面板铺在聊天区上面。
  *

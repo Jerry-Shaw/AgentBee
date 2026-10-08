@@ -3,7 +3,7 @@ import { Bot, Trash2 } from 'lucide-vue-next';
 import type { SubAgentSummary } from './SubAgentMenu.vue';
 
 /**
- * 子 Agent 列表的**唯一一份**实现。
+ * 专家列表的**唯一一份**实现。
  *
  * 桌面端装在 `SubAgentMenu` 的下拉浮层里，移动端装在 `SubAgentDrawer` 的右侧抽屉里——
  * 和会话列表同样的思路：只留一份行与操作，避免「手机上少做了某个操作」。

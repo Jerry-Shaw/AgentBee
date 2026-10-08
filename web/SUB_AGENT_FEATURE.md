@@ -1,8 +1,8 @@
-# 子Agent功能说明
+# 专家功能说明
 
 ## 功能概述
 
-BeeWeb 现在支持子Agent对话的独立显示。当后端返回的消息包含 `isSubTalk: 1` 字段时，这些消息会被识别为子Agent的对话，不会显示在主聊天区域，而是显示在右侧的独立面板中。
+BeeWeb 现在支持专家对话的独立显示。当后端返回的消息包含 `isSubTalk: 1` 字段时，这些消息会被识别为专家的对话，不会显示在主聊天区域，而是显示在右侧的独立面板中。
 
 ## 后端协议扩展
 
@@ -16,23 +16,23 @@ BeeWeb 现在支持子Agent对话的独立显示。当后端返回的消息包�
   "messageId": "msg-xxx",
   "sessionId": "session-xxx",
   "data": "消息内容",
-  "workerName": "greeter_worker",  // 必需，用于识别和分组子Agent
+  "workerName": "greeter_worker",  // 必需，用于识别和分组专家
   "workerRole": "问候者",          // 可选，显示用
   
   // 新增字段
-  "isSubTalk": 1               // 标记为子Agent消息（1表示是，0或不传表示否）
+  "isSubTalk": 1               // 标记为专家消息（1表示是，0或不传表示否）
 }
 ```
 
 ### 字段说明
 
-- **isSubTalk**: `number` - 值为1时表示这是子Agent的消息，将不在主聊天区显示
-- **workerName**: `string` - Worker的标识名称，用于区分不同的子Agent并分组显示
+- **isSubTalk**: `number` - 值为1时表示这是专家的消息，将不在主聊天区显示
+- **workerName**: `string` - Worker的标识名称，用于区分不同的专家并分组显示
 - **workerRole**: `string` - Worker的角色/显示名称（可选）
 
 ### 实际示例
 
-#### 子Agent消息
+#### 专家消息
 ```json
 {
   "type": "end",
@@ -69,26 +69,26 @@ BeeWeb 现在支持子Agent对话的独立显示。当后端返回的消息包�
 - 只显示 `isSubTalk` 不为1的消息
 - 保持原有的消息渲染逻辑
 
-### 右侧子Agent面板
+### 右侧专家面板
 
 #### 竖向Tab栏
 - 位于右侧边缘
-- 每个不同 `workerName` 的子Agent显示一个图标按钮
-- 图标右上角显示该子Agent的消息数量徽章
+- 每个不同 `workerName` 的专家显示一个图标按钮
+- 图标右上角显示该专家的消息数量徽章
 - 支持鼠标悬浮和点击操作
 
 #### 展开面板
 - 点击Tab图标后，从右侧滑出展示面板
-- 显示标题为该子Agent的 `workerName`
-- 显示该子Agent的所有对话记录
+- 显示标题为该专家的 `workerName`
+- 显示该专家的所有对话记录
 - 支持消息的所有交互操作（复制、重发等）
 - 点击关闭按钮可收起面板
 
 ### UI特性
 
-1. **多子Agent支持**: 可以同时有多个子Agent活跃，每个都有独立的Tab
-2. **消息统计**: 每个Tab显示该子Agent的消息总数
-3. **独立交互**: 子Agent面板内的消息支持完整的交互功能
+1. **多专家支持**: 可以同时有多个专家活跃，每个都有独立的Tab
+2. **消息统计**: 每个Tab显示该专家的消息总数
+3. **独立交互**: 专家面板内的消息支持完整的交互功能
 4. **响应式设计**: 面板宽度固定为420px，适配不同屏幕尺寸
 
 ## 使用场景
@@ -144,10 +144,10 @@ report_generator: 报告已完成
 ```
 App.vue
 ├── ChatMessage.vue (主聊天消息)
-└── SubAgentPanel.vue (子Agent面板)
+└── SubAgentPanel.vue (专家面板)
     ├── 竖向Tab栏
     └── 展开式消息面板
-        └── ChatMessage.vue (子Agent消息)
+        └── ChatMessage.vue (专家消息)
 ```
 
 ### 数据流
@@ -155,13 +155,13 @@ App.vue
 1. WebSocket接收到带有 `isSubTalk: 1` 的消息
 2. `useWebSocketAgent` 将 `isSubTalk` 字段附加到消息对象
 3. 消息保存到会话的messages数组
-4. `App.vue` 的 `visibleChatItems` 计算属性过滤掉子Agent消息
-5. `subAgentMessages` 和 `subAgents` 计算属性提取子Agent相关数据
-6. `SubAgentPanel` 组件根据 `workerName` 分组渲染子Agent界面
+4. `App.vue` 的 `visibleChatItems` 计算属性过滤掉专家消息
+5. `subAgentMessages` 和 `subAgents` 计算属性提取专家相关数据
+6. `SubAgentPanel` 组件根据 `workerName` 分组渲染专家界面
 
 ### 消息分组逻辑
 
-前端根据 `workerName` 字段对子Agent消息进行分组：
+前端根据 `workerName` 字段对专家消息进行分组：
 
 ```javascript
 const subAgents = computed(() => {
@@ -183,9 +183,9 @@ const subAgents = computed(() => {
 
 ### 存储
 
-- 子Agent消息与普通消息一起保存在 `localStorage`
+- 专家消息与普通消息一起保存在 `localStorage`
 - 通过 `isSubTalk` 字段区分消息类型
-- 刷新页面后子Agent状态会恢复
+- 刷新页面后专家状态会恢复
 
 ## 兼容性
 
@@ -197,15 +197,15 @@ const subAgents = computed(() => {
 
 ### Python示例
 ```python
-# 子Agent消息
+# 专家消息
 message = {
     "type": "content",
     "sessionId": session_id,
     "messageId": message_id,
-    "data": "子Agent消息内容",
+    "data": "专家消息内容",
     "workerName": "my_worker",
     "workerRole": "我的助手",
-    "isSubTalk": 1  # 标记为子Agent
+    "isSubTalk": 1  # 标记为专家
 }
 ws.send(json.dumps(message))
 
@@ -224,12 +224,12 @@ ws.send(json.dumps(message))
 
 ### Node.js示例
 ```javascript
-// 子Agent消息
+// 专家消息
 ws.send(JSON.stringify({
   type: 'content',
   sessionId: sessionId,
   messageId: messageId,
-  data: '子Agent消息内容',
+  data: '专家消息内容',
   workerName: 'my_worker',
   workerRole: '我的助手',
   isSubTalk: 1
@@ -249,7 +249,7 @@ ws.send(JSON.stringify({
 
 ## 样式定制
 
-如需调整子Agent面板的样式，可以修改 `SubAgentPanel.vue` 中的样式变量：
+如需调整专家面板的样式，可以修改 `SubAgentPanel.vue` 中的样式变量：
 
 ```css
 .subagent-panel {
@@ -264,6 +264,6 @@ ws.send(JSON.stringify({
 
 ## 注意事项
 
-1. **workerName的重要性**: 前端使用 `workerName` 字段来分组和识别不同的子Agent，确保相同子Agent的消息使用相同的 `workerName`
+1. **workerName的重要性**: 前端使用 `workerName` 字段来分组和识别不同的专家，确保相同专家的消息使用相同的 `workerName`
 2. **消息类型支持**: 所有消息类型（content、status、think、tool_calls等）都支持添加 `isSubTalk` 字段
-3. **性能考虑**: 大量子Agent消息可能影响渲染性能，建议合理控制消息数量
+3. **性能考虑**: 大量专家消息可能影响渲染性能，建议合理控制消息数量

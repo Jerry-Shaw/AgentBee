@@ -27,7 +27,7 @@ let restoreDistance: number | null = null;
 let restoringScroll = false;
 /**
  * 「贴底自动跟随」状态：默认 true，即用户没主动往上翻过之前，新消息一律滚到底部。
- * 和主聊天区（App.vue）的 `shouldAutoScroll` 同一套语义——子 Agent 面板每次打开、
+ * 和主聊天区（App.vue）的 `shouldAutoScroll` 同一套语义——专家面板每次打开、
  * 切换 Agent 时都会重置回 true，所以「有新消息就自动落底」是默认行为；用户手动
  * 往上翻超过阈值后停止跟随，避免抢滚动位置。
  */
@@ -105,7 +105,7 @@ function onScroll(event: Event) {
 /**
  * 切换 Agent（或面板首次挂载）：重置分页与滚动状态，并直接落底。
  * `immediate: true` 覆盖「组件一渲染出来就贴底」的场景——移动端每次点开抽屉、
- * 桌面端从列表选中某个子 Agent，都会走这里。
+ * 桌面端从列表选中某个专家，都会走这里。
  */
 watch(
   () => props.agent.name,

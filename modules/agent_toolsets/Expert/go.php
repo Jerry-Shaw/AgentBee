@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_toolsets\WorkerBee;
+namespace modules\agent_toolsets\Expert;
 
 use Nervsys\Core\Factory;
 
@@ -33,7 +33,7 @@ class go extends Factory
      *
      * @return string[]
      */
-    public function start(string $worker_name, string $worker_role, string $init_prompt): array
+    public function invite(string $worker_name, string $worker_role, string $init_prompt): array
     {
         return [
             'async'       => true,

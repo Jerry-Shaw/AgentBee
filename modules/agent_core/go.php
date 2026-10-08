@@ -92,7 +92,7 @@ class go extends Factory
      * @return int
      * @throws \Exception
      */
-    public function runProcWorker(int $proc_idx, string $worker_type, string $worker_name, callable $output_handler): int
+    public function runWorker(int $proc_idx, string $worker_type, string $worker_name, callable $output_handler): int
     {
         $worker_status = $this->core->utils->procMgr->getStatus($proc_idx);
 
@@ -184,7 +184,7 @@ class go extends Factory
         $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
         $this->init();
-        $this->runProcWorker($this->utils->getMainIDX(), WORKER_MAIN, WORKER_MAIN, [$this, 'streamWorkerHandler']);
+        $this->runWorker($this->utils->getMainIDX(), WORKER_MAIN, WORKER_MAIN, [$this, 'streamWorkerHandler']);
 
         $agent_toolsets = $this->utils->fetchToolset('modules/agent_toolsets');
         $this->core->addSkills($agent_toolsets);
@@ -296,7 +296,7 @@ class go extends Factory
                         $this->utils->setStatus($payload['sessionId'], utils::STATUS_WAIT);
                     } else {
                         $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'streaming');
-                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' working on streaming', 'debug');
+                        $this->utils->debug('Expert: ' . $payload['workerName'] . ' working on streaming', 'debug');
                     }
 
                     switch ($payload_type) {
@@ -532,7 +532,7 @@ class go extends Factory
                         $this->utils->setStatus($payload['sessionId'], utils::STATUS_IDLE);
                     } else {
                         $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'ready');
-                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' reply completed, ready.', 'trace');
+                        $this->utils->debug('Expert: ' . $payload['workerName'] . ' reply completed, ready.', 'trace');
                     }
 
                     $new_messages = $this->core->context->refreshHistory($payload['sessionId'], $payload['workerName']);
@@ -699,7 +699,7 @@ class go extends Factory
                                         );
 
                                         $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'busy');
-                                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' receiving ' . $new_messages . ' message(s).', 'trace');
+                                        $this->utils->debug('Expert: ' . $payload['workerName'] . ' receiving ' . $new_messages . ' message(s).', 'trace');
 
                                         $this->openai->talkTo(
                                             $payload['sender'],
@@ -711,7 +711,7 @@ class go extends Factory
                                             $metadata + ['socket_id' => $payload['socket_id']]
                                         );
                                     } elseif ($remain_tokens < 8192) {
-                                        $this->utils->debug('WorkerBee: ' . $payload['workerName'] . ' completion tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
+                                        $this->utils->debug('Expert: ' . $payload['workerName'] . ' completion tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
 
                                         $this->core->context->addMessageQueue(
                                             $payload['sessionId'],
@@ -983,7 +983,7 @@ class go extends Factory
             }
 
             $this->utils->debug('User: Sending ' . (count($message_list)) . ' message(s) to #' . $session_id, 'trace');
-            $this->runProcWorker($main_pid, WORKER_MAIN, WORKER_MAIN, [$this, 'streamWorkerHandler']);
+            $this->runWorker($main_pid, WORKER_MAIN, WORKER_MAIN, [$this, 'streamWorkerHandler']);
 
             $this->core->context->refreshHistory($session_id, WORKER_MAIN);
             $this->core->context->addUserMessage($session_id, WORKER_MAIN, $message_list);

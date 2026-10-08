@@ -37,7 +37,7 @@ BeeWeb 现在支持子Agent对话的独立显示。当后端返回的消息包�
 {
   "type": "end",
   "data": "",
-  "sender": "WorkerBee",
+  "sender": "Expert",
   "isSubTalk": 1,
   "workerName": "greeter_worker",
   "workerRole": "问候者",

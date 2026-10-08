@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-namespace modules\agent_toolsets\WorkerBee;
+namespace modules\agent_toolsets\Expert;
 
 class skills
 {
@@ -26,7 +26,7 @@ class skills
         [
             'type'     => 'function',
             'function' => [
-                'name'        => 'start',
+                'name'        => 'invite',
                 'description' => '邀请一位专家协助处理任务（须提供完整背景，我会记住关键信息）。对方回复“已就绪”后可开始交流。交流异步进行，按需保持沟通至完成。适用于辩论/协作。返回{message}。',
                 'parameters'  => [
                     'type'       => 'object',

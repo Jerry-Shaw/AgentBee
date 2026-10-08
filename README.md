@@ -48,7 +48,7 @@ AgentBee/
 │   │   ├── OfficeSuite/      # Office document processing (.docx/.xlsx/.pptx)
 │   │   ├── System/           # Shell commands, file I/O, context management
 │   │   ├── HttpFetcher/       # Web crawling, content extraction & asset download
-│   │   └── WorkerBee/        # Sub-process worker management (async tasks)
+│   │   └── Expert/        # Sub-process worker management (async tasks)
 │   └── agent_openai/         # OpenAI-compatible LLM adapter
 ├── skills/                   # Third-party skill packages (hot-plug discovery)
 ├── memory/                   # Persistent memory storage for all Agent conversations
@@ -102,7 +102,7 @@ Low-level system operations including file I/O (read/write/copy/delete/search/li
 ### HttpFetcher
 Web content extraction engine. Provides HTML fetching with custom headers, plain text extraction (removes script/style tags), intelligent content extraction (headers, body, title) for article parsing, link discovery with deduplication, asset extraction (images/files like PDF/ZIP/etc.), JSON API calls (auto GET/POST based on params), and file downloading with streaming write to local storage.
 
-### WorkerBee
+### Expert
 Sub-process worker management for parallel task execution. Supports creating named workers with custom roles and initialization prompts, sending async messages to ready workers only, listing all workers with status monitoring (ready/processing/calling_tools/etc.), and graceful shutdown. Ideal for CPU-intensive or long-running tasks that need isolation from the main thread.
 
 ---

@@ -48,7 +48,7 @@ AgentBee/
 │   │   ├── OfficeSuite/      # Office文档处理 (.docx/.xlsx/.pptx)
 │   │   ├── System/           # Shell命令、文件I/O、上下文管理等底层操作
 │   │   ├── HttpFetcher/       # 网页抓取、内容提取与资源下载
-│   │   └── WorkerBee/        # 子进程Worker管理（异步任务）
+│   │   └── Expert/        # 子进程Worker管理（异步任务）
 │   └── agent_openai/         # OpenAI兼容LLM适配器
 ├── skills/                   # 第三方技能包存放路径（热插拔发现）
 ├── memory/                   # 持久化记忆存储（首次使用时自动创建）
@@ -102,7 +102,7 @@ Office文档处理套件。支持DOCX标题/段落/图片插入与格式控制�
 ### HttpFetcher
 网页内容提取引擎。支持HTML抓取(自定义Header)、纯文本提取(去除script/style标签)、智能正文提取(标题+正文)用于文章解析、页面超链接提取去重、资源文件提取(图片/PDF/ZIP等)、JSON API请求(自动GET/POST和流式文件下载)。
 
-### WorkerBee
+### Expert
 子进程Worker管理。支持创建带角色/初始化提示的独立Worker实例，通过异步消息通信（仅ready状态可发送），提供状态监控(list)和稳定关闭(close)。适用于CPU密集型或长时间运行的任务隔离执行。
 
 ---

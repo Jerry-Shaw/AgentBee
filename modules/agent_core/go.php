@@ -241,7 +241,7 @@ class go extends Factory
             : '【会话ID】`' . $session_id . '`，读写记忆时必传。';
 
         $system_default .= "\n\n" . '---' . "\n\n";
-        $system_default .= '【时间·唯一权威】当前：' . date('Y-m-d H:i:s', $now_time) . ' 周' . $weekday . '，时区' . $this->core->app->timezone . '。上下文中的时间不可作为当前时间依据，判断现在/今天/多久前均以此时间为准。';
+        $system_default .= '【时间·唯一权威】每次对话前先校准：当前 ' . date('Y-m-d H:i:s', $now_time) . ' 周' . $weekday . '，时区 ' . $this->core->app->timezone . '。判断现在/今天/多久前均以此为准，上下文中的时间不作依据。';
 
         unset($session_id, $now_time, $weekday, $system_memory, $memory, $content);
         return $system_default;

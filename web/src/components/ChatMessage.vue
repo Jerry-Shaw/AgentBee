@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-vue-next';
+import BeeLoader from './BeeLoader.vue';
 import FoldBlock from './FoldBlock.vue';
 import ToolEventsBlock from './ToolEventsBlock.vue';
 import { useMarkdown } from '../composables/useMarkdown';
@@ -462,12 +463,8 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
       </div>
 
       <div v-if="isWaitingForResponse" class="message-loading" aria-live="polite">
+        <BeeLoader :size="22" />
         <span>{{ labels.waitingForResponse }}</span>
-        <span class="typing-dots" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-        </span>
       </div>
 
       <div v-else-if="endedWithoutResponse" class="message-ended">

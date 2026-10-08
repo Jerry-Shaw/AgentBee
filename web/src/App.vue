@@ -5,7 +5,10 @@ import {
   History,
   LoaderCircle,
   MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
+  Settings,
   UsersRound,
   X,
 } from 'lucide-vue-next';
@@ -73,6 +76,11 @@ type VisibleChatItem =
 const chatContainer = ref<HTMLElement | null>(null);
 const chatShell = ref<HTMLElement | null>(null);
 const shouldAutoScroll = ref(true);
+/**
+ * PC 上把会话侧栏收起来，聊天区拿满宽度。
+ * 移动端不适用（那一行本身就是头部），所以只在 `!isMobileLayout` 时生效。
+ */
+const sidebarCollapsed = ref(readSidebarCollapsed());
 const currentView = ref<'chat' | 'settings'>('chat');
 const showLoginWindow = ref(true);
 const agentConfig = ref<Record<string, unknown>>(readAgentConfig());
@@ -107,9 +115,7 @@ const MEMORY_RESPONSE_TIMEOUT_MS = 15_000;
 const SESSION_RESPONSE_TIMEOUT_MS = 15_000;
 const LEGACY_MEMORY_CACHE_STORAGE_KEY = 'agentbee.memoryCache.v1';
 localStorage.removeItem(LEGACY_MEMORY_CACHE_STORAGE_KEY);
-// 「收起侧栏」已经去掉，侧栏常驻展开。清掉遗留的键，免得以后重新引入折叠时
-// 从一个陈旧的 `true` 开始（老版本默认就是收起的）。
-localStorage.removeItem('agentbee.sidebarCollapsed');
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'agentbee.sidebarCollapsed';
 const memoryRecords = ref<MemoryRecord[]>([]);
 /**
  * 当前在途 memory 读取请求所属的会话 id。
@@ -176,8 +182,8 @@ const MOBILE_MEDIA_QUERY = '(max-width: 820px), (hover: none) and (pointer: coar
 const isMobileLayout = ref(false);
 const sessionDrawerOpen = ref(false);
 /**
- * 移动端的子 Agent 右侧抽屉。
- * 桌面端子 Agent 走顶栏的 `SubAgentMenu` + 聊天区右侧面板，不需要这个抽屉。
+ * 移动端的专家右侧抽屉。
+ * 桌面端专家走顶栏的 `SubAgentMenu` + 聊天区右侧面板，不需要这个抽屉。
  */
 const subAgentDrawerOpen = ref(false);
 let mobileMediaQuery: MediaQueryList | null = null;
@@ -369,7 +375,7 @@ watch(subAgents, (agents) => {
   ) {
     selectedSubAgentName.value = null;
   }
-  // 最后一个子 Agent 没了就把抽屉一起收掉：入口按钮本身也会跟着消失。
+  // 最后一个专家没了就把抽屉一起收掉：入口按钮本身也会跟着消失。
   if (!agents.length) subAgentDrawerOpen.value = false;
 });
 
@@ -1138,7 +1144,7 @@ function openSubAgentDrawer() {
 }
 
 /**
- * 关掉子 Agent 抽屉时把选中项一起清掉。
+ * 关掉专家抽屉时把选中项一起清掉。
  *
  * 抽屉里「列表 / 面板」是二选一渲染的：如果留着选中项，下次打开会直接进上一个
  * Agent 的面板，就再也换不了 Agent 了。顺带也走一遍 closeSubAgentPanel，
@@ -1148,6 +1154,23 @@ function closeSubAgentDrawer() {
   subAgentDrawerOpen.value = false;
   closeSubAgentPanel();
 }
+
+/** 侧栏收放只认字符串 'true'：老版本写进去的是字符串，缺省（键不存在）算展开。 */
+function readSidebarCollapsed(): boolean {
+  return localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+}
+
+function setSidebarCollapsed(collapsed: boolean) {
+  sidebarCollapsed.value = collapsed;
+  localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+}
+
+function toggleSidebar() {
+  setSidebarCollapsed(!sidebarCollapsed.value);
+}
+
+/** 收起状态只在 PC 生效；移动端那一行就是头部，没有「侧栏」可收。 */
+const sidebarIsCollapsed = computed(() => sidebarCollapsed.value && !isMobileLayout.value);
 
 /**
  * 移动端在抽屉里操作完（选会话 / 新建会话）后的收尾：收起抽屉并回到聊天。
@@ -1830,8 +1853,12 @@ function redactConnectionUrl(value: string): string {
     @update:ws-url="updateWsUrl"
   />
 
-  <div class="app">
-    <aside class="sidebar">
+  <div class="app" :class="{ 'is-sidebar-collapsed': sidebarIsCollapsed }">
+    <!--
+      收起时侧栏宽度塌成 0，但里面的按钮还在 DOM 里——加 inert 把焦点和读屏都挡在外面，
+      否则 Tab 会跑进一条看不见的会话列表。
+    -->
+    <aside class="sidebar" :inert="sidebarIsCollapsed">
       <div class="brand">
         <!--
           移动端的会话入口。放在 `.brand`（移动端这一行就是「头部」）而不是 `.topbar`：
@@ -1860,13 +1887,28 @@ function redactConnectionUrl(value: string): string {
           </h1>
           <p>{{ t.tagline }}</p>
         </div>
+        <!--
+          PC 上的侧栏收放。收起按钮就长在侧栏自己头上，收起来之后由顶栏那个展开
+          按钮接手；移动端不渲染——那一行本身就是头部，没有「侧栏」可收。
+        -->
+        <button
+          v-if="!isMobileLayout"
+          type="button"
+          class="icon-button sidebar-collapse-toggle"
+          :title="t.collapseSidebar"
+          :aria-label="t.collapseSidebar"
+          :aria-expanded="!sidebarCollapsed"
+          @click="toggleSidebar"
+        >
+          <PanelLeftClose :size="17" aria-hidden="true" />
+        </button>
       </div>
 
       <div class="sidebar-body">
         <!--
-          移动端聊天页的顶栏是隐藏的，而子 Agent 的入口（SubAgentMenu）长在顶栏里，
+          移动端聊天页的顶栏是隐藏的，而专家的入口（SubAgentMenu）长在顶栏里，
           手机上够不着。这里补一个按钮，内容交给右侧的 SubAgentDrawer。
-          没有子 Agent 时按钮本身就不渲染。
+          没有专家时按钮本身就不渲染。
         -->
         <button
           v-if="isMobileLayout && subAgents.length"
@@ -1905,6 +1947,33 @@ function redactConnectionUrl(value: string): string {
 
     <main class="main">
       <header class="topbar">
+        <!--
+          侧栏收起后，它头上那个收起按钮跟着一起没了，这里接一个展开按钮。
+          顺带把设置入口挪过来：齿轮平时长在侧栏的 ConnectionPanel 里，
+          收起后会一起藏掉，不补一个就没法进设置了。
+        -->
+        <div v-if="sidebarIsCollapsed" class="topbar-sidebar-actions">
+          <button
+            type="button"
+            class="icon-button"
+            :title="t.expandSidebar"
+            :aria-label="t.expandSidebar"
+            :aria-expanded="false"
+            @click="toggleSidebar"
+          >
+            <PanelLeftOpen :size="17" aria-hidden="true" />
+          </button>
+          <button
+            v-if="currentView === 'chat'"
+            type="button"
+            class="icon-button"
+            :title="t.settings"
+            :aria-label="t.settings"
+            @click="openSettings"
+          >
+            <Settings :size="17" aria-hidden="true" />
+          </button>
+        </div>
         <div class="topbar-title">
           <strong :title="currentView === 'settings' ? t.settings : activeSessionTitle">
             {{ currentView === 'settings' ? t.settings : activeSessionTitle }}

@@ -21,6 +21,7 @@ import {
   parseServerMessage,
 } from '../protocol/normalizers';
 import { makeId, nowTime } from './useSessions';
+import { RESET_COMMAND } from '../utils/commands';
 
 const NO_RESPONSE_TIMEOUT_MS = 5 * 60_000;
 const AUTO_CONNECT_WINDOW_MS = 60_000;
@@ -370,10 +371,14 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     if (!session) return false;
 
     const messageId = makeId();
-    options.addMessage('user', text, {
-      attachments: toChatAttachments(attachments),
-      messageId,
-    });
+    // `/reset` 是指令不是聊天内容：照常发出去、照常等后端那句确认，
+    // 但不给它在聊天区留一条「/reset」的用户气泡（顺带也不会拿它给会话起标题）。
+    if (text !== RESET_COMMAND) {
+      options.addMessage('user', text, {
+        attachments: toChatAttachments(attachments),
+        messageId,
+      });
+    }
     pendingTurns.value.set(messageId, { assistantId: null, sessionId: session.id });
     ensureAssistantMessage(messageId);
     startNoResponseTimer(messageId);

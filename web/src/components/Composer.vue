@@ -3,6 +3,7 @@ import { ArrowUp, LoaderCircle, Paperclip, Plus, RotateCcw, Square, X } from 'lu
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import ModelPicker from './ModelPicker.vue';
 import type { ClientAttachment } from '../protocol/types';
+import { RESET_COMMAND } from '../utils/commands';
 import { shouldIgnoreCompositionEnter } from '../utils/composerKeyboard';
 
 const props = defineProps<{
@@ -35,7 +36,6 @@ const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userA
 const COMPOSITION_ENTER_GUARD_MS = 100;
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024;
-const RESET_COMMAND = '/reset';
 let ignoreEnterUntil = 0;
 let textareaResizeObserver: ResizeObserver | null = null;
 let textareaWidth = 0;

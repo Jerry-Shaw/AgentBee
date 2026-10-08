@@ -105,11 +105,16 @@
 把文件从系统文件管理器拖到输入框即可添加为附件，拖入时输入区高亮并提示「松开鼠标即可添加文件」。
 拖拽与「+」按钮共用同一套体积校验（单文件 20 MB、总 40 MB）和读取逻辑（`Composer.vue` 的 `addFiles`）。
 
-### 重置会话
+### 重置上下文
 
-输入框工具栏的「重置会话」按钮发送字面量 `/reset` 指令，后端（`lib/message.php` 的 `process_text` /
-`process_chat`）收到后清空上下文并回一句确认，**不会**写进记忆。前端在收到 `act === 'reset'` 的
-message 事件时主动收尾该轮次——后端对这种 `need_llm = false` 的答复不会再发 `end`。
+输入框工具栏的「重置上下文」按钮发送字面量 `/reset`（字面量收在 `src/utils/commands.ts`），
+后端（`lib/message.php` 的 `process_text` / `process_chat`）收到后清空上下文并回一句确认，
+**不会**写进记忆。前端在收到 `act === 'reset'` 的 message 事件时主动收尾该轮次——
+后端对这种 `need_llm = false` 的答复不会再发 `end`。
+
+这条指令**不当作聊天内容渲染**：`useWebSocketAgent.dispatchText` 认出 `/reset` 就跳过
+`addMessage('user', …)`，所以聊天区只留后端那句确认，不会出现一条「/reset」的用户气泡
+（顺带也不会拿它给会话起标题）。
 
 ### 会话（session）
 

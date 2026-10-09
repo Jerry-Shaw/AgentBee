@@ -3064,14 +3064,8 @@ body:has(.login-window-backdrop) {
 
 }
 
-/* 移动端布局。
-   第二个判据是**设备能力**，必须永远留一个宽度出口：`(hover: none)` / `(pointer: coarse)`
-   看的是「主指针」，Windows 触屏本上拖动窗口宽度就会把它翻成粗指针；而这条查询是
-   OR，翻过去之后窗口拉多宽都还会命中——表现就是「变成移动端 UI 后再也回不去 PC」。
-   所以再要求 `(any-hover: none)`：只要这台机器还有**任何**能 hover 的指针（鼠标 /
-   触摸板），能力判据恒为假，布局只由宽度决定。手机 / 平板没有精确指针，行为不变。 */
-@media (max-width: 820px),
-       (hover: none) and (pointer: coarse) and (any-hover: none) {
+/* 移动端布局只由视口宽度决定，与 App.vue 的 MOBILE_MEDIA_QUERY 保持一致。 */
+@media (max-width: 820px) {
   html,
   body {
     height: 100%;
@@ -3267,9 +3261,8 @@ body:has(.login-window-backdrop) {
   }
 }
 
-/* 判据与上方移动端主媒体查询一致（含 `(any-hover: none)`，理由见那里）。 */
-@media (max-width: 820px),
-       (hover: none) and (pointer: coarse) and (any-hover: none) {
+/* 判据与上方移动端主媒体查询一致，只按视口宽度切换。 */
+@media (max-width: 820px) {
   .composer textarea {
     min-height: 44px;
     font-size: 16px;

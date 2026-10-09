@@ -169,15 +169,10 @@ const toasts = useToasts();
 useAppViewport();
 
 /**
- * 移动端布局标记。
- * 字符串必须与 `base.css` 里的媒体查询一致
- * （`@media (max-width: 820px), (hover: none) and (pointer: coarse) and (any-hover: none)`），
- * 否则会出现「CSS 认为该收起侧栏、JS 却不渲染抽屉」这种错位。
- *
- * 末尾那个 `(any-hover: none)` 不是装饰：它保证**只要有鼠标/触摸板就不会命中能力判据**，
- * 否则 Windows 触屏本拖一下窗口宽度就会被翻进移动端布局，且再也退不回来。
+ * 移动端布局只由视口宽度决定，放大超过 820px 时恢复桌面布局。
+ * 此条件必须与 base.css 中两处移动端媒体查询保持一致。
  */
-const MOBILE_MEDIA_QUERY = '(max-width: 820px), (hover: none) and (pointer: coarse) and (any-hover: none)';
+const MOBILE_MEDIA_QUERY = '(max-width: 820px)';
 /** 顶栏那个「会话」入口按钮和左侧抽屉都只在移动端出现。 */
 const isMobileLayout = ref(false);
 const sessionDrawerOpen = ref(false);

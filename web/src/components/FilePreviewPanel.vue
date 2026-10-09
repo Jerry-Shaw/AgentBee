@@ -54,13 +54,50 @@ async function copySource() {
 
 function downloadFile() {
   if (resolvedUrl.value && !props.file.content) { window.open(resolvedUrl.value, '_blank', 'noopener,noreferrer'); return; }
-  const content = props.file.encoding === 'base64' ? decodeBase64Bytes(props.file.content || '') : (props.file.content || '');
-  const url = URL.createObjectURL(new Blob([content], { type: props.file.mimeType || 'application/octet-stream' }));
+  const raw = props.file.content || '';
+  // content 本身可能是一条 data URL：后端推图片发的就是 `data:image/png;base64,...`
+  // （见 core.php 的 sendImageMessage），气泡里点图片预览走的也是这条路
+  // （ChatMessage.previewImage 把整条 data URL 塞进 content 并标成 encoding: 'text'）。
+  // 不拆开就直接落盘的话，下下来的是一串 base64 文本、文件名却是 .png，图片打不开。
+  const dataUrl = /^data:/i.test(raw) ? parseDataUrl(raw) : null;
+  // 兜底顺序：data URL 拆出来的字节 → encoding 说是 base64 就解码 → 否则按纯文本编码。
+  const bytes = dataUrl?.bytes
+    ?? (props.file.encoding === 'base64' ? tryDecodeBase64Bytes(raw) : null)
+    ?? new TextEncoder().encode(raw);
+  // data URL 自带的 MIME 比 file.mimeType 更可信（它描述的就是这段字节）。
+  const mimeType = dataUrl?.mimeType || props.file.mimeType || 'application/octet-stream';
+  const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = props.file.name;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+/** `data:[<mime>][;base64],<payload>` → 字节 + MIME；不是 data URL 就返回 null。 */
+function parseDataUrl(value: string) {
+  const match = /^data:([^;,]*)((?:;[^,]*)*),([\s\S]*)$/i.exec(value);
+  if (!match) return null;
+  const mimeType = match[1] || 'application/octet-stream';
+  const payload = match[3] || '';
+  if (/;base64/i.test(match[2] || '')) {
+    const bytes = tryDecodeBase64Bytes(payload);
+    return bytes ? { bytes, mimeType } : null;
+  }
+  try {
+    return { bytes: new TextEncoder().encode(decodeURIComponent(payload)), mimeType };
+  } catch {
+    return { bytes: new TextEncoder().encode(payload), mimeType };
+  }
+}
+
+/** `atob` 遇到非法字符会抛，降级成 null 让调用方兜底，别把整个下载弄挂。 */
+function tryDecodeBase64Bytes(value: string) {
+  try {
+    return decodeBase64Bytes(value);
+  } catch {
+    return null;
+  }
 }
 
 function decodeContent(file: ChatFile) {

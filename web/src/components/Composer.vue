@@ -4,12 +4,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ModelPicker from './ModelPicker.vue';
 import type { ClientAttachment } from '../protocol/types';
 import { RESET_COMMAND } from '../utils/commands';
-import { shouldIgnoreCompositionEnter } from '../utils/composerKeyboard';
+import { resolveEnterAction, shouldIgnoreCompositionEnter } from '../utils/composerKeyboard';
 
 const props = defineProps<{
   availableModels: string[];
   disabled: boolean;
   labels: Record<string, string>;
+  /** 移动端布局：软键盘上的 Enter 只换行，发送交给按钮。 */
+  mobileLayout: boolean;
   modelName: string;
 }>();
 
@@ -32,7 +34,6 @@ const uploadWarnings = ref<string[]>([]);
 const isComposing = ref(false);
 const submissionPending = ref(false);
 const isDraggingFile = ref(false);
-const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent);
 const COMPOSITION_ENTER_GUARD_MS = 100;
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024;
@@ -40,6 +41,11 @@ let ignoreEnterUntil = 0;
 let textareaResizeObserver: ResizeObserver | null = null;
 let textareaWidth = 0;
 let dragDepth = 0;
+/** 发送按钮的悬浮提示：桌面端讲「Enter 发送」，移动端讲「Enter 换行」。 */
+const sendHint = computed(() => (
+  props.mobileLayout ? props.labels.sendShortcutHintMobile : props.labels.sendShortcutHint
+));
+
 const canSubmit = computed(() => (
   !submissionPending.value &&
   !isComposing.value &&
@@ -116,16 +122,13 @@ function onKeydown(event: KeyboardEvent) {
     isComposing.value,
     performance.now() < ignoreEnterUntil,
   )) return;
-  const shouldInsertNewline = isMac ? event.metaKey : event.ctrlKey;
-  if (shouldInsertNewline) {
-    event.preventDefault();
-    insertNewlineAtCursor();
-    return;
-  }
-  if (!event.shiftKey) {
-    event.preventDefault();
-    submit();
-  }
+  // 具体规则见 utils/composerKeyboard.ts 的 resolveEnterAction。
+  const action = resolveEnterAction(event, props.mobileLayout);
+  // 'none' 不拦默认行为：移动端 / Shift+Enter 都靠浏览器自己插入换行。
+  if (action === 'none') return;
+  event.preventDefault();
+  if (action === 'newline') insertNewlineAtCursor();
+  else submit();
 }
 
 function onCompositionStart() {
@@ -440,8 +443,8 @@ function formatLabel(template: string, values: Record<string, string>) {
             type="button"
             class="send composer-submit-button"
             :aria-label="labels.send"
-            :data-tooltip="submissionPending ? labels.connectingToSend : labels.send"
-            :title="submissionPending ? labels.connectingToSend : labels.send"
+            :data-tooltip="submissionPending ? labels.connectingToSend : sendHint"
+            :title="submissionPending ? labels.connectingToSend : sendHint"
             :disabled="!canSubmit"
             @click="submit"
           >

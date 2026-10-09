@@ -2150,6 +2150,7 @@ function redactConnectionUrl(value: string): string {
         :labels="t"
         :disabled="!agent.canSend.value"
         :available-models="availableModels"
+        :mobile-layout="isMobileLayout"
         :model-name="basicSettings.modelName"
         @select-model="selectComposerModel"
         @send="onSend"

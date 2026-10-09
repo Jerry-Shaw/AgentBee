@@ -13,7 +13,11 @@
 - `tool_calls.data` 支持函数调用数组格式，`tool_result.data.result` 支持 JSON 字符串，前端会格式化后显示在同一个 assistant 对话里的独立折叠块中。
 - 后端返回 `close` 时，前端会移除对应 `messageId` 的 assistant 显示，不删除用户消息。
 - 流式输出时，如果用户已经滚动到历史记录位置，前端不会强制滚动到底部。
-- 输入框使用 Enter 发送，Ctrl+Enter 或 Cmd+Enter 换行。
+- 输入框发送规则（收在 `utils/composerKeyboard.ts` 的 `resolveEnterAction`，有单测）：
+  **桌面端** Enter 发送、Ctrl / ⌘ + Enter 换行、Shift+Enter 换行；
+  **移动端** Enter 一律换行，发送交给右下角那个按钮——软键盘上的回车是给换行用的，
+  不然想换行的人会把半句话发出去。修饰键同时认 Ctrl 和 ⌘，不去猜平台
+  （`navigator.platform` 已废弃，猜错整条快捷键就失效）。
 - 前端按 `messageId` 分流多个并发回答。
 - 如果后端暂时没有返回 `messageId`，前端会落到最近一个 loading 回答里。
 - WS 获取聊天历史暂不启用，聊天记录保存在浏览器 `localStorage`。
@@ -21,6 +25,11 @@
 - assistant 回复支持轻量 Markdown 渲染。
 - 后端返回 `file`、`html` 或 `document` 事件时，前端会按文件类型显示桌面预览侧栏；文本、Markdown、HTML、图片和 PDF 分别采用对应预览方式。
 - 文件事件可提供 `content`、`url` 或 `path`。工作区内路径可通过配置中的 `workspace_url` 映射为浏览器可访问的 HTTP(S) 地址；无法映射的后端本地路径只显示路径提示，不会假装浏览器能够读取它。
+- **下载要先认 data URL**：`file.content` 可能本身就是一条 `data:...`（后端推图片发的就是
+  `data:image/png;base64,...`，见 `core.php` 的 `sendImageMessage`；气泡里点图片预览也走这条路，
+  `ChatMessage.previewImage` 把整条 data URL 塞进 `content` 并标成 `encoding: 'text'`）。
+  `FilePreviewPanel.downloadFile()` 会先把它拆成字节再落盘，否则下下来的是一串 base64 文本、
+  文件名却还是 `.png`，图片根本打不开。
 
 文件事件示例：
 

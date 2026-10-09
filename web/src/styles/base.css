@@ -1643,11 +1643,11 @@ body:has(.login-window-backdrop) {
 }
 
 .message.assistant:has(.markdown-table-scroll, .markdown-code-block) .markdown-body > div > :not(.markdown-table-scroll, .markdown-code-block) {
-  max-width: 76ch;
+  max-width: 100%;
 }
 
 .message.system {
-  max-width: min(760px, 96%);
+  max-width: 100%;
 }
 
 .system-log {

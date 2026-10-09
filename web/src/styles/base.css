@@ -1622,7 +1622,7 @@ body:has(.login-window-backdrop) {
 .message {
   display: grid;
   gap: 6px;
-  max-width: min(760px, 88%);
+  max-width: min(68%, 88%);
   min-width: 0;
 }
 

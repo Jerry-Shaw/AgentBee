@@ -222,9 +222,9 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     nextSocket.onerror = () => {
       if (socket.value !== nextSocket) return;
       connectionError.value = makeConnectionIssue('network', url);
-      if (!currentConnectIsAuto) {
-        options.addMessage('error', 'WebSocket connection error. Waiting for close details.');
-      }
+      // if (!currentConnectIsAuto) {
+      //   options.addMessage('error', 'WebSocket connection error. Waiting for close details.');
+      // }
     };
 
     nextSocket.onclose = (event) => {

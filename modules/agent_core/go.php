@@ -312,10 +312,14 @@ class go extends Factory
             $this->session_calls[$payload['sessionId']] ??= 0;
 
             if (0 < $this->session_calls[$payload['sessionId']]) {
-                $this->utils->debug('System: Calls executed for #' . $payload['sessionId'] . '.', 'trace');
-                $this->utils->setStatus(utils::STATUS_IDLE, $payload['sessionId']);
                 $this->session_calls[$payload['sessionId']] = 0;
-                \Fiber::suspend();
+
+                // Suspend only if there are new messages in queue
+                if (0 < count($this->core->context->message_queue)) {
+                    $this->utils->debug('System: Calls executed for #' . $payload['sessionId'] . '.', 'trace');
+                    $this->utils->setStatus(utils::STATUS_IDLE, $payload['sessionId']);
+                    \Fiber::suspend();
+                }
             }
 
             $this->utils->debug($payload['workerName'] . ': ' . $message['type'] . '->' . $payload_type, 'debug');

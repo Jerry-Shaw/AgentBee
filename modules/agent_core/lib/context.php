@@ -306,7 +306,12 @@ class context extends Factory
      */
     public function refreshHistory(string $session_id, string $worker_name): int
     {
-        if (!isset($this->message_queue[$session_id][$worker_name]) || [] === $this->message_queue[$session_id][$worker_name]) {
+        if (!isset($this->message_queue[$session_id][$worker_name])) {
+            return 0;
+        }
+
+        if ([] === $this->message_queue[$session_id][$worker_name]) {
+            unset($this->message_queue[$session_id][$worker_name]);
             return 0;
         }
 
@@ -321,7 +326,7 @@ class context extends Factory
             $this->addUserMessage($session_id, $worker_name, $messages);
         }
 
-        unset($session_id, $worker_name, $messages, $message);
+        unset($this->message_queue[$session_id][$worker_name], $session_id, $worker_name, $messages, $message);
         return $count_messages;
     }
 

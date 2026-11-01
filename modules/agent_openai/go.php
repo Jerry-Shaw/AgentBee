@@ -203,6 +203,8 @@ class go extends Factory
         }
 
         try {
+            $this->utils->debug('Process: #' . $session_id . ' start.', 'trace');
+
             $this->utils->procMgr->writeProc(
                 $proc_idx,
                 json_encode([
@@ -213,8 +215,10 @@ class go extends Factory
                     'llm_params' => $this->utils->getChildWorker($worker, $receiver, 'llm_params')
                 ], JSON_FORMAT)
             );
+
+            $this->utils->debug('Process: #' . $session_id . ' done.', 'trace');
         } catch (\Throwable $throwable) {
-            $this->utils->debug('Status: #' . $session_id . ' ERROR: ' . $throwable->getMessage(), 'trace');
+            $this->utils->debug('Process: #' . $session_id . ' failed: ' . $throwable->getMessage(), 'trace');
 
             if (WORKER_MAIN === $worker) {
                 $this->utils->setStatus(utils::STATUS_IDLE, $session_id);

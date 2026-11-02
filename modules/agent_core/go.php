@@ -212,7 +212,6 @@ class go extends Factory
                 ->setAliveTimeout($this->utils->agent_config['agent_server']['ping_interval'])
                 ->setEventListener('onUserFunc', [$this, 'scheduleTask'])
                 ->setEventListener('onHandshake', [$this, 'onHandshake'])
-                ->setEventListener('onHeartbeat', [$this, 'onHeartbeat'])
                 ->setEventListener('onMessage', [$this, 'onMessage'])
                 ->setEventListener('onSendString', [$this, 'onSendString'])
                 ->setEventListener('onClose', [$this, 'onClose'])
@@ -777,9 +776,35 @@ class go extends Factory
      */
     public function scheduleTask(SocketMgr $socketMgr): void
     {
-        $session_list = $this->memory->listSessions(0, '', true);
+        $now_time       = time();
+        $session_active = $this->core->context->getSessionList();
+        $session_list   = $this->memory->listSessions(0, '', true);
 
         foreach ($session_list['sessions'] as $session) {
+            // Remove session data when last response duration is too long
+            if (
+                isset($this->last_response[$session['session_id']])
+                && 0 < $this->last_response[$session['session_id']]
+                && ($this->last_response[$session['session_id']] + $this->utils->agent_config['reset_interval']) < $now_time
+            ) {
+                $this->core->context->removeHistory($session['session_id'], WORKER_MAIN);
+                $this->utils->setStatus(utils::STATUS_IDLE, $session['session_id']);
+            }
+
+            // Reset status to IDLE when now time is newer wait until time
+            if (utils::STATUS_IDLE !== $this->utils->wait_status && $this->utils->wait_until < $now_time) {
+                $this->utils->setStatus(utils::STATUS_IDLE, $session['session_id'], true);
+            }
+
+            // Remove session from list when active duration is too long
+            if (
+                isset($session_active[$session['session_id']])
+                && ($session_active[$session['session_id']] + $this->utils->agent_config['reset_interval']) < $now_time
+            ) {
+                $this->core->context->removeSessionList($session['session_id']);
+            }
+
+            // Run scheduled tasks
             $task_list = $this->memory->runTask($session['session_id']);
 
             if ([] === $task_list) {
@@ -802,6 +827,7 @@ class go extends Factory
                 . '待执行任务：' . "\n" . implode("\n", array_column($task_list, 'prompt')) . "\n\n"
                 . '严格按流程执行：①执行任务并详细汇总；②按会话ID存储：重要→daily，特别重要→important，琐事不存；③完整输出详细结果，简述存储层级或未存原因，必要时补充分析并总结。';
 
+            $this->core->context->addSessionList($session['session_id']);
             $this->core->context->addUserMessage($session['session_id'], WORKER_MAIN, [['type' => 'text', 'content' => $task_content]]);
 
             $metadata = $this->utils->getMarker(
@@ -825,7 +851,7 @@ class go extends Factory
             );
         }
 
-        unset($socketMgr, $session_list, $session, $task_list, $task_content, $metadata);
+        unset($socketMgr, $now_time, $session_active, $session_list, $session, $task_list, $task_content, $metadata);
     }
 
     /**
@@ -852,46 +878,6 @@ class go extends Factory
 
         unset($socket_id, $ws_protocol);
         return true;
-    }
-
-    /**
-     * Heartbeat callback.
-     *
-     * @param string $socket_id
-     *
-     * @return string
-     * @throws \Throwable
-     */
-    public function onHeartbeat(string $socket_id): string
-    {
-        $now_time     = time();
-        $session_list = $this->core->context->getSessionList();
-
-        foreach ($session_list as $session_id => $active_time) {
-            if (
-                isset($this->last_response[$session_id])
-                && 0 < $this->last_response[$session_id]
-                && $now_time - $this->last_response[$session_id] >= $this->utils->agent_config['reset_interval']
-            ) {
-                $this->core->context->removeHistory($session_id, WORKER_MAIN);
-                $this->utils->setStatus(utils::STATUS_IDLE, $session_id);
-            }
-
-            if ($now_time - $active_time >= $this->utils->agent_config['reset_interval']) {
-                $this->core->context->removeSessionList($session_id);
-            }
-
-            if (utils::STATUS_IDLE !== $this->utils->wait_status) {
-                if ($this->utils->wait_until > $now_time) {
-                    continue;
-                }
-
-                $this->utils->setStatus(utils::STATUS_IDLE, $session_id, true);
-            }
-        }
-
-        unset($socket_id, $now_time, $session_list, $session_id, $active_time);
-        return '';
     }
 
     /**

@@ -882,7 +882,7 @@ class utils extends Factory
             return;
         }
 
-        $this->wait_until = time() + ($this->agent_config['agent_llm']['timeout']);
+        $this->wait_until = time() + ($this->agent_config['agent_llm']['wait_timeout'] ?? 600);
 
         if (($this->wait_status & $status) !== $status) {
             switch ($status) {

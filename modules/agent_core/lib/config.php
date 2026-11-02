@@ -171,6 +171,7 @@ class config extends Factory
                 'model_id'         => '',
                 'model_ctx'        => 131072,
                 'timeout'          => 3600,
+                'wait_timeout'     => 600,
                 'low_speed_time'   => 300,
                 'hw_hash'          => '',
                 'keep_reasons'     => false,

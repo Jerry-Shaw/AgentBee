@@ -1,0 +1,7 @@
+{
+  "org_id": "",
+  "api_url": "https://127.0.0.1",
+  "api_key": "sk-xxxxxx",
+  "model_id": "gpt-5.6-sol",
+  "timeout": 3600
+}

@@ -562,6 +562,12 @@ class go extends Factory
                 case 'end':
                     $this->last_response[$payload['sessionId']] = time();
 
+                    if ('tools' === $payload_type) {
+                        $this->utils->debug($payload['workerName'] . ': #' . $payload['sessionId'] . ' process tool results.', 'trace');
+                    } else {
+                        $this->utils->debug($payload['workerName'] . ': #' . $payload['sessionId'] . ' reply ended.', 'trace');
+                    }
+
                     if (WORKER_MAIN === $payload['sender']) {
                         ++$this->session_calls[$payload['sessionId']];
                         $this->utils->setStatus('tools' === $payload_type ? utils::STATUS_BUSY : utils::STATUS_IDLE, $payload['sessionId']);
@@ -575,7 +581,7 @@ class go extends Factory
                     if (isset($worker_info['proc_idx'])) {
                         for ($i = 0; $i < 3; ++$i) {
                             $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['sessionId'], $payload['workerName'], $llm_params);
-                            $this->utils->debug($payload['sender'] . ': Token remains ' . $remain_tokens . ' for #' . $payload['sessionId'] . '.', 'trace');
+                            $this->utils->debug($payload['sender'] . ': #' . $payload['sessionId'] . ' has ' . $remain_tokens . ' tokens left.', 'trace');
 
                             // Skip when token > 1024
                             if (1024 < $remain_tokens) {
@@ -653,8 +659,6 @@ class go extends Factory
 
                     switch ($payload_type) {
                         case 'tools':
-                            $this->utils->debug($payload['workerName'] . ': Tool results collected for #' . $payload['sessionId'] . ', proceeding.', 'trace');
-
                             if (WORKER_MAIN === $payload['sender']) {
                                 $worker_idx = $this->utils->getMainIDX();
                             } else {

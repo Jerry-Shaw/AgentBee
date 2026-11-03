@@ -789,6 +789,7 @@ class go extends Factory
             ) {
                 $this->core->context->removeHistory($session['session_id'], WORKER_MAIN);
                 $this->utils->setStatus(utils::STATUS_IDLE, $session['session_id']);
+                unset($this->last_response[$session['session_id']]);
             }
 
             // Reset status to IDLE when now time is newer wait until time

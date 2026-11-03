@@ -203,7 +203,7 @@ class go extends Factory
         }
 
         try {
-            $this->utils->debug('Process: #' . $session_id . ' START.', 'trace');
+            $this->utils->debug('Process: #' . $session_id . ' sending data.', 'trace');
 
             $this->utils->procMgr->writeProc(
                 $proc_idx,
@@ -216,7 +216,7 @@ class go extends Factory
                 ], JSON_FORMAT)
             );
 
-            $this->utils->debug('Process: #' . $session_id . ' DONE.', 'trace');
+            $this->utils->debug('Process: #' . $session_id . ' sending completed.', 'trace');
         } catch (\Throwable $throwable) {
             $this->utils->debug('Process: #' . $session_id . ' ERROR: ' . $throwable->getMessage(), 'trace');
 

@@ -233,7 +233,7 @@ class go extends Factory
     public function getSystemPrompt(string $session_id): string
     {
         $prompt   = $this->utils->getMainPrompt();
-        $memories = $this->memory->read('system');
+        $memories = $this->memory->read('system', 0, 0, 0);
 
         if ([] !== $memories['data']) {
             $memory = ['## 用户与人物设定'];

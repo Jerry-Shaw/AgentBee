@@ -34,9 +34,9 @@ class context extends Factory
     public array $tools   = [];
     public array $history = [];
 
-    public array $session_list   = [];
-    public array $message_queue  = [];
-    public array $message_onsend = [];
+    public array $session_list    = [];
+    public array $message_queue   = [];
+    public array $message_pending = [];
 
     /**
      * @throws \ReflectionException
@@ -485,19 +485,19 @@ class context extends Factory
 
     /**
      * @param string $session_id
-     * @param bool   $on_send
+     * @param bool   $pending
      *
      * @return void
      */
-    public function messageOnSend(string $session_id, bool $on_send = true): void
+    public function messagePending(string $session_id, bool $pending = true): void
     {
-        if ($on_send) {
-            $this->message_onsend[$session_id] = time();
+        if ($pending) {
+            $this->message_pending[$session_id] = time();
         } else {
-            unset($this->message_onsend[$session_id]);
+            unset($this->message_pending[$session_id]);
         }
 
-        unset($session_id, $on_send);
+        unset($session_id, $pending);
     }
 
     /**
@@ -505,10 +505,10 @@ class context extends Factory
      *
      * @return bool
      */
-    public function isMessageOnSend(string $session_id): bool
+    public function isMessagePending(string $session_id): bool
     {
-        if (isset($this->message_onsend[$session_id])) {
-            $on_send = time() - $this->message_onsend[$session_id] > 15;
+        if (isset($this->message_pending[$session_id])) {
+            $on_send = time() - $this->message_pending[$session_id] > 15;
         } else {
             $on_send = false;
         }

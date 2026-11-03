@@ -696,7 +696,7 @@ class go extends Factory
 
                         case 'end':
                             if (WORKER_MAIN === $payload['sender']) {
-                                if (0 < $new_messages || $this->core->context->isMessageOnSend($payload['sessionId'])) {
+                                if (0 < $new_messages || $this->core->context->isMessagePending($payload['sessionId'])) {
                                     $metadata = $this->utils->getMarker(
                                         $payload['sender'],
                                         $payload['workerName'],
@@ -977,7 +977,7 @@ class go extends Factory
                     case 'reset':
                         $this->openai->reload();
                         $this->openai->getModels(true);
-                        $this->core->context->messageOnSend($data['sessionId'], false);
+                        $this->core->context->messagePending($data['sessionId'], false);
                         $this->core->context->removeHistory($data['sessionId'], WORKER_MAIN);
                         $this->utils->setStatus(utils::STATUS_IDLE, $data['sessionId'] ?? 'Unknown-Session-ID');
                         break;
@@ -1109,20 +1109,20 @@ class go extends Factory
         $session_list = $this->core->context->getSessionList();
 
         foreach ($session_list as $session_id => $active_time) {
-            $message_onsend = $this->core->context->isMessageOnSend($session_id);
+            $message_pending = $this->core->context->isMessagePending($session_id);
 
-            if (utils::STATUS_IDLE !== $this->utils->wait_status && !$message_onsend) {
-                $this->utils->debug('System: Proc #' . $session_id . ' is BUSY with no message onsend.', 'debug');
+            if (utils::STATUS_IDLE !== $this->utils->wait_status && !$message_pending) {
+                $this->utils->debug('System: Proc #' . $session_id . ' is BUSY with no message pending.', 'debug');
                 continue;
             }
 
             $new_messages = $this->core->context->refreshHistory($session_id, WORKER_MAIN);
 
-            if (0 === $new_messages && !$message_onsend) {
+            if (0 === $new_messages && !$message_pending) {
                 continue;
             }
 
-            $message_onsend
+            $message_pending
                 ? $this->utils->debug('System: Resending messages to #' . $session_id, 'trace')
                 : $this->utils->debug('System: Sending ' . $new_messages . ' new message(s) to #' . $session_id, 'trace');
 
@@ -1148,7 +1148,7 @@ class go extends Factory
             );
         }
 
-        unset($socket_id, $buffer, $session_list, $session_id, $active_time, $message_onsend, $new_messages, $metadata);
+        unset($socket_id, $buffer, $session_list, $session_id, $active_time, $message_pending, $new_messages, $metadata);
         return [];
     }
 

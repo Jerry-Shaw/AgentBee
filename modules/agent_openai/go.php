@@ -37,6 +37,8 @@ class go extends Factory
     public libOpenAI $libOpenAI;
     public processor $processor;
 
+    public bool $pipe_dirty = false;
+
     /**
      * @throws \ReflectionException
      */
@@ -196,13 +198,20 @@ class go extends Factory
         array  $metadata
     ): bool
     {
-        $this->core->context->messageOnSend($session_id, false);
-
-        if (WORKER_MAIN === $worker) {
-            $this->utils->setStatus(utils::STATUS_BUSY, $session_id);
-        }
-
         try {
+            // Flush dirty content when pipe contains partial writes
+            if ($this->pipe_dirty) {
+                $this->utils->procMgr->writeProc($proc_idx, '');
+                $this->pipe_dirty = false;
+            }
+
+            // Send full context to Agent LLM
+            $this->core->context->messagePending($session_id, false);
+
+            if (WORKER_MAIN === $worker) {
+                $this->utils->setStatus(utils::STATUS_BUSY, $session_id);
+            }
+
             $this->utils->debug('Process: #' . $session_id . ' sending data.', 'trace');
 
             $this->utils->procMgr->writeProc(
@@ -224,7 +233,10 @@ class go extends Factory
                 $this->utils->setStatus(utils::STATUS_IDLE, $session_id);
             }
 
-            $this->core->context->messageOnSend($session_id, true);
+            $this->core->context->messagePending($session_id, true);
+
+            // Mark pipe as dirty on partial writes
+            $this->pipe_dirty = true;
 
             unset($throwable);
             return false;

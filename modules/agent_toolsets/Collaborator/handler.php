@@ -52,7 +52,7 @@ class handler extends Factory
             'worker_name' => $payload_data['worker_name'],
             'worker_role' => $payload_data['worker_role'],
             'status'      => 'busy',
-            'last_talk'   => date('Y-m-d H:i:s')
+            'last_talk'   => time()
         ];
 
         $this->sendMessage(
@@ -243,7 +243,7 @@ class handler extends Factory
                 'worker_name'   => $worker['worker_name'],
                 'worker_role'   => $worker['worker_role'],
                 'worker_status' => $worker['status'],
-                'idle_sec'      => time() - strtotime($worker['last_talk'])
+                'idle_sec'      => time() - $worker['last_talk']
             ];
         }
 

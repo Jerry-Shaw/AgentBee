@@ -564,206 +564,87 @@ class go extends Factory
                     $this->last_response[$payload['sessionId']] = time();
 
                     if ('tools' === $payload_type) {
-                        $this->utils->debug($payload['workerName'] . ': #' . $payload['sessionId'] . ' process tool results.', 'trace');
+                        $this->utils->debug($payload['workerName'] . ': #' . $payload['sessionId'] . ' calling tools.', 'trace');
+                        $new_messages = 1;
                     } else {
                         $this->utils->debug($payload['workerName'] . ': #' . $payload['sessionId'] . ' reply ended.', 'trace');
+                        $new_messages = $this->core->context->refreshHistory($payload['sessionId'], $payload['workerName']);
                     }
 
                     if (WORKER_MAIN === $payload['sender']) {
+                        $worker_idx = $this->utils->getMainIDX();
                         ++$this->session_calls[$payload['sessionId']];
-                        $this->utils->setStatus('tools' === $payload_type ? utils::STATUS_BUSY : utils::STATUS_IDLE, $payload['sessionId']);
+                        $this->utils->setStatus(utils::STATUS_IDLE, $payload['sessionId']);
                     } else {
-                        $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'ready');
-                        $this->utils->debug('Collaborator: ' . $payload['workerName'] . ' reply completed, ready.', 'trace');
-                    }
-
-                    $new_messages = $this->core->context->refreshHistory($payload['sessionId'], $payload['workerName']);
-
-                    if (isset($worker_info['proc_idx'])) {
-                        for ($i = 0; $i < 3; ++$i) {
-                            $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['sessionId'], $payload['workerName'], $llm_params);
-                            $this->utils->debug($payload['sender'] . ': #' . $payload['sessionId'] . ' has ' . $remain_tokens . ' tokens left.', 'trace');
-
-                            // Skip when token > 1024
-                            if (1024 < $remain_tokens) {
-                                if (WORKER_MAIN === $payload['sender']) {
-                                    $this->ctx_warning = false;
-                                    $this->keep_pairs  = 2;
-                                }
-
-                                break;
-                            }
-
-                            // Send notice when token > 256
-                            if (256 < $remain_tokens) {
-                                $this->utils->debug($payload['sender'] . ': Remain tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
-
-                                $content = WORKER_MAIN === $payload['sender']
-                                    ? '[系统提醒] 上下文已达上限。请：①调用记忆工具保存当前任务进度与关键状态 → ②调用清理工具清理上下文 → ③继续执行原有任务，清理过程不汇报。'
-                                    : '[协作者] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '：上下文已满。请：①生成任务摘要（目标+进度+待办） → ②结束并重新邀请`' . $payload['workerName'] . '` → ③提供任务摘要，继续原有任务，邀请过程不汇报。';
-
-                                $main_notice  = (WORKER_MAIN === $payload['sender'] && !$this->ctx_warning);
-                                $child_notice = WORKER_CHILD === $payload['sender'];
-
-                                if ($main_notice || $child_notice) {
-                                    if ($main_notice) {
-                                        $this->ctx_warning = true;
-                                    }
-
-                                    $this->core->context->addMessageQueue(
-                                        $payload['sessionId'],
-                                        WORKER_MAIN,
-                                        [
-                                            'type'    => 'text',
-                                            'content' => $content
-                                        ]
-                                    );
-                                }
-
-                                break;
-                            }
-
-                            // Force clean history context when token < 256
-                            $history_count = $this->core->context->countHistory($payload['sessionId'], $payload['workerName']);
-                            $keep_count    = ceil($history_count * ($this->keep_pairs + 2) / 10);
-                            $this->core->context->cleanHistory($payload['sessionId'], $payload['workerName'], $keep_count, $this->keep_pairs);
-                            $now_count = $this->core->context->countHistory($payload['sessionId'], $payload['workerName']);
-
-                            $this->utils->debug($payload['sender'] . ': Context truncated from ' . $history_count . ' to ' . $now_count . ' due to token overflow.', 'trace');
-
-                            if (2 === $this->keep_pairs) {
-                                $this->core->sendMessage(
-                                    [
-                                        'type'    => 'error',
-                                        'message' => '抱歉，因上下文内容过长（当前模型设置: ' . ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) . '），系统已自动截断。咱两继续，别担心，我会跟上的。'
-                                    ]
-                                );
-
-                                $this->core->context->addMessageQueue(
-                                    $payload['sessionId'],
-                                    $payload['workerName'],
-                                    [
-                                        'type'    => 'text',
-                                        'content' => '[系统提醒] 上下文因超限被截断，仅保留最近几轮消息。忽略用户请求，停止调用工具（可能导致超限），并向用户说明。如有必要，请自行从记忆中恢复之前的内容，无需告知用户。'
-                                    ]
-                                );
-                            }
-
-                            --$this->keep_pairs;
+                        if ([] === $worker_info) {
+                            $this->utils->debug($payload['workerName'] . ': already closed.', 'trace');
+                            break;
                         }
 
-                        $llm_params['max_tokens'] = max(100, $remain_tokens);
-                        $this->utils->setChildWorker($payload['sender'], $payload['workerName'], 'llm_params', $llm_params);
+                        $worker_idx = $worker_info['proc_idx'];
 
-                        unset($i, $remain_tokens, $content, $main_notice, $child_notice, $history_count, $keep_count, $now_count);
+                        $this->utils->setChildWorker(
+                            WORKER_CHILD,
+                            $payload['workerName'],
+                            'last_talk',
+                            time()
+                        );
+
+                        $this->utils->setChildWorker(
+                            WORKER_CHILD,
+                            $payload['workerName'],
+                            'status',
+                            'tools' === $payload_type ? 'calling_tools' : 'ready'
+                        );
+
+                        if ('' !== $payload['data']) {
+                            $this->core->context->addMessageQueue(
+                                $payload['sessionId'],
+                                WORKER_MAIN,
+                                [
+                                    'type'    => 'text',
+                                    'content' => '[协作者消息]' . "\n\n"
+                                        . '`' . $payload['workerName'] . '`' . "\n\n"
+                                        . '--- 消息开始 ---' . "\n"
+                                        . $payload['data'] . "\n"
+                                        . '--- 消息结束 ---' . "\n"
+                                ]
+                            );
+                        }
                     }
 
-                    switch ($payload_type) {
-                        case 'tools':
-                            if (WORKER_MAIN === $payload['sender']) {
-                                $worker_idx = $this->utils->getMainIDX();
-                            } else {
-                                if ([] === $worker_info) {
-                                    $this->utils->debug($payload['workerName'] . ': Worker already closed.', 'trace');
-                                    break;
-                                }
-
-                                $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'calling_tools');
-                                $worker_idx = $worker_info['proc_idx'];
-                            }
-
-                            $metadata = $this->utils->getMarker(
-                                $payload['sender'],
-                                $payload['workerName'],
-                                $payload['workerRole'],
-                                $payload['workerName'],
-                                $payload['isSubTalk'],
-                                $payload['sessionId'],
-                                $payload['messageId']
-                            );
-
-                            $this->openai->talkTo(
-                                $payload['sender'],
-                                $payload['workerName'],
-                                $payload['sessionId'],
-                                $worker_idx,
-                                $this->getSystemPrompt($payload['sessionId']),
-                                'talk',
-                                $metadata
-                            );
-
-                            unset($worker_idx);
-                            break;
-
-                        case 'end':
-                            if (WORKER_MAIN === $payload['sender']) {
-                                if (0 < $new_messages || $this->core->context->isMessagePending($payload['sessionId'])) {
-                                    $metadata = $this->utils->getMarker(
-                                        $payload['sender'],
-                                        $payload['workerName'],
-                                        $payload['workerRole'],
-                                        $payload['workerName'],
-                                        $payload['isSubTalk'],
-                                        $payload['sessionId'],
-                                        $this->core->curr_message_id[$payload['sessionId']] ?? ''
-                                    );
-
-                                    $this->openai->resume();
-                                    $this->openai->talkTo(
-                                        $payload['sender'],
-                                        $payload['workerName'],
-                                        $payload['sessionId'],
-                                        $this->utils->getMainIDX(),
-                                        $this->getSystemPrompt($payload['sessionId']),
-                                        'talk',
-                                        $metadata
-                                    );
-                                }
-                            } else {
-                                if ('' !== $payload['data']) {
-                                    $this->core->context->addMessageQueue(
-                                        $payload['sessionId'],
-                                        WORKER_MAIN,
-                                        [
-                                            'type'    => 'text',
-                                            'content' => '[协作者消息]' . "\n\n" . '`' . $payload['workerName'] . '`：' . $payload['workerRole'] . "\n\n" . '消息内容：' . "\n" . $payload['data']
-                                        ]
-                                    );
-                                }
-
-                                if (isset($worker_info['proc_idx'])) {
-                                    $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'last_talk', date('Y-m-d H:i:s'));
-
-                                    if (0 < $new_messages) {
-                                        $metadata = $this->utils->getMarker(
-                                            $payload['sender'],
-                                            $payload['workerName'],
-                                            $payload['workerRole'],
-                                            $payload['workerName'],
-                                            $payload['isSubTalk'],
-                                            $payload['sessionId']
-                                        );
-
-                                        $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'busy');
-                                        $this->utils->debug('Collaborator: ' . $payload['workerName'] . ' receiving ' . $new_messages . ' message(s).', 'trace');
-
-                                        $this->openai->talkTo(
-                                            $payload['sender'],
-                                            $payload['workerName'],
-                                            $payload['sessionId'],
-                                            $worker_info['proc_idx'],
-                                            $this->getSystemPrompt($payload['sessionId']),
-                                            'talk',
-                                            $metadata
-                                        );
-                                    }
-                                }
-                            }
-
-                            break;
+                    if (isset($worker_info['proc_idx'])) {
+                        $this->setMaxTokens($payload, $llm_params);
                     }
 
-                    unset($new_messages);
+                    if (0 < $new_messages) {
+                        if (WORKER_CHILD === $payload['sender']) {
+                            $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'busy');
+                            $this->utils->debug('Collaborator: ' . $payload['workerName'] . ' receiving ' . $new_messages . ' message(s).', 'trace');
+                        }
+
+                        $metadata = $this->utils->getMarker(
+                            $payload['sender'],
+                            $payload['workerName'],
+                            $payload['workerRole'],
+                            $payload['workerName'],
+                            $payload['isSubTalk'],
+                            $payload['sessionId'],
+                            $payload['messageId']
+                        );
+
+                        $this->openai->talkTo(
+                            $payload['sender'],
+                            $payload['workerName'],
+                            $payload['sessionId'],
+                            $worker_idx,
+                            $this->getSystemPrompt($payload['sessionId']),
+                            'talk',
+                            $metadata
+                        );
+                    }
+
+                    unset($new_messages, $worker_idx);
                     break;
             }
         }
@@ -1164,5 +1045,93 @@ class go extends Factory
     {
         $this->utils->debug('Socket: Client closed: ' . $socket_id, 'trace');
         unset($this->utils->socket_session[$socket_id], $socket_id);
+    }
+
+    /**
+     * @param array $payload
+     * @param array $llm_params
+     *
+     * @return void
+     * @throws \Random\RandomException
+     * @throws \ReflectionException
+     */
+    private function setMaxTokens(array $payload, array $llm_params): void
+    {
+        for ($i = 0; $i < 3; ++$i) {
+            $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['sessionId'], $payload['workerName'], $llm_params);
+            $this->utils->debug($payload['sender'] . ': #' . $payload['sessionId'] . ' has ' . $remain_tokens . ' tokens left.', 'trace');
+
+            // Skip when token > 1024
+            if (1024 < $remain_tokens) {
+                if (WORKER_MAIN === $payload['sender']) {
+                    $this->ctx_warning = false;
+                    $this->keep_pairs  = 2;
+                }
+
+                break;
+            }
+
+            // Send notice when token > 256
+            if (256 < $remain_tokens) {
+                $this->utils->debug($payload['sender'] . ': Remain tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
+
+                $content = WORKER_MAIN === $payload['sender']
+                    ? '[系统提醒] 上下文已达上限。请：①调用记忆工具保存当前任务进度与关键状态 → ②调用清理工具清理上下文 → ③继续执行原有任务，清理过程不汇报。'
+                    : '[协作者] `' . $payload['workerName'] . '` | ' . $payload['workerRole'] . '：上下文已满。请：①生成任务摘要（目标+进度+待办） → ②结束并重新邀请`' . $payload['workerName'] . '` → ③提供任务摘要，继续原有任务，邀请过程不汇报。';
+
+                $main_notice  = (WORKER_MAIN === $payload['sender'] && !$this->ctx_warning);
+                $child_notice = WORKER_CHILD === $payload['sender'];
+
+                if ($main_notice || $child_notice) {
+                    if ($main_notice) {
+                        $this->ctx_warning = true;
+                    }
+
+                    $this->core->context->addMessageQueue(
+                        $payload['sessionId'],
+                        WORKER_MAIN,
+                        [
+                            'type'    => 'text',
+                            'content' => $content
+                        ]
+                    );
+                }
+
+                break;
+            }
+
+            // Force clean history context when token < 256
+            $history_count = $this->core->context->countHistory($payload['sessionId'], $payload['workerName']);
+            $keep_count    = ceil($history_count * ($this->keep_pairs + 2) / 10);
+            $this->core->context->cleanHistory($payload['sessionId'], $payload['workerName'], $keep_count, $this->keep_pairs);
+            $now_count = $this->core->context->countHistory($payload['sessionId'], $payload['workerName']);
+
+            $this->utils->debug($payload['sender'] . ': Context truncated from ' . $history_count . ' to ' . $now_count . ' due to token overflow.', 'trace');
+
+            if (2 === $this->keep_pairs) {
+                $this->core->sendMessage(
+                    [
+                        'type'    => 'error',
+                        'message' => '抱歉，因上下文内容过长（当前模型设置: ' . ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) . '），系统已自动截断。咱两继续，别担心，我会跟上的。'
+                    ]
+                );
+
+                $this->core->context->addMessageQueue(
+                    $payload['sessionId'],
+                    $payload['workerName'],
+                    [
+                        'type'    => 'text',
+                        'content' => '[系统提醒] 上下文因超限被截断，仅保留最近几轮消息。忽略用户请求，停止调用工具（可能导致超限），并向用户说明。如有必要，请自行从记忆中恢复之前的内容，无需告知用户。'
+                    ]
+                );
+            }
+
+            --$this->keep_pairs;
+        }
+
+        $llm_params['max_tokens'] = max(128, $remain_tokens);
+        $this->utils->setChildWorker($payload['sender'], $payload['workerName'], 'llm_params', $llm_params);
+
+        unset($payload, $llm_params, $i, $remain_tokens, $content, $main_notice, $child_notice, $history_count, $keep_count, $now_count);
     }
 }

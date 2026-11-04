@@ -321,7 +321,6 @@ class go extends Factory
                 }
             }
 
-            $this->utils->debug($payload['workerName'] . ': ' . $message['type'] . '->' . $payload_type, 'debug');
             $worker_info = $this->utils->getChildWorker($payload['sender'], $payload['workerName']);
             $llm_params  = $worker_info['llm_params'] ?? [];
 
@@ -387,6 +386,8 @@ class go extends Factory
                             break;
 
                         case 'error':
+                            $this->utils->debug($payload['workerName'] . ': stream->error', 'trace');
+
                             if (WORKER_MAIN === $payload['sender']) {
                                 $this->utils->setStatus(utils::STATUS_IDLE, $payload['sessionId']);
                             } else {
@@ -400,6 +401,8 @@ class go extends Factory
                             break;
 
                         case 'abort':
+                            $this->utils->debug($payload['workerName'] . ': stream->abort', 'trace');
+
                             $this->core->sendMessage($payload);
                             $this->utils->setStatus(utils::STATUS_IDLE, $payload['sessionId']);
                             break;
@@ -460,6 +463,8 @@ class go extends Factory
                     break;
 
                 case 'context':
+                    $this->utils->debug($payload['workerName'] . ': context->callHandler', 'trace');
+
                     // Reset main worker status
                     if (WORKER_MAIN === $payload['sender']) {
                         $this->utils->setStatus(utils::STATUS_IDLE, $payload['sessionId']);
@@ -467,96 +472,92 @@ class go extends Factory
                         $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'ready');
                     }
 
-                    switch ($payload_type) {
-                        case 'callHandler':
-                            $tool_calls   = [];
-                            $tool_results = [];
+                    $tool_calls   = [];
+                    $tool_results = [];
 
-                            foreach ($payload['data'] as $data) {
-                                if (!isset($data['handler_args']['action'])) {
-                                    $this->utils->debug('Handler: handler or action NOT found!', 'trace');
-                                    continue;
-                                }
+                    foreach ($payload['data'] as $data) {
+                        if (!isset($data['handler_args']['action'])) {
+                            $this->utils->debug('Handler: handler or action NOT found!', 'trace');
+                            continue;
+                        }
 
-                                $this->utils->debug('Handler: Calling ' . $data['tool_calls']['name'], 'trace');
+                        $this->utils->debug('Handler: Calling ' . $data['tool_calls']['name'], 'trace');
 
-                                try {
-                                    $this->core->IOData->src_cmd  = $data['tool_calls']['name'];
-                                    $this->core->IOData->src_argv = $data['handler_args'];
+                        try {
+                            $this->core->IOData->src_cmd  = $data['tool_calls']['name'];
+                            $this->core->IOData->src_argv = $data['handler_args'];
 
-                                    $data['handler_args']['ext_id'] = $context['ext_id'];
+                            $data['handler_args']['ext_id'] = $context['ext_id'];
 
-                                    $handler = $data['handler_args']['handler']::new();
-                                    $result  = $handler->{$data['handler_args']['action']}($data['handler_args'], $this) ?? '工具执行完成，但未返回数据。';
-                                } catch (\Throwable $throwable) {
-                                    $result = [
-                                        'status' => 'error',
-                                        'error'  => $throwable->getMessage(),
-                                    ];
+                            $handler = $data['handler_args']['handler']::new();
+                            $result  = $handler->{$data['handler_args']['action']}($data['handler_args'], $this) ?? '工具执行完成，但未返回数据。';
+                        } catch (\Throwable $throwable) {
+                            $result = [
+                                'status' => 'error',
+                                'error'  => $throwable->getMessage(),
+                            ];
 
-                                    $this->utils->debug('Handler ERROR: ' . $data['tool_calls']['name'] . ' => ' . $throwable->getMessage(), 'trace');
-                                    $this->core->error->exceptionHandler($throwable, false, false);
-                                    unset($throwable);
-                                }
+                            $this->utils->debug('Handler ERROR: ' . $data['tool_calls']['name'] . ' => ' . $throwable->getMessage(), 'trace');
+                            $this->core->error->exceptionHandler($throwable, false, false);
+                            unset($throwable);
+                        }
 
-                                $this->core->IOData->src_cmd  = '';
-                                $this->core->IOData->src_argv = [];
+                        $this->core->IOData->src_cmd  = '';
+                        $this->core->IOData->src_argv = [];
 
-                                if (!is_string($result)) {
-                                    $result = json_encode($result, JSON_FORMAT);
+                        if (!is_string($result)) {
+                            $result = json_encode($result, JSON_FORMAT);
 
-                                    if (false === $result) {
-                                        $result = 'Handler ERROR: ' . $data['tool_calls']['name'] . ' -> ' . json_last_error_msg();
-                                    }
-                                }
-
-                                $tool_calls[]   = $data['tool_calls'];
-                                $tool_results[] = [
-                                    'call_id'     => $data['tool_calls']['id'],
-                                    'call_name'   => $data['tool_calls']['name'],
-                                    'call_result' => $result
-                                ];
+                            if (false === $result) {
+                                $result = 'Handler ERROR: ' . $data['tool_calls']['name'] . ' -> ' . json_last_error_msg();
                             }
+                        }
 
-                            if ([] === $tool_calls) {
-                                break;
-                            }
-
-                            $metadata = $this->utils->getMarker(
-                                $payload['sender'],
-                                $payload['workerName'],
-                                $payload['workerRole'],
-                                $payload['workerName'],
-                                $payload['isSubTalk'],
-                                $payload['sessionId'],
-                                $payload['messageId']
-                            );
-
-                            $this->core->context->addAssistantMessage($payload['sessionId'], $payload['workerName'], '', $tool_calls);
-
-                            foreach ($tool_results as $tool_result) {
-                                $this->core->context->addToolResult(
-                                    $payload['sessionId'],
-                                    $payload['workerName'],
-                                    $tool_result['call_id'],
-                                    $tool_result['call_result']
-                                );
-
-                                $msg_data = [
-                                    'type' => 'tool_result',
-                                    'data' => [
-                                        'call_id'       => $tool_result['call_id'],
-                                        'function_name' => $tool_result['call_name'],
-                                        'content'       => $tool_result['call_result'],
-                                    ]
-                                ];
-
-                                $this->core->sendMessage($metadata + $msg_data);
-                            }
-
-                            unset($tool_calls, $tool_results, $data, $handler, $result, $metadata, $assistant_message, $tool_result, $msg_data);
-                            break;
+                        $tool_calls[]   = $data['tool_calls'];
+                        $tool_results[] = [
+                            'call_id'     => $data['tool_calls']['id'],
+                            'call_name'   => $data['tool_calls']['name'],
+                            'call_result' => $result
+                        ];
                     }
+
+                    if ([] === $tool_calls) {
+                        break;
+                    }
+
+                    $metadata = $this->utils->getMarker(
+                        $payload['sender'],
+                        $payload['workerName'],
+                        $payload['workerRole'],
+                        $payload['workerName'],
+                        $payload['isSubTalk'],
+                        $payload['sessionId'],
+                        $payload['messageId']
+                    );
+
+                    $this->core->context->addAssistantMessage($payload['sessionId'], $payload['workerName'], '', $tool_calls);
+
+                    foreach ($tool_results as $tool_result) {
+                        $this->core->context->addToolResult(
+                            $payload['sessionId'],
+                            $payload['workerName'],
+                            $tool_result['call_id'],
+                            $tool_result['call_result']
+                        );
+
+                        $msg_data = [
+                            'type' => 'tool_result',
+                            'data' => [
+                                'call_id'       => $tool_result['call_id'],
+                                'function_name' => $tool_result['call_name'],
+                                'content'       => $tool_result['call_result'],
+                            ]
+                        ];
+
+                        $this->core->sendMessage($metadata + $msg_data);
+                    }
+
+                    unset($tool_calls, $tool_results, $data, $handler, $result, $metadata, $assistant_message, $tool_result, $msg_data);
                     break;
 
                 case 'end':

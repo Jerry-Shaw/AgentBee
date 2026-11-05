@@ -508,7 +508,7 @@ class context extends Factory
     public function isMessagePending(string $session_id): bool
     {
         if (isset($this->message_pending[$session_id])) {
-            $on_send = time() - $this->message_pending[$session_id] > 15;
+            $on_send = time() - $this->message_pending[$session_id] > 20;
         } else {
             $on_send = false;
         }

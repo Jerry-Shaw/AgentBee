@@ -429,8 +429,15 @@ class go extends Factory
                                 $payload['sessionId'],
                                 $payload['workerName'],
                                 $payload['data']['content'],
-                                $payload['data']['tool_calls'] ?? [],
                                 $payload['data']['reasoning_content'] ?? ''
+                            );
+                            break;
+
+                        case 'addAssistantToolCalls':
+                            $this->core->context->addAssistantToolCalls(
+                                $payload['sessionId'],
+                                $payload['workerName'],
+                                $payload['data']['tool_calls']
                             );
                             break;
 

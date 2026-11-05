@@ -84,7 +84,7 @@ class messages extends stream
                     break;
 
                 case 'assistant':
-                    if ('' !== $event['content']) {
+                    if (isset($event['content']) && '' !== $event['content']) {
                         $contents[] = ['type' => 'text', 'text' => $event['content']];
                     }
 
@@ -441,10 +441,15 @@ class messages extends stream
                 $assistant_message = $this->buildAssistantEvent();
 
                 if ([] !== $correct_calls) {
-                    $assistant_message['tool_calls'] = $correct_calls;
+                    $this->output(
+                        'history',
+                        'addAssistantToolCalls',
+                        $metadata,
+                        ['role' => 'assistant', 'tool_calls' => $correct_calls]
+                    );
                 }
 
-                if ('' !== $this->assistant_content || '' !== $this->reasons_content || [] !== $correct_calls) {
+                if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
                     $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
                 }
 

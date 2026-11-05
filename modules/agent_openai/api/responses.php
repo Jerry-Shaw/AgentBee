@@ -400,10 +400,15 @@ class responses extends stream
                 $assistant_message = $this->buildAssistantEvent();
 
                 if ([] !== $correct_calls) {
-                    $assistant_message['tool_calls'] = $correct_calls;
+                    $this->output(
+                        'history',
+                        'addAssistantToolCalls',
+                        $metadata,
+                        ['role' => 'assistant', 'tool_calls' => $correct_calls]
+                    );
                 }
 
-                if ('' !== $this->assistant_content || '' !== $this->reasons_content || [] !== $correct_calls) {
+                if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
                     $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
                 }
 

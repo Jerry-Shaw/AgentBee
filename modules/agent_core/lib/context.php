@@ -116,12 +116,11 @@ class context extends Factory
      * @param string $session_id
      * @param string $worker_name
      * @param string $content
-     * @param array  $tool_calls
      * @param string $reasoning_content
      *
      * @return void
      */
-    public function addAssistantMessage(string $session_id, string $worker_name, string $content = '', array $tool_calls = [], string $reasoning_content = ''): void
+    public function addAssistantMessage(string $session_id, string $worker_name, string $content = '', string $reasoning_content = ''): void
     {
         $message = ['role' => 'assistant', 'content' => $content];
 
@@ -129,14 +128,32 @@ class context extends Factory
             $message['reasoning_content'] = $reasoning_content;
         }
 
-        if ([] !== $tool_calls) {
-            $message['tool_calls'] = array_map(fn(array $tool_call): array => $this->normalizeToolCall($tool_call), $tool_calls);
-        }
+        $this->history[$session_id][$worker_name]   ??= [];
+        $this->history[$session_id][$worker_name][] = $message;
+
+        unset($session_id, $worker_name, $content, $reasoning_content, $message);
+    }
+
+    /**
+     * Add an assistant tool call message.
+     *
+     * @param string $session_id
+     * @param string $worker_name
+     * @param array  $tool_calls
+     *
+     * @return void
+     */
+    public function addAssistantToolCalls(string $session_id, string $worker_name, array $tool_calls): void
+    {
+        $message = [
+            'role'       => 'assistant',
+            'tool_calls' => array_map(fn(array $tool_call): array => $this->normalizeToolCall($tool_call), $tool_calls)
+        ];
 
         $this->history[$session_id][$worker_name]   ??= [];
         $this->history[$session_id][$worker_name][] = $message;
 
-        unset($session_id, $worker_name, $content, $tool_calls, $reasoning_content, $message);
+        unset($session_id, $worker_name, $tool_calls, $message);
     }
 
     /**

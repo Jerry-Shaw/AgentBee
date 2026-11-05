@@ -1004,10 +1004,12 @@ class go extends Factory
      */
     public function onSendString(string $socket_id): array
     {
-        if ([] !== $this->utils->message_buffers) {
-            while (null !== ($buffer = array_shift($this->utils->message_buffers))) {
-                $this->core->sendMessage($buffer);
-            }
+        if ([] === $this->utils->message_buffers) {
+            return [];
+        }
+
+        while (null !== ($buffer = array_shift($this->utils->message_buffers))) {
+            $this->core->sendMessage($buffer);
         }
 
         unset($socket_id, $buffer);

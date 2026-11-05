@@ -397,8 +397,6 @@ class responses extends stream
                     }
                 }
 
-                $assistant_message = $this->buildAssistantEvent();
-
                 if ([] !== $correct_calls) {
                     $this->output(
                         'history',
@@ -409,7 +407,7 @@ class responses extends stream
                 }
 
                 if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
-                    $this->output('history', 'addAssistantMessage', $metadata, $assistant_message);
+                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
 
                 foreach ($tool_results as $tool_result) {
@@ -447,7 +445,7 @@ class responses extends stream
                 $this->output('stream', 'end', $metadata);
                 $this->output('end', 'tools', $metadata, $correct_calls);
 
-                unset($error_args, $error_names, $error_calls, $correct_calls, $tool_results, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $assistant_message, $tool_result, $error_types);
+                unset($error_args, $error_names, $error_calls, $correct_calls, $tool_results, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $tool_result, $error_types);
                 break;
 
             case 'content_filter':

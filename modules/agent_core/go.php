@@ -543,7 +543,7 @@ class go extends Factory
                         $payload['messageId']
                     );
 
-                    $this->core->context->addAssistantMessage($payload['sessionId'], $payload['workerName'], '', $tool_calls);
+                    $this->core->context->addAssistantToolCalls($payload['sessionId'], $payload['workerName'], $tool_calls);
 
                     foreach ($tool_results as $tool_result) {
                         $this->core->context->addToolResult(

@@ -209,7 +209,7 @@ class go extends Factory
             $this->core->context->messagePending($session_id, false);
 
             if (WORKER_MAIN === $worker) {
-                $this->utils->setStatus(utils::STATUS_BUSY, $session_id);
+                $this->utils->setPipeStatus(utils::STATUS_BUSY, $session_id);
             }
 
             $this->utils->debug('Process: #' . $session_id . ' sending data.', 'trace');
@@ -230,7 +230,7 @@ class go extends Factory
             $this->utils->debug('Process: #' . $session_id . ' ERROR: ' . $throwable->getMessage(), 'trace');
 
             if (WORKER_MAIN === $worker) {
-                $this->utils->setStatus(utils::STATUS_IDLE, $session_id);
+                $this->utils->setPipeStatus(utils::STATUS_IDLE, $session_id);
             }
 
             $this->core->context->messagePending($session_id, true);

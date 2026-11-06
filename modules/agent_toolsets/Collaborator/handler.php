@@ -40,7 +40,7 @@ class handler extends Factory
             $agent_core->utils->getWorkerIDX(),
             WORKER_CHILD,
             $payload_data['worker_name'],
-            [$agent_core, 'workerHandler']
+            [$agent_core, 'stdoutHandler']
         );
 
         $agent_core->utils->debug('Collaborator started: ' . $payload_data['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload_data['worker_role'] . ')', 'trace');

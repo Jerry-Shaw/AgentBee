@@ -143,7 +143,7 @@ class context extends Factory
      *
      * @return void
      */
-    public function addAssistantToolCalls(string $session_id, string $worker_name, array $tool_calls): void
+    public function addToolCalls(string $session_id, string $worker_name, array $tool_calls): void
     {
         $message = [
             'role'       => 'assistant',
@@ -166,7 +166,7 @@ class context extends Factory
      *
      * @return void
      */
-    public function addToolResult(string $session_id, string $worker_name, string $call_id, string $content): void
+    public function addToolResults(string $session_id, string $worker_name, string $call_id, string $content): void
     {
         $this->history[$session_id][$worker_name]   ??= [];
         $this->history[$session_id][$worker_name][] = [

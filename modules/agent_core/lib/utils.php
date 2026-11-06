@@ -40,17 +40,17 @@ class utils extends Factory
     public libFileIO $libFileIO;
     public config    $config;
 
-    public int $main_idx    = 0;
-    public int $proc_idx    = 10;
-    public int $worker_idx  = 1000;
-    public int $wait_until  = 0;
-    public int $wait_status = self::STATUS_IDLE;
+    public int $main_idx   = 0;
+    public int $proc_idx   = 10;
+    public int $worker_idx = 1000;
 
     public array  $agent_config;
     public string $pid_file_path;
 
     public string $memory_buffer = '';
 
+    public array $wait_until      = [];
+    public array $wait_status     = [];
     public array $model_list      = [];
     public array $program_list    = [];
     public array $child_workers   = [];
@@ -874,17 +874,23 @@ class utils extends Factory
      *
      * @return void
      */
-    public function setStatus(int $status, string $session_id, bool $timeout = false): void
+    public function setPipeStatus(int $status, string $session_id, bool $timeout = false): void
     {
+        $this->wait_until[$session_id]  ??= 0;
+        $this->wait_status[$session_id] ??= self::STATUS_IDLE;
+
         if (self::STATUS_IDLE === $status) {
-            $this->debug('Status: #' . $session_id . ' IDLE (' . (!$timeout ? 'stream ended' : 'response timeout') . ')', 'trace');
-            $this->wait_status = $status;
+            if ($this->wait_status[$session_id] !== $status) {
+                $this->debug('Status: #' . $session_id . ' IDLE (' . (!$timeout ? 'stream ended' : 'response timeout') . ')', 'trace');
+            }
+
+            $this->wait_status[$session_id] = $status;
             return;
         }
 
-        $this->wait_until = time() + ($this->agent_config['agent_llm']['wait_timeout'] ?? 600);
+        $this->wait_until[$session_id] = time() + ($this->agent_config['agent_llm']['wait_timeout'] ?? 600);
 
-        if (($this->wait_status & $status) !== $status) {
+        if (($this->wait_status[$session_id] & $status) !== $status) {
             switch ($status) {
                 case self::STATUS_BUSY:
                     $this->debug('Status: #' . $session_id . ' BUSY (waiting for response)', 'trace');
@@ -894,10 +900,24 @@ class utils extends Factory
                     break;
             }
 
-            $this->wait_status |= $status;
+            $this->wait_status[$session_id] |= $status;
         }
 
         unset($status, $session_id, $timeout);
+    }
+
+    /**
+     * @param string $session_id
+     *
+     * @return bool
+     */
+    public function isPipeIdle(string $session_id = ''): bool
+    {
+        if ('' !== $session_id) {
+            return (self::STATUS_IDLE === ($this->wait_until[$session_id] ?? self::STATUS_IDLE));
+        }
+
+        return 0 === count(array_intersect($this->wait_status, [self::STATUS_BUSY, self::STATUS_WAIT, self::STATUS_BUSY | self::STATUS_WAIT]));
     }
 
     /**

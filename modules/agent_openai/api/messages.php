@@ -200,14 +200,14 @@ class messages extends stream
 
         if (isset($data['error'])) {
             $this->finish_reason = 'error';
-            $this->output('stream', 'error', $metadata, ['message' => $data['error']]);
+            $this->output('end', 'error', $metadata, ['message' => $data['error']]);
             return;
         }
 
         if (isset($data['status']) && 'aborted' === $data['status']) {
             $this->finish_reason = 'abort';
             $this->tool_calls    = [];
-            $this->output('stream', 'abort', $metadata, ['message' => '已停止生成']);
+            $this->output('end', 'abort', $metadata, ['message' => '已停止生成']);
             return;
         }
 
@@ -309,12 +309,7 @@ class messages extends stream
 
             case 'error':
                 $this->finish_reason = 'error';
-                $this->output(
-                    'stream',
-                    'error',
-                    $metadata,
-                    $chunk['error'] ?? ['message' => 'Unknown error']
-                );
+                $this->output('end', 'error', $metadata, $chunk['error'] ?? ['message' => 'Unknown error']);
                 break;
         }
 
@@ -342,7 +337,6 @@ class messages extends stream
                     $this->output('memory', 'save', $metadata, $this->assistant_content);
                 }
 
-                $this->output('stream', 'end', $metadata);
                 $this->output('end', 'end', $metadata, $this->assistant_content);
                 break;
 
@@ -360,7 +354,7 @@ class messages extends stream
                     $this->output('memory', 'save', $metadata, $this->assistant_content);
                 }
 
-                $this->output('stream', 'length', $metadata, '[系统提示] 内容过长被截断。');
+                $this->output('end', 'length', $metadata, '[系统提示] 内容过长被截断。');
                 break;
 
             case 'tool_calls':
@@ -439,11 +433,10 @@ class messages extends stream
                 }
 
                 if ([] !== $correct_calls) {
-                    $this->output(
-                        'history',
-                        'addAssistantToolCalls',
-                        $metadata,
-                        ['role' => 'assistant', 'tool_calls' => $correct_calls]
+                    $this->output('history', 'addToolCalls', $metadata, [
+                            'role'       => 'assistant',
+                            'tool_calls' => $correct_calls
+                        ]
                     );
                 }
 
@@ -452,11 +445,11 @@ class messages extends stream
                 }
 
                 foreach ($tool_results as $tool_result) {
-                    $this->output('history', 'addToolResult', $metadata, $tool_result);
+                    $this->output('history', 'addToolResults', $metadata, $tool_result);
                 }
 
                 if ([] !== $handler_calls) {
-                    $this->output('context', 'callHandler', $metadata, $handler_calls);
+                    $this->output('toolCalls', 'callHandler', $metadata, $handler_calls);
                 }
 
                 $error_types = [];
@@ -483,14 +476,13 @@ class messages extends stream
                     ]);
                 }
 
-                $this->output('stream', 'end', $metadata);
                 $this->output('end', 'tools', $metadata, $correct_calls);
 
                 unset($error_args, $error_names, $error_calls, $correct_calls, $tool_results, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $tool_result, $error_types);
                 break;
 
             case 'content_filter':
-                $this->output('stream', 'error', $metadata, ['message' => '[系统提示] 内容被安全策略过滤，已终止生成。']);
+                $this->output('end', 'error', $metadata, ['message' => '[系统提示] 内容被安全策略过滤，已终止生成。']);
                 $this->finish_reason = 'error';
                 break;
 
@@ -505,12 +497,12 @@ class messages extends stream
                     ]);
                 }
 
-                $this->output('stream', 'error', $metadata, ['message' => '[系统提示] 生成异常中断。']);
+                $this->output('end', 'error', $metadata, ['message' => '[系统提示] 生成异常中断。']);
                 $this->finish_reason = 'error';
                 break;
 
             default:
-                $this->output('stream', 'error', $metadata, ['message' => '[系统提示] 未知的结束原因（' . $this->finish_reason . '），已终止生成。']);
+                $this->output('end', 'error', $metadata, ['message' => '[系统提示] 未知的结束原因（' . $this->finish_reason . '），已终止生成。']);
                 $this->finish_reason = 'error';
                 break;
         }

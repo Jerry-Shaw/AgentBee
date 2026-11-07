@@ -953,7 +953,12 @@ class go extends Factory
                     $new_messages = 1;
                 } else {
                     $this->utils->debug($payload['sender'], '#' . $payload['sessionId'] . ' ' . $payload['workerName'] . ' reply ended.', 'trace');
+                    $end_message  = $payload;
                     $new_messages = $this->core->context->refreshHistory($payload['sessionId'], $payload['workerName']);
+
+                    unset($end_message['data']);
+                    $this->core->sendMessage($end_message);
+                    unset($end_message);
                 }
 
                 // Recalculate max-tokens

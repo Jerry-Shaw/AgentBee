@@ -432,16 +432,20 @@ class messages extends stream
                     }
                 }
 
+                if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
+                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
+
+                    if ('' !== $this->assistant_content) {
+                        $this->output('memory', 'save', $metadata, $this->assistant_content);
+                    }
+                }
+
                 if ([] !== $correct_calls) {
                     $this->output('history', 'addToolCalls', $metadata, [
                             'role'       => 'assistant',
                             'tool_calls' => $correct_calls
                         ]
                     );
-                }
-
-                if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
-                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
 
                 foreach ($tool_results as $tool_result) {

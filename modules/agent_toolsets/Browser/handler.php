@@ -866,7 +866,7 @@ class handler extends Factory
         Factory::destroy($socketMgr);
 
         $this->tab_list[$target_id]['injected'] = true;
-        $agent_core->utils->debug('Browser', 'Injection commands to ' . $target_id, 'trace');
+        $agent_core->utils->debug('Browser', 'Inject scripts into ' . $target_id, 'trace');
 
         unset($target_id, $agent_core, $ws_addr, $source, $socketMgr, $commands, $command, $cmd_id, $message, $write, $except, $read);
     }

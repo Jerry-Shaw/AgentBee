@@ -127,7 +127,7 @@ class go extends Factory
             ]
         );
 
-        $this->utils->debug($worker_type, 'Started with pid: ' . $worker_pid, 'trace');
+        $this->utils->debug($worker_type, 'Started with pid ' . $worker_pid, 'trace');
         $this->utils->debug('System', 'Register Output Handler', 'debug');
 
         $this->core->socketMgr->addExternalProc(
@@ -207,7 +207,7 @@ class go extends Factory
         try {
             $server_host = 'tcp://' . $this->utils->agent_config['agent_server']['host'] . ':' . $this->utils->agent_config['agent_server']['port'];
             $this->utils->debug('Local-IP', implode(', ', $this->core->OSMgr->getIPv4()), 'trace');
-            $this->utils->debug('System', 'Ready to start server: ' . $server_host, 'trace');
+            $this->utils->debug('System', 'Ready to start server on ' . $server_host, 'trace');
             $this->core->socketMgr
                 ->setUserFuncInterval(10)
                 ->setAliveTimeout($this->utils->agent_config['agent_server']['ping_interval'])
@@ -486,7 +486,7 @@ class go extends Factory
             return;
         }
 
-        $this->utils->debug('UserAct', 'Received [' . (!$is_binary ? 'TEXT' : 'BINARY') . '] message', 'debug');
+        $this->utils->debug('User-Act', 'Received [' . (!$is_binary ? 'TEXT' : 'BINARY') . '] message', 'debug');
 
         if ($is_binary) {
             $this->utils->debug('System', 'Binary message is NOT supported yet', 'trace');
@@ -511,7 +511,7 @@ class go extends Factory
 
             if ('/abort' === $data['type']) {
                 $this->openai->abort();
-                $this->utils->debug('UserAct', 'Abort signal sent. Cancelling task.', 'trace');
+                $this->utils->debug('User-Act', 'Abort signal sent. Cancelling task.', 'trace');
                 $this->utils->setPipeStatus(utils::STATUS_IDLE, $data['sessionId'] ?? 'Unknown-Session-ID');
                 continue;
             }
@@ -519,7 +519,7 @@ class go extends Factory
             $type_method = 'process_' . $data['type'];
 
             if (!method_exists($this->message, $type_method)) {
-                $this->utils->debug('UserAct', 'Incorrect message type: ' . $data['type'], 'debug');
+                $this->utils->debug('User-Act', 'Incorrect message type "' . $data['type'] . '"', 'debug');
                 continue;
             }
 
@@ -551,7 +551,7 @@ class go extends Factory
 
             if (!$result['need_llm']) {
                 // Other actions
-                $this->utils->debug('UserAct', $data['type'] . '->' . ($result['content']['act'] ?? 'Unsupported'), 'debug');
+                $this->utils->debug('User-Act', $data['type'] . '->' . ($result['content']['act'] ?? 'Unsupported'), 'debug');
 
                 $response = ['type' => $result['type'] ?? $data['type']] + $result['content'];
                 $this->core->sendMessage($response);
@@ -580,7 +580,7 @@ class go extends Factory
                         $this->openai->reload();
                         $this->openai->getModels(true);
 
-                        $this->utils->debug('UserAct', $data['type'] . '->reloaded', 'trace');
+                        $this->utils->debug('User-Act', $data['type'] . '->reloaded', 'trace');
                         break;
                 }
 
@@ -644,7 +644,7 @@ class go extends Factory
                 continue;
             }
 
-            $this->utils->debug('UserAct', 'Sending ' . (count($message_list)) . ' message(s) to #' . $session_id, 'trace');
+            $this->utils->debug('User-Act', 'Sending ' . (count($message_list)) . ' message(s) to #' . $session_id, 'trace');
 
             $this->core->context->refreshHistory($session_id, WORKER_MAIN);
             $this->core->context->addUserMessage($session_id, WORKER_MAIN, $message_list);
@@ -949,10 +949,10 @@ class go extends Factory
                 $this->last_response[$payload['sessionId']] = time();
 
                 if ('tools' === $payload['type']) {
-                    $this->utils->debug($payload['sender'], $payload['workerName'] . ' #' . $payload['sessionId'] . ' calling tools.', 'trace');
+                    $this->utils->debug($payload['sender'], '#' . $payload['sessionId'] . ' ' . $payload['workerName'] . ' is calling tools.', 'trace');
                     $new_messages = 1;
                 } else {
-                    $this->utils->debug($payload['sender'], $payload['workerName'] . ' #' . $payload['sessionId'] . ' reply ended.', 'trace');
+                    $this->utils->debug($payload['sender'], '#' . $payload['sessionId'] . ' ' . $payload['workerName'] . ' reply ended.', 'trace');
                     $new_messages = $this->core->context->refreshHistory($payload['sessionId'], $payload['workerName']);
                 }
 

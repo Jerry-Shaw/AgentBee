@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUpdate, onUpdated, ref } from 'vue';
+import {computed, nextTick, onBeforeUpdate, onUpdated, ref} from 'vue';
 import {
   Check,
   Copy,
@@ -16,9 +16,9 @@ import {
 import BeeLoader from './BeeLoader.vue';
 import FoldBlock from './FoldBlock.vue';
 import ToolEventsBlock from './ToolEventsBlock.vue';
-import { useMarkdown } from '../composables/useMarkdown';
-import { extractContentArtifacts, pickInlinePreviewArtifact } from '../utils/artifacts';
-import type { ChatFile, ChatImage, ChatMessage } from '../protocol/types';
+import {useMarkdown} from '../composables/useMarkdown';
+import {extractContentArtifacts, pickInlinePreviewArtifact} from '../utils/artifacts';
+import type {ChatFile, ChatImage, ChatMessage} from '../protocol/types';
 
 const props = defineProps<{
   labels: Record<string, string>;
@@ -35,7 +35,7 @@ const emit = defineEmits<{
   previewFile: [file: ChatFile];
 }>();
 
-const { renderMarkdown } = useMarkdown();
+const {renderMarkdown} = useMarkdown();
 const editTextarea = ref<HTMLTextAreaElement | null>(null);
 const draft = ref('');
 const isEditing = ref(false);
@@ -47,8 +47,8 @@ let horizontalScrollPositions: number[] = [];
 
 onBeforeUpdate(() => {
   horizontalScrollPositions = Array.from(
-    markdownBody.value?.querySelectorAll<HTMLElement>(SCROLLABLE_MARKDOWN) || [],
-    (element) => element.scrollLeft,
+      markdownBody.value?.querySelectorAll<HTMLElement>(SCROLLABLE_MARKDOWN) || [],
+      (element) => element.scrollLeft,
   );
 });
 
@@ -62,28 +62,28 @@ onUpdated(() => {
 
 const isMainProcessMessage = computed(() => (
     props.message.isSubTalk === 1 &&
-    props.message.sender === 'Agent' &&
+    props.message.sender === 'AgentBee' &&
     props.message.role === 'assistant'
 ));
 
 const hasAssistantOutput = computed(() => (
-  Boolean(props.message.content?.trim()) ||
-  Boolean(props.message.think?.trim()) ||
-  Boolean(props.message.images?.length) ||
-  Boolean(props.message.files?.length) ||
-  Boolean(props.message.toolEvents?.length)
+    Boolean(props.message.content?.trim()) ||
+    Boolean(props.message.think?.trim()) ||
+    Boolean(props.message.images?.length) ||
+    Boolean(props.message.files?.length) ||
+    Boolean(props.message.toolEvents?.length)
 ));
 
 const isWaitingForResponse = computed(() => (
-  props.message.role === 'assistant' &&
-  props.message.status === 'loading' &&
-  !hasAssistantOutput.value
+    props.message.role === 'assistant' &&
+    props.message.status === 'loading' &&
+    !hasAssistantOutput.value
 ));
 
 const endedWithoutResponse = computed(() => (
-  props.message.role === 'assistant' &&
-  props.message.status !== 'loading' &&
-  !hasAssistantOutput.value
+    props.message.role === 'assistant' &&
+    props.message.status !== 'loading' &&
+    !hasAssistantOutput.value
 ));
 
 /**
@@ -93,19 +93,19 @@ const endedWithoutResponse = computed(() => (
  * 界面却在说「未收到回复」。
  */
 const wasStopped = computed(() => (
-  props.message.role === 'assistant' &&
-  props.message.status === 'stopped'
+    props.message.role === 'assistant' &&
+    props.message.status === 'stopped'
 ));
 
 /** 服务端 abort 回执里的文案优先；没有时退回本地 i18n。 */
 const stoppedLabel = computed(() => (
-  props.message.statusMessage?.trim() || props.labels.generationStopped
+    props.message.statusMessage?.trim() || props.labels.generationStopped
 ));
 
 const renderedMarkdown = computed(() => {
   const markdown = props.message.content || '';
   if (props.message.status !== 'loading') {
-    return { stable: renderMarkdownBlocks(markdown), tail: '' };
+    return {stable: renderMarkdownBlocks(markdown), tail: ''};
   }
 
   const split = splitStreamingMarkdown(markdown);
@@ -120,15 +120,15 @@ const contentArtifacts = computed<ChatFile[]>(() => {
   if (props.message.role !== 'assistant') return [];
   // 服务端记忆里的历史回复不再派生预览入口，避免整屏都是按钮。
   if (props.message.isRemoteHistory) return [];
-  return extractContentArtifacts({ content: props.message.content || '' });
+  return extractContentArtifacts({content: props.message.content || ''});
 });
 
 const previewEntries = computed<ChatFile[]>(() => {
   const serverKeys = new Set(
-    (props.message.files || []).map((file) => file.path || file.name),
+      (props.message.files || []).map((file) => file.path || file.name),
   );
   const entries = contentArtifacts.value
-    .filter((file) => !serverKeys.has(file.path || file.name));
+      .filter((file) => !serverKeys.has(file.path || file.name));
   return entries.slice(0, MAX_PREVIEW_ENTRIES);
 });
 
@@ -140,7 +140,7 @@ const historyPreviewArtifact = computed<ChatFile | null>(() => {
   if (!props.message.memoryCreateId) return null;
   // 用户那条记忆记录里贴的链接不算产物，不给预览按钮（删除按钮仍保留）。
   if (props.message.role === 'user') return null;
-  return pickInlinePreviewArtifact({ content: props.message.content || '' });
+  return pickInlinePreviewArtifact({content: props.message.content || ''});
 });
 
 const senderIdentity = computed(() => {
@@ -254,7 +254,7 @@ function formatSize(size: number) {
 }
 
 function previewArtifact(file: ChatFile) {
-  emit('previewFile', { ...file, time: file.time || props.message.time });
+  emit('previewFile', {...file, time: file.time || props.message.time});
 }
 
 function artifactEntryLabel(file: ChatFile): string {
@@ -370,7 +370,7 @@ function renderMarkdownBlocks(markdown: string) {
 const UNSAFE_STREAMING_BLOCK = /^(\s|[-*+]\s|\d+[.)]\s|\||\$\$)/;
 
 function splitStreamingMarkdown(markdown: string): { stable: string; tail: string } {
-  if (!markdown) return { stable: '', tail: '' };
+  if (!markdown) return {stable: '', tail: ''};
 
   const lineBreak = markdown.includes('\r\n') ? '\r\n' : '\n';
   const lines = markdown.split(/\r?\n/);
@@ -383,7 +383,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
     if (fenceMatch) {
       const marker = fenceMatch[1][0];
       const size = fenceMatch[1].length;
-      if (!fence) fence = { marker, size };
+      if (!fence) fence = {marker, size};
       else if (marker === fence.marker && size >= fence.size) fence = null;
       continue;
     }
@@ -396,7 +396,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
     }
   }
 
-  if (splitLine <= 0) return { stable: '', tail: markdown };
+  if (splitLine <= 0) return {stable: '', tail: markdown};
   return {
     stable: lines.slice(0, splitLine).join(lineBreak),
     tail: lines.slice(splitLine).join(lineBreak),
@@ -408,177 +408,174 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
   <article class="message" :class="[message.role, { 'remote-history': message.isRemoteHistory, 'sub-talk': message.isSubTalk === 1, 'main-process': isMainProcessMessage }]">
     <div v-if="message.role === 'system'" class="system-log">
       <SquareTerminal :size="14" aria-hidden="true" />
-      <span class="system-log-text">{{ message.content }}</span>
-      <span class="system-log-time">{{ message.time }}</span>
+      <span class="system-log-text">{{ message.content }}</span> <span class="system-log-time">{{ message.time }}</span>
     </div>
     <template v-else>
-    <div class="meta">
-      <span class="sender-identity">{{ senderIdentity }}</span>
-      <span class="meta-separator">·</span>
-      <span>{{ message.time }}</span>
-    </div>
-    <div class="bubble">
-      <FoldBlock
-        v-if="message.think"
-        class-name="think-card"
-        :expand-label="labels.expand"
-        :collapse-label="labels.collapse"
-        :title="message.status === 'loading' ? labels.thinking : labels.thinkingProcess"
-        :text="message.think"
-      />
-
-      <ToolEventsBlock
-        v-if="message.toolEvents?.length"
-        :events="message.toolEvents"
-        :labels="labels"
-      />
-
-      <div v-if="message.images?.length" class="message-images">
-        <figure v-for="image in message.images" :key="image.id" class="message-image">
-          <button type="button" class="message-image-open" :title="labels.preview" @click="previewImage(image)">
-            <img :src="image.src" :alt="image.prompt || labels.imageAlt" loading="lazy" />
-          </button>
-          <figcaption v-if="image.prompt">{{ image.prompt }}</figcaption>
-        </figure>
+      <div class="meta">
+        <span class="sender-identity">{{ senderIdentity }}</span> <span class="meta-separator">·</span>
+        <span>{{ message.time }}</span>
       </div>
+      <div class="bubble">
+        <FoldBlock
+            v-if="message.think"
+            class-name="think-card"
+            :expand-label="labels.expand"
+            :collapse-label="labels.collapse"
+            :title="message.status === 'loading' ? labels.thinking : labels.thinkingProcess"
+            :text="message.think"
+        />
 
-      <div v-if="message.attachments?.length" class="message-attachments">
+        <ToolEventsBlock
+            v-if="message.toolEvents?.length"
+            :events="message.toolEvents"
+            :labels="labels"
+        />
+
+        <div v-if="message.images?.length" class="message-images">
+          <figure v-for="image in message.images" :key="image.id" class="message-image">
+            <button type="button" class="message-image-open" :title="labels.preview" @click="previewImage(image)">
+              <img :src="image.src" :alt="image.prompt || labels.imageAlt" loading="lazy" />
+            </button>
+            <figcaption v-if="image.prompt">{{ image.prompt }}</figcaption>
+          </figure>
+        </div>
+
+        <div v-if="message.attachments?.length" class="message-attachments">
         <span v-for="attachment in message.attachments" :key="attachment.id" class="message-attachment-chip">
           <Paperclip :size="13" aria-hidden="true" />
           <span class="attachment-name">{{ attachment.name }}</span>
           <span class="attachment-size">{{ formatSize(attachment.size) }}</span>
         </span>
-      </div>
+        </div>
 
-      <div v-if="message.files?.length" class="message-files">
-        <article v-for="file in message.files" :key="file.id" class="message-file-card">
-          <FileText :size="16" aria-hidden="true" />
-          <span class="message-file-copy">
+        <div v-if="message.files?.length" class="message-files">
+          <article v-for="file in message.files" :key="file.id" class="message-file-card">
+            <FileText :size="16" aria-hidden="true" />
+            <span class="message-file-copy">
             <strong>{{ file.name }}</strong>
             <small>{{ file.mimeType }}</small>
           </span>
-          <button type="button" class="icon-button" :title="labels.preview" @click="emit('previewFile', file)">
+            <button type="button" class="icon-button" :title="labels.preview" @click="emit('previewFile', file)">
+              <Eye :size="15" aria-hidden="true" />
+            </button>
+          </article>
+        </div>
+
+        <div v-if="previewEntries.length" class="message-artifacts">
+          <button
+              v-for="file in previewEntries"
+              :key="file.id"
+              type="button"
+              class="html-preview-entry"
+              :title="file.name"
+              @click="previewArtifact(file)"
+          >
             <Eye :size="15" aria-hidden="true" />
-          </button>
-        </article>
-      </div>
-
-      <div v-if="previewEntries.length" class="message-artifacts">
-        <button
-          v-for="file in previewEntries"
-          :key="file.id"
-          type="button"
-          class="html-preview-entry"
-          :title="file.name"
-          @click="previewArtifact(file)"
-        >
-          <Eye :size="15" aria-hidden="true" />
-          <span>{{ artifactEntryLabel(file) }}</span>
-          <span class="artifact-name">{{ file.name }}</span>
-        </button>
-      </div>
-
-      <div v-if="isWaitingForResponse" class="message-loading" aria-live="polite">
-        <BeeLoader :size="22" />
-        <span>{{ labels.waitingForResponse }}</span>
-      </div>
-
-      <div v-else-if="endedWithoutResponse" class="message-ended">
-        {{ wasStopped ? stoppedLabel : labels.noResponseEnded }}
-      </div>
-
-      <div
-        v-else-if="message.role === 'assistant'"
-        ref="markdownBody"
-        class="markdown-body"
-        @click="copyMarkdownBlock"
-      >
-        <div v-if="renderedMarkdown.stable" v-html="renderedMarkdown.stable"></div>
-        <div v-if="renderedMarkdown.tail" v-html="renderedMarkdown.tail"></div>
-      </div>
-      <div v-else-if="isEditing" class="user-edit-form">
-        <textarea
-          ref="editTextarea"
-          v-model="draft"
-          rows="2"
-          class="user-edit-textarea"
-          @input="resizeEditTextarea"
-          @keydown="onEditKeydown"
-        ></textarea>
-        <div class="user-edit-actions">
-          <button type="button" class="message-action-button" :title="labels.cancelEdit" @click="cancelEdit">
-            <X :size="14" aria-hidden="true" />
-          </button>
-          <button type="button" class="message-action-button primary" :title="labels.saveEdit" @click="saveEdit">
-            <Check :size="14" aria-hidden="true" />
+            <span>{{ artifactEntryLabel(file) }}</span> <span class="artifact-name">{{ file.name }}</span>
           </button>
         </div>
-      </div>
-      <div v-else class="markdown-body plain">{{ message.content }}</div>
 
-      <!-- 有内容又被中止的：内容照常渲染，末尾补一条说明（没内容的情况上面那条已经显示了）。 -->
-      <div v-if="wasStopped && !endedWithoutResponse" class="message-stopped">
-        {{ stoppedLabel }}
-      </div>
-    </div>
+        <div v-if="isWaitingForResponse" class="message-loading" aria-live="polite">
+          <BeeLoader :size="22" />
+          <span>{{ labels.waitingForResponse }}</span>
+        </div>
 
-    <div v-if="message.role === 'user'" class="user-message-actions">
-      <button
-        v-if="!isEditing"
-        type="button"
-        class="message-action-button"
-        :title="labels.resendMessage"
-        @click="resendMessage"
-      >
-        <RotateCcw :size="14" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        class="message-action-button"
-        :title="copied ? labels.copied : labels.copyMessage"
-        @click="copyMessage"
-      >
-        <Check v-if="copied" :size="14" aria-hidden="true" />
-        <Copy v-else :size="14" aria-hidden="true" />
-      </button>
-      <button
-        v-if="!isEditing"
-        type="button"
-        class="message-action-button"
-        :title="labels.editMessage"
-        @click="startEdit"
-      >
-        <Pencil :size="14" aria-hidden="true" />
-      </button>
-      <button
-        v-if="message.memoryCreateId"
-        type="button"
-        class="message-action-button history-delete-button"
-        :title="labels.deleteMemoryRecord"
-        :disabled="deletingMemory || memoryDeleteDisabled"
-        @click="emit('deleteMemoryMessage', message.memoryCreateId)"
-      >
-        <LoaderCircle v-if="deletingMemory" class="spin" :size="14" aria-hidden="true" />
-        <Trash2 v-else :size="14" aria-hidden="true" />
-      </button>
-    </div>
+        <div v-else-if="endedWithoutResponse" class="message-ended">
+          {{ wasStopped ? stoppedLabel : labels.noResponseEnded }}
+        </div>
+
+        <div
+            v-else-if="message.role === 'assistant'"
+            ref="markdownBody"
+            class="markdown-body"
+            @click="copyMarkdownBlock"
+        >
+          <div v-if="renderedMarkdown.stable" v-html="renderedMarkdown.stable"></div>
+          <div v-if="renderedMarkdown.tail" v-html="renderedMarkdown.tail"></div>
+        </div>
+        <div v-else-if="isEditing" class="user-edit-form">
+        <textarea
+            ref="editTextarea"
+            v-model="draft"
+            rows="2"
+            class="user-edit-textarea"
+            @input="resizeEditTextarea"
+            @keydown="onEditKeydown"
+        ></textarea>
+          <div class="user-edit-actions">
+            <button type="button" class="message-action-button" :title="labels.cancelEdit" @click="cancelEdit">
+              <X :size="14" aria-hidden="true" />
+            </button>
+            <button type="button" class="message-action-button primary" :title="labels.saveEdit" @click="saveEdit">
+              <Check :size="14" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <div v-else class="markdown-body plain">{{ message.content }}</div>
+
+        <!-- 有内容又被中止的：内容照常渲染，末尾补一条说明（没内容的情况上面那条已经显示了）。 -->
+        <div v-if="wasStopped && !endedWithoutResponse" class="message-stopped">
+          {{ stoppedLabel }}
+        </div>
+      </div>
+
+      <div v-if="message.role === 'user'" class="user-message-actions">
+        <button
+            v-if="!isEditing"
+            type="button"
+            class="message-action-button"
+            :title="labels.resendMessage"
+            @click="resendMessage"
+        >
+          <RotateCcw :size="14" aria-hidden="true" />
+        </button>
+        <button
+            type="button"
+            class="message-action-button"
+            :title="copied ? labels.copied : labels.copyMessage"
+            @click="copyMessage"
+        >
+          <Check v-if="copied" :size="14" aria-hidden="true" />
+          <Copy v-else :size="14" aria-hidden="true" />
+        </button>
+        <button
+            v-if="!isEditing"
+            type="button"
+            class="message-action-button"
+            :title="labels.editMessage"
+            @click="startEdit"
+        >
+          <Pencil :size="14" aria-hidden="true" />
+        </button>
+        <button
+            v-if="message.memoryCreateId"
+            type="button"
+            class="message-action-button history-delete-button"
+            :title="labels.deleteMemoryRecord"
+            :disabled="deletingMemory || memoryDeleteDisabled"
+            @click="emit('deleteMemoryMessage', message.memoryCreateId)"
+        >
+          <LoaderCircle v-if="deletingMemory" class="spin" :size="14" aria-hidden="true" />
+          <Trash2 v-else :size="14" aria-hidden="true" />
+        </button>
+      </div>
     </template>
     <div v-if="message.memoryCreateId && message.role !== 'user'" class="history-message-actions">
       <button
-        v-if="historyPreviewArtifact"
-        type="button"
-        class="message-action-button history-preview-button"
-        :title="historyPreviewLabel()"
-        @click="previewHistoryArtifact"
+          v-if="historyPreviewArtifact"
+          type="button"
+          class="message-action-button history-preview-button"
+          :title="historyPreviewLabel()"
+          @click="previewHistoryArtifact"
       >
         <Eye :size="14" aria-hidden="true" />
       </button>
       <button
-        type="button"
-        class="message-action-button history-delete-button"
-        :title="labels.deleteMemoryRecord"
-        :disabled="deletingMemory || memoryDeleteDisabled"
-        @click="emit('deleteMemoryMessage', message.memoryCreateId)"
+          type="button"
+          class="message-action-button history-delete-button"
+          :title="labels.deleteMemoryRecord"
+          :disabled="deletingMemory || memoryDeleteDisabled"
+          @click="emit('deleteMemoryMessage', message.memoryCreateId)"
       >
         <LoaderCircle v-if="deletingMemory" class="spin" :size="14" aria-hidden="true" />
         <Trash2 v-else :size="14" aria-hidden="true" />

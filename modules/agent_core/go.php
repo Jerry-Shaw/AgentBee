@@ -1072,13 +1072,19 @@ class go extends Factory
                 break;
 
             case 'abort':
-                $this->utils->debug($payload['workerName'] . ': stream->abort', 'trace');
+                $this->utils->debug($payload['workerName'] . ': end->abort (user aborted)', 'trace');
                 $this->utils->setPipeStatus(utils::STATUS_IDLE, $payload['sessionId']);
                 $this->core->sendMessage($payload);
                 break;
 
             case 'error':
-                $this->utils->debug($payload['workerName'] . ': stream->error', 'trace');
+                $error = $payload['workerName'] . ': end->error';
+
+                if (is_string($payload['data']) && '' !== $payload['data']) {
+                    $error .= ' (' . $payload['data'] . ')';
+                }
+
+                $this->utils->debug($error, 'trace');
 
                 if (WORKER_MAIN === $payload['sender']) {
                     $this->utils->setPipeStatus(utils::STATUS_IDLE, $payload['sessionId']);
@@ -1089,6 +1095,8 @@ class go extends Factory
                 if (is_array($payload['data']) && isset($payload['data']['message'])) {
                     $this->core->sendMessage($payload);
                 }
+
+                unset($error);
                 break;
         }
 

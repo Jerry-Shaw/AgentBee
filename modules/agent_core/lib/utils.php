@@ -881,7 +881,7 @@ class utils extends Factory
 
         if (self::STATUS_IDLE === $status) {
             if ($this->wait_status[$session_id] !== $status) {
-                $this->debug('Status: #' . $session_id . ' IDLE (' . (!$timeout ? 'stream ended' : 'response timeout') . ')', 'trace');
+                $this->debug('Status', '#' . $session_id . ' IDLE (' . (!$timeout ? 'stream ended' : 'response timeout') . ')', 'trace');
             }
 
             $this->wait_status[$session_id] = $status;
@@ -893,10 +893,10 @@ class utils extends Factory
         if (($this->wait_status[$session_id] & $status) !== $status) {
             switch ($status) {
                 case self::STATUS_BUSY:
-                    $this->debug('Status: #' . $session_id . ' BUSY (waiting for response)', 'trace');
+                    $this->debug('Status', '#' . $session_id . ' BUSY (waiting for response)', 'trace');
                     break;
                 case self::STATUS_WAIT:
-                    $this->debug('Status: #' . $session_id . ' WAIT (receiving stream data)', 'trace');
+                    $this->debug('Status', '#' . $session_id . ' WAIT (receiving stream data)', 'trace');
                     break;
             }
 
@@ -921,12 +921,13 @@ class utils extends Factory
     }
 
     /**
-     * @param string $string
+     * @param string $title
+     * @param string $content
      * @param string $level Debug level (none, trace, debug)
      *
      * @return void
      */
-    public function debug(string $string, string $level = 'trace'): void
+    public function debug(string $title, string $content, string $level = 'trace'): void
     {
         $debug_level = strtolower($this->agent_config['agent_debug']);
 
@@ -938,7 +939,10 @@ class utils extends Factory
             return;
         }
 
-        echo '[' . date('Y-m-d H:i:s') . '][' . strtoupper($level) . '] ' . $string . PHP_EOL;
-        unset($string, $level, $debug_level);
+        echo '[' . date('Y-m-d H:i:s') . '][' . strtoupper($level) . '] '
+            . str_pad($title, (int)ceil(strlen($title) / 5) * 5) . ': '
+            . $content . PHP_EOL;
+
+        unset($content, $level, $debug_level);
     }
 }

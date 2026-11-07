@@ -212,7 +212,7 @@ class go extends Factory
                 $this->utils->setPipeStatus(utils::STATUS_BUSY, $session_id);
             }
 
-            $this->utils->debug('Process: #' . $session_id . ' sending data.', 'trace');
+            $this->utils->debug('Process', '#' . $session_id . ' sending data.', 'trace');
 
             $this->utils->procMgr->writeProc(
                 $proc_idx,
@@ -225,9 +225,9 @@ class go extends Factory
                 ], JSON_FORMAT)
             );
 
-            $this->utils->debug('Process: #' . $session_id . ' sending completed.', 'trace');
+            $this->utils->debug('Process', '#' . $session_id . ' sending completed.', 'trace');
         } catch (\Throwable $throwable) {
-            $this->utils->debug('Process: #' . $session_id . ' ERROR: ' . $throwable->getMessage(), 'trace');
+            $this->utils->debug('Process', '#' . $session_id . ' ERROR: ' . $throwable->getMessage(), 'trace');
 
             if (WORKER_MAIN === $worker) {
                 $this->utils->setPipeStatus(utils::STATUS_IDLE, $session_id);
@@ -284,7 +284,7 @@ class go extends Factory
      * @return void
      * @throws \ReflectionException
      */
-    public function Agent(): void
+    public function AgentBee(): void
     {
         ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
 

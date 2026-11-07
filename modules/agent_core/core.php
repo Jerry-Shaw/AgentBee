@@ -213,7 +213,7 @@ final class core extends Factory
     public function sendMessage(array $message, array $to_sockets = []): void
     {
         if (!isset($message['type'])) {
-            $this->utils->debug('Missing message type: ' . json_encode($message, JSON_FORMAT), 'debug');
+            $this->utils->debug('System', 'Missing type (' . json_encode($message, JSON_FORMAT) . ')', 'debug');
             return;
         }
 
@@ -223,7 +223,7 @@ final class core extends Factory
 
         if ([] === $to_sockets) {
             $this->utils->message_buffers[] = $message;
-            $this->utils->debug('No client online, message queued in buffer for next delivery.', 'debug');
+            $this->utils->debug('System', 'No client online, message queued in buffer for next delivery.', 'debug');
             return;
         }
 
@@ -235,7 +235,7 @@ final class core extends Factory
             }
 
             if (!$this->socketMgr->sendMessage($socket_id, $this->socketMgr->wsEncode(json_encode($buffers, JSON_FORMAT)))) {
-                $this->utils->debug('Failed to send message to #' . $socket_id, 'debug');
+                $this->utils->debug('System', 'Failed to send message to #' . $socket_id, 'debug');
             }
         }
 

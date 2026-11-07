@@ -132,7 +132,7 @@ class handler extends Factory
         $browser_pid  = $agent_core->utils->procMgr->getPid($browser_idx);
 
         $agent_core->utils->savePid($browser_pid);
-        $agent_core->utils->debug('Browser started (PID: ' . $browser_pid . ')', 'trace');
+        $agent_core->utils->debug('Browser', 'Started (PID: ' . $browser_pid . ')', 'trace');
 
         for ($i = 0; $i < 100; ++$i) {
             $err_msg = trim($agent_core->utils->procMgr->readProc($browser_idx, 'stderr'));
@@ -151,7 +151,7 @@ class handler extends Factory
         }
 
         if ('' === $browser_addr) {
-            $agent_core->utils->debug('Browser ERROR: Failed to fetch address, closing (PID: ' . $browser_pid . ')', 'trace');
+            $agent_core->utils->debug('Browser', 'Failed to fetch address, closing (PID: ' . $browser_pid . ')', 'trace');
             $agent_core->utils->OSMgr->killPid($browser_pid);
             $agent_core->utils->procMgr->close($browser_idx);
             $agent_core->utils->removePid($browser_pid);
@@ -204,7 +204,7 @@ class handler extends Factory
             'data_dir'     => $data_dir,
         ];
 
-        $agent_core->utils->debug('Browser ready for connections.', 'trace');
+        $agent_core->utils->debug('Browser', 'Ready for connections.', 'trace');
         $message = '浏览器已就绪，当前标签页`target_id`：`' . $this->curr_id . '`，可继续操作。';
 
         unset($payload_data, $agent_core, $start_args, $data_dir, $browser_idx, $browser_pid, $browser_addr, $i, $err_msg, $marker, $ws_pos, $local_port, $debugger, $tab_list, $ws_addr);
@@ -234,7 +234,7 @@ class handler extends Factory
         $this->tab_list     = [];
         $this->browser_data = [];
 
-        $agent_core->utils->debug('Browser closed.', 'trace');
+        $agent_core->utils->debug('Browser', 'Closed.', 'trace');
         return '浏览器实例已关闭。';
     }
 
@@ -866,7 +866,7 @@ class handler extends Factory
         Factory::destroy($socketMgr);
 
         $this->tab_list[$target_id]['injected'] = true;
-        $agent_core->utils->debug('Browser: Injection commands sent to ' . $target_id, 'trace');
+        $agent_core->utils->debug('Browser', 'Injection commands to ' . $target_id, 'trace');
 
         unset($target_id, $agent_core, $ws_addr, $source, $socketMgr, $commands, $command, $cmd_id, $message, $write, $except, $read);
     }
@@ -1445,7 +1445,7 @@ class handler extends Factory
             try {
                 $this->injectScript($target_id, $agent_core);
             } catch (\Throwable $throwable) {
-                $agent_core->utils->debug('Browser: Failed to inject: ' . $throwable->getMessage(), 'trace');
+                $agent_core->utils->debug('Browser', 'Failed to inject: ' . $throwable->getMessage(), 'trace');
                 unset($throwable);
             }
         }
@@ -1475,7 +1475,7 @@ class handler extends Factory
             : 10;
 
         try {
-            $agent_core->utils->debug('Browser: working on ' . $action . '.', 'trace');
+            $agent_core->utils->debug('Browser', 'Working on ' . $action . '.', 'trace');
 
             $socketMgr->createWSClient($ws_addr);
 
@@ -1562,7 +1562,7 @@ class handler extends Factory
             }
 
             if (isset($msg_data['error'])) {
-                $agent_core->utils->debug('Browser CDP error: ' . ($msg_data['error']['message'] ?? '未知错误'), 'debug');
+                $agent_core->utils->debug('Browser', 'CDP error: ' . ($msg_data['error']['message'] ?? '未知错误'), 'debug');
 
                 if (in_array($action, ['switchTab', 'closeTab'], true)) {
                     unset($this->tab_list[$target_id]);
@@ -1696,7 +1696,7 @@ class handler extends Factory
                 'message' => $this->getMessage($action),
             ];
         } catch (\Throwable $throwable) {
-            $agent_core->utils->debug('Browser closed due to communication errors. (' . $throwable->getMessage() . ')', 'trace');
+            $agent_core->utils->debug('Browser', 'Closed due to communication errors. (' . $throwable->getMessage() . ')', 'trace');
             $this->close($payload_data, $agent_core);
 
             unset($throwable);

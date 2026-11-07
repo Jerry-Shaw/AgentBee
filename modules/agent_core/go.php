@@ -67,21 +67,21 @@ class go extends Factory
      */
     public function init(bool $reload = false): void
     {
-        $this->utils->debug($reload ? 'Reloading...' : 'Initializing...', 'trace');
         $this->core->initCore($reload);
 
-        $this->utils->debug('WS-Token: ' . ($this->utils->agent_config['agent_server']['ws_token'] ?? 'NONE'), 'trace');
-        $this->utils->debug('API-URL: ' . ($this->utils->agent_config['agent_llm']['api_url'] ?? 'NONE'), 'trace');
-        $this->utils->debug('API-Type: ' . $this->utils->agent_config['agent_llm']['api_type'], 'trace');
-        $this->utils->debug('Model-ID: ' . ($this->utils->agent_config['agent_llm']['model_id'] ?? 'NONE'), 'trace');
-        $this->utils->debug('SandBox mode: ' . ($this->utils->agent_config['sandbox_mode'] ? 'ON' : 'OFF'), 'trace');
+        $this->utils->debug('System', $reload ? 'Reloading...' : 'Initializing...', 'trace');
+        $this->utils->debug('SandBox', $this->utils->agent_config['sandbox_mode'] ? 'ON' : 'OFF', 'trace');
+        $this->utils->debug('API-URL', $this->utils->agent_config['agent_llm']['api_url'] ?? 'NONE', 'trace');
+        $this->utils->debug('API-Type', $this->utils->agent_config['agent_llm']['api_type'], 'trace');
+        $this->utils->debug('Model-ID', $this->utils->agent_config['agent_llm']['model_id'] ?? 'NONE', 'trace');
+        $this->utils->debug('WS-Token', $this->utils->agent_config['agent_server']['ws_token'] ?? 'NONE', 'trace');
 
         $workspace_path = $this->utils->agent_config['workspace_path'] ?? '';
-        $this->utils->debug('Workspace path: ' . $workspace_path, 'trace');
+        $this->utils->debug('Workspace', $workspace_path, 'trace');
 
         if ('' !== $workspace_path && !is_dir($workspace_path)) {
             try {
-                $this->utils->debug('Creating workspace: ' . $workspace_path, 'trace');
+                $this->utils->debug('Creating', $workspace_path, 'trace');
                 mkdir($workspace_path, 0777, true);
             } catch (\Throwable) {
             }
@@ -127,8 +127,8 @@ class go extends Factory
             ]
         );
 
-        $this->utils->debug($worker_type . ' started with pid: ' . $worker_pid, 'trace');
-        $this->utils->debug('Register Output Handler', 'debug');
+        $this->utils->debug($worker_type, 'Started with pid: ' . $worker_pid, 'trace');
+        $this->utils->debug('System', 'Register Output Handler', 'debug');
 
         $this->core->socketMgr->addExternalProc(
             $this->core->utils->procMgr->getProc($proc_idx, 'stdout', 'process'),
@@ -136,7 +136,7 @@ class go extends Factory
         );
 
         if (WORKER_MAIN === $worker_type) {
-            $this->utils->debug('Create shared memory for ' . $worker_type, 'debug');
+            $this->utils->debug('System', 'Create shared memory for ' . $worker_type, 'debug');
         }
 
         unset($worker_type, $worker_name, $output_handler, $worker_status, $worker_pid);
@@ -155,7 +155,7 @@ class go extends Factory
         $flock_fp  = fopen($boot_file, 'c+');
 
         if (!flock($flock_fp, LOCK_EX | LOCK_NB)) {
-            $this->utils->debug('AgentBee already running, exit!', 'debug');
+            $this->utils->debug('System', 'AgentBee already running, exit!', 'debug');
             return;
         }
 
@@ -173,7 +173,7 @@ class go extends Factory
         $occupied_pids = $this->core->OSMgr->findPidsByPortState($this->utils->agent_config['agent_server']['port'], 'LISTEN');
 
         if ([] !== $occupied_pids) {
-            $this->utils->debug('AgentBee failed to start. Port ' . $this->utils->agent_config['agent_server']['port'] . ' is occupied.', 'trace');
+            $this->utils->debug('System', 'AgentBee failed to start. Port ' . $this->utils->agent_config['agent_server']['port'] . ' is occupied.', 'trace');
             return;
         }
 
@@ -185,8 +185,8 @@ class go extends Factory
 
         ini_set('memory_limit', $memory_limit);
 
-        $this->utils->debug('Set memory limit to: ' . $memory_limit, 'trace');
-        $this->utils->debug('Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
+        $this->utils->debug('System', 'Set memory limit to ' . $memory_limit, 'trace');
+        $this->utils->debug('System', 'Ready to start ' . AGENT_NAME . ' v' . AGENT_VERSION, 'trace');
 
         $this->init();
 
@@ -206,8 +206,8 @@ class go extends Factory
 
         try {
             $server_host = 'tcp://' . $this->utils->agent_config['agent_server']['host'] . ':' . $this->utils->agent_config['agent_server']['port'];
-            $this->utils->debug('Local IP address: ' . implode(', ', $this->core->OSMgr->getIPv4()), 'trace');
-            $this->utils->debug('Ready to start server: ' . $server_host, 'trace');
+            $this->utils->debug('Local IP', implode(', ', $this->core->OSMgr->getIPv4()), 'trace');
+            $this->utils->debug('System', 'Ready to start server: ' . $server_host, 'trace');
             $this->core->socketMgr
                 ->setUserFuncInterval(10)
                 ->setAliveTimeout($this->utils->agent_config['agent_server']['ping_interval'])
@@ -218,7 +218,7 @@ class go extends Factory
                 ->setEventListener('onClose', [$this, 'onClose'])
                 ->listenTo($server_host, true);
         } catch (\Throwable $throwable) {
-            $this->utils->debug('Failed to start server: ' . $throwable->getMessage(), 'trace');
+            $this->utils->debug('System', 'Failed to start server: ' . $throwable->getMessage(), 'trace');
         }
     }
 
@@ -310,7 +310,7 @@ class go extends Factory
             $worker_info = $this->utils->getChildWorker($payload['sender'], $payload['workerName']);
 
             if ([] === $worker_info) {
-                $this->utils->debug($payload['sender'] . ': ' . $payload['workerName'] . ' already closed.', 'trace');
+                $this->utils->debug($payload['sender'], $payload['workerName'] . ' already closed.', 'trace');
                 continue;
             }
 
@@ -326,7 +326,7 @@ class go extends Factory
 
                 // Suspend only if there are new messages in other sessions
                 if (0 < count($session_queue)) {
-                    $this->utils->debug('System: #' . $payload['sessionId'] . ' suspending.', 'trace');
+                    $this->utils->debug('System', '#' . $payload['sessionId'] . ' suspending.', 'trace');
                     $this->utils->setPipeStatus(utils::STATUS_IDLE, $payload['sessionId']);
                     $this->session_calls[$payload['sessionId']] = 0;
                     \Fiber::suspend();
@@ -395,17 +395,17 @@ class go extends Factory
 
             // Resending context
             if ($pending_message) {
-                $this->utils->debug('System: resending context to #' . $session['session_id'], 'trace');
+                $this->utils->debug('System', 'Resending context to #' . $session['session_id'], 'trace');
             }
 
             // Sending new messages
             if (0 < $new_messages) {
-                $this->utils->debug('System: sending ' . $new_messages . ' new message(s) to #' . $session['session_id'], 'trace');
+                $this->utils->debug('System', 'Sending ' . $new_messages . ' new message(s) to #' . $session['session_id'], 'trace');
             }
 
             // Run scheduled tasks
             if ([] !== $task_list) {
-                $this->utils->debug('Scheduler: dispatching ' . count($task_list) . ' task(s) to #' . $session['session_id'], 'trace');
+                $this->utils->debug('Scheduler', 'Dispatching ' . count($task_list) . ' task(s) to #' . $session['session_id'], 'trace');
 
                 $task_content = '[定时任务]' . "\n"
                     . '会话ID：`' . $session['session_id'] . '`' . "\n\n"
@@ -458,11 +458,11 @@ class go extends Factory
             isset($this->utils->agent_config['agent_server']['ws_token'])
             && !in_array($this->utils->agent_config['agent_server']['ws_token'], ['', $ws_protocol], true)
         ) {
-            $this->utils->debug('Socket: Client reject, protocol error: ' . ('' !== $ws_protocol ? $ws_protocol : 'None'), 'trace');
+            $this->utils->debug('Socket', 'Client reject, protocol error: ' . ('' !== $ws_protocol ? $ws_protocol : 'None'), 'trace');
             return false;
         }
 
-        $this->utils->debug('Socket: New client: ' . $socket_id, 'trace');
+        $this->utils->debug('Socket', 'New client: ' . $socket_id, 'trace');
         $this->utils->socket_session[$socket_id] = 'ready';
 
         unset($socket_id, $ws_protocol);
@@ -486,10 +486,10 @@ class go extends Factory
             return;
         }
 
-        $this->utils->debug('User: receiving [' . (!$is_binary ? 'TEXT' : 'BINARY') . '] message', 'debug');
+        $this->utils->debug('Action', 'Received [' . (!$is_binary ? 'TEXT' : 'BINARY') . '] message', 'debug');
 
         if ($is_binary) {
-            $this->utils->debug('System: Binary message is NOT supported yet', 'trace');
+            $this->utils->debug('System', 'Binary message is NOT supported yet', 'trace');
             return;
         }
 
@@ -505,13 +505,13 @@ class go extends Factory
             $data = json_decode($line, true);
 
             if (!is_array($data) || !isset($data['type'])) {
-                $this->utils->debug('System: Message data ERROR: ' . $line . '.', 'debug');
+                $this->utils->debug('System', 'Message data ERROR: ' . $line . '.', 'debug');
                 continue;
             }
 
             if ('/abort' === $data['type']) {
                 $this->openai->abort();
-                $this->utils->debug('User: Abort signal sent. Cancelling task.', 'trace');
+                $this->utils->debug('Action', 'Abort signal sent. Cancelling task.', 'trace');
                 $this->utils->setPipeStatus(utils::STATUS_IDLE, $data['sessionId'] ?? 'Unknown-Session-ID');
                 continue;
             }
@@ -519,7 +519,7 @@ class go extends Factory
             $type_method = 'process_' . $data['type'];
 
             if (!method_exists($this->message, $type_method)) {
-                $this->utils->debug('User: Incorrect message type: ' . $data['type'], 'debug');
+                $this->utils->debug('Action', 'Incorrect message type: ' . $data['type'], 'debug');
                 continue;
             }
 
@@ -551,7 +551,7 @@ class go extends Factory
 
             if (!$result['need_llm']) {
                 // Other actions
-                $this->utils->debug('User: ' . $data['type'] . '->' . ($result['content']['act'] ?? 'Unsupported'), 'debug');
+                $this->utils->debug('Action', $data['type'] . '->' . ($result['content']['act'] ?? 'Unsupported'), 'debug');
 
                 $response = ['type' => $result['type'] ?? $data['type']] + $result['content'];
                 $this->core->sendMessage($response);
@@ -580,7 +580,7 @@ class go extends Factory
                         $this->openai->reload();
                         $this->openai->getModels(true);
 
-                        $this->utils->debug('User: ' . $data['type'] . '->reloaded', 'trace');
+                        $this->utils->debug('Action', $data['type'] . '->reloaded', 'trace');
                         break;
                 }
 
@@ -623,7 +623,7 @@ class go extends Factory
             if ($this->utils->isPipeIdle()) {
                 $curr_msg[$data['sessionId']] = array_merge($curr_msg[$data['sessionId']], $result['content']);
             } else {
-                $this->utils->debug('AgentBee: LLM is busy, ' . count($result['content']) . ' message(s) queued for #' . $data['sessionId'], 'trace');
+                $this->utils->debug('System', 'LLM is busy, ' . count($result['content']) . ' message(s) queued for #' . $data['sessionId'], 'trace');
 
                 foreach ($result['content'] as $msg_line) {
                     $this->core->context->addMessageQueue($data['sessionId'], WORKER_MAIN, $msg_line);
@@ -644,7 +644,7 @@ class go extends Factory
                 continue;
             }
 
-            $this->utils->debug('User: Sending ' . (count($message_list)) . ' message(s) to #' . $session_id, 'trace');
+            $this->utils->debug('Action', 'Sending ' . (count($message_list)) . ' message(s) to #' . $session_id, 'trace');
 
             $this->core->context->refreshHistory($session_id, WORKER_MAIN);
             $this->core->context->addUserMessage($session_id, WORKER_MAIN, $message_list);
@@ -703,7 +703,7 @@ class go extends Factory
      */
     public function onClose(string $socket_id): void
     {
-        $this->utils->debug('Socket: Client closed: ' . $socket_id, 'trace');
+        $this->utils->debug('Socket', 'Client closed: ' . $socket_id, 'trace');
         unset($this->utils->socket_session[$socket_id], $socket_id);
     }
 
@@ -851,11 +851,11 @@ class go extends Factory
 
         foreach ($payload['data'] as $data) {
             if (!isset($data['handler_args']['action'])) {
-                $this->utils->debug('Handler: handler or action NOT found!', 'debug');
+                $this->utils->debug('Handler', 'Handle action NOT found!', 'debug');
                 continue;
             }
 
-            $this->utils->debug('Handler: Calling ' . $data['tool_calls']['name'], 'trace');
+            $this->utils->debug('Handler', 'Calling ' . $data['tool_calls']['name'], 'trace');
 
             try {
                 $this->core->IOData->src_cmd  = $data['tool_calls']['name'];
@@ -869,7 +869,7 @@ class go extends Factory
                     'error'  => $throwable->getMessage(),
                 ];
 
-                $this->utils->debug('Handler ERROR: ' . $data['tool_calls']['name'] . ' => ' . $throwable->getMessage(), 'trace');
+                $this->utils->debug('Handler', $data['tool_calls']['name'] . ' => ' . $throwable->getMessage(), 'trace');
                 $this->core->error->exceptionHandler($throwable, false, false);
                 unset($throwable);
             }
@@ -949,10 +949,10 @@ class go extends Factory
                 $this->last_response[$payload['sessionId']] = time();
 
                 if ('tools' === $payload['type']) {
-                    $this->utils->debug($payload['workerName'] . ': #' . $payload['sessionId'] . ' calling tools.', 'trace');
+                    $this->utils->debug($payload['sender'], $payload['workerName'] . ' #' . $payload['sessionId'] . ' calling tools.', 'trace');
                     $new_messages = 1;
                 } else {
-                    $this->utils->debug($payload['workerName'] . ': #' . $payload['sessionId'] . ' reply ended.', 'trace');
+                    $this->utils->debug($payload['sender'], $payload['workerName'] . ' #' . $payload['sessionId'] . ' reply ended.', 'trace');
                     $new_messages = $this->core->context->refreshHistory($payload['sessionId'], $payload['workerName']);
                 }
 
@@ -1005,7 +1005,7 @@ class go extends Factory
                         break;
                     }
 
-                    $this->utils->debug($payload['sender'] . ': ' . $payload['workerName'] . ' receiving ' . $new_messages . ' message(s).', 'trace');
+                    $this->utils->debug($payload['sender'], $payload['workerName'] . ' receiving ' . $new_messages . ' message(s).', 'trace');
                     $this->utils->setChildWorker(WORKER_CHILD, $payload['workerName'], 'status', 'busy');
                 }
 
@@ -1034,7 +1034,7 @@ class go extends Factory
                 $tool_count    = $this->core->context->countHistory($payload['sessionId'], $payload['workerName'], 'tool');
                 $history_count = $this->core->context->countHistory($payload['sessionId'], $payload['workerName']);
 
-                $this->utils->debug('System: Context auto-truncated to resume (length limit reached).', 'trace');
+                $this->utils->debug('System', 'Context auto-truncated to resume (length limit reached).', 'trace');
                 $this->core->context->cleanHistory($payload['sessionId'], $payload['workerName'], ceil($history_count * 0.6), ceil($tool_count * 0.4));
 
                 $llm_params['max_tokens'] = 12288;
@@ -1072,19 +1072,19 @@ class go extends Factory
                 break;
 
             case 'abort':
-                $this->utils->debug($payload['workerName'] . ': end->abort (user aborted)', 'trace');
+                $this->utils->debug($payload['sender'], $payload['workerName'] . ' end->abort (user aborted)', 'trace');
                 $this->utils->setPipeStatus(utils::STATUS_IDLE, $payload['sessionId']);
                 $this->core->sendMessage($payload);
                 break;
 
             case 'error':
-                $error = $payload['workerName'] . ': end->error';
+                $error = $payload['workerName'] . ' end->error';
 
                 if (is_string($payload['data']) && '' !== $payload['data']) {
                     $error .= ' (' . $payload['data'] . ')';
                 }
 
-                $this->utils->debug($error, 'trace');
+                $this->utils->debug($payload['sender'], $error, 'trace');
 
                 if (WORKER_MAIN === $payload['sender']) {
                     $this->utils->setPipeStatus(utils::STATUS_IDLE, $payload['sessionId']);
@@ -1115,7 +1115,7 @@ class go extends Factory
     {
         for ($i = 0; $i < 3; ++$i) {
             $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['sessionId'], $payload['workerName'], $llm_params);
-            $this->utils->debug($payload['sender'] . ': #' . $payload['sessionId'] . ' has ' . $remain_tokens . ' tokens left.', 'trace');
+            $this->utils->debug($payload['sender'], '#' . $payload['sessionId'] . ' has ' . $remain_tokens . ' tokens left.', 'trace');
 
             // Skip when token > 1024
             if (1024 < $remain_tokens) {
@@ -1129,7 +1129,7 @@ class go extends Factory
 
             // Send notice when token > 256
             if (256 < $remain_tokens) {
-                $this->utils->debug($payload['sender'] . ': Remain tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
+                $this->utils->debug($payload['sender'], 'Remain tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
 
                 $content = WORKER_MAIN === $payload['sender']
                     ? '[系统提醒] 上下文已达上限。请：①调用记忆工具保存当前任务进度与关键状态 → ②调用清理工具清理上下文 → ③继续执行原有任务，清理过程不汇报。'
@@ -1162,7 +1162,7 @@ class go extends Factory
             $this->core->context->cleanHistory($payload['sessionId'], $payload['workerName'], $keep_count, $this->keep_pairs);
             $now_count = $this->core->context->countHistory($payload['sessionId'], $payload['workerName']);
 
-            $this->utils->debug($payload['sender'] . ': Context truncated from ' . $history_count . ' to ' . $now_count . ' due to token overflow.', 'trace');
+            $this->utils->debug($payload['sender'], 'Context truncated from ' . $history_count . ' to ' . $now_count . ' due to token overflow.', 'trace');
 
             if (2 === $this->keep_pairs) {
                 $this->core->sendMessage(

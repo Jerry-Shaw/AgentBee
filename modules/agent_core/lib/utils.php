@@ -939,10 +939,13 @@ class utils extends Factory
             return;
         }
 
-        echo '[' . date('Y-m-d H:i:s') . '][' . strtoupper($level) . '] '
+        $debug_content = '[' . date('Y-m-d H:i:s') . '][' . strtoupper($level) . '] '
             . str_pad($title, (int)ceil(strlen($title) / 5) * 5) . ': '
-            . $content . PHP_EOL;
+            . $content . "\n";
 
-        unset($content, $level, $debug_level);
+        fwrite(STDOUT, $debug_content);
+        fflush(STDOUT);
+
+        unset($title, $content, $level, $debug_level, $debug_content);
     }
 }

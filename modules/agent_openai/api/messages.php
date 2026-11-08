@@ -472,10 +472,6 @@ class messages extends stream
                     ]);
                 }
 
-                if ('' !== $this->assistant_content) {
-                    $this->output('memory', 'save', $metadata, $this->assistant_content);
-                }
-
                 $this->output('end', 'tools', $metadata, $correct_calls);
 
                 unset($error_args, $error_names, $error_calls, $correct_calls, $tool_results, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $tool_result, $error_types);

@@ -47,25 +47,37 @@ class stream extends Factory
      */
     public function output(string $message_type, string $payload_type, array $payload_metadata, string|array $payload_content = ''): void
     {
-        $payload_data = [
-            'type' => $payload_type,
-            'data' => $payload_content
-        ];
-
-        $payload_data += $payload_metadata;
-
         $stream_data = json_encode(
             [
                 'type'    => $message_type,
-                'payload' => $payload_data
+                'payload' => [
+                        'type' => $payload_type,
+                        'data' => $payload_content
+                    ] + $payload_metadata
             ], JSON_FORMAT
         );
 
-        echo $stream_data . "\n";
+        $buffer  = $stream_data . "\n";
+        $length  = strlen($buffer);
+        $written = 0;
 
-        flush();
+        while ($written < $length) {
+            $bytes = fwrite(STDOUT, substr($buffer, $written));
+
+            if (false === $bytes) {
+                break;
+            }
+
+            if (0 === $bytes) {
+                usleep(20000);
+                continue;
+            }
+
+            $written += $bytes;
+        }
+
         fflush(STDOUT);
 
-        unset($message_type, $payload_type, $payload_metadata, $payload_content, $payload_data, $stream_data);
+        unset($message_type, $payload_type, $payload_metadata, $payload_content, $stream_data, $buffer, $length, $written, $bytes);
     }
 }

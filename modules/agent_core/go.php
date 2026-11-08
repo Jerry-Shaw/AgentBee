@@ -280,32 +280,39 @@ class go extends Factory
      */
     public function stdoutHandler(string $ext_id, array $context): void
     {
-        $stdout_buffer = [];
+        $message_lines = [];
+        $stdout_buffer = '';
         $stdout_stream = $context['stdout'];
 
         // Free the stdout pipe by reading all data immediately.
-        while (false !== ($line = fgets($stdout_stream))) {
-            $line = trim($line);
+        while (false !== ($raw_line = fgets($stdout_stream))) {
+            $stdout_buffer .= $raw_line;
 
-            if ('' === $line) {
-                continue;
+            while (false !== ($line_pos = strpos($stdout_buffer, "\n"))) {
+                $buffer_line   = substr($stdout_buffer, 0, $line_pos);
+                $stdout_buffer = substr($stdout_buffer, $line_pos + 1);
+                $buffer_line   = trim($buffer_line);
+
+                if ('' === $buffer_line) {
+                    continue;
+                }
+
+                $message = json_decode($buffer_line, true);
+
+                if (!is_array($message) || !isset($message['payload']['sessionId'])) {
+                    continue;
+                }
+
+                $message_lines[] = $message;
             }
-
-            $message = json_decode($line, true);
-
-            if (!is_array($message) || !isset($message['payload']['sessionId'])) {
-                continue;
-            }
-
-            $stdout_buffer[] = $message;
         }
 
-        if ([] === $stdout_buffer) {
+        if ([] === $message_lines) {
             return;
         }
 
         // Process buffer frames
-        foreach ($stdout_buffer as $message) {
+        foreach ($message_lines as $message) {
             $payload     = $message['payload'];
             $worker_info = $this->utils->getChildWorker($payload['sender'], $payload['workerName']);
 
@@ -334,7 +341,7 @@ class go extends Factory
             }
         }
 
-        unset($ext_id, $context, $stdout_buffer, $stdout_stream, $line, $message, $payload, $worker_info, $llm_params, $session_queue);
+        unset($ext_id, $context, $message_lines, $stdout_buffer, $stdout_stream, $raw_line, $line_pos, $buffer_line, $message, $payload, $worker_info, $llm_params, $session_queue);
     }
 
     /**

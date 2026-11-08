@@ -820,7 +820,9 @@ class go extends Factory
                 $this->core->context->addToolCalls(
                     $payload['sessionId'],
                     $payload['workerName'],
-                    $payload['data']['tool_calls']
+                    $payload['data']['tool_calls'],
+                    $payload['data']['content'] ?? '',
+                    $payload['data']['reasoning_content'] ?? ''
                 );
                 break;
 

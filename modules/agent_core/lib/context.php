@@ -140,20 +140,30 @@ class context extends Factory
      * @param string $session_id
      * @param string $worker_name
      * @param array  $tool_calls
+     * @param string $content
+     * @param string $reasoning_content
      *
      * @return void
      */
-    public function addToolCalls(string $session_id, string $worker_name, array $tool_calls): void
+    public function addToolCalls(string $session_id, string $worker_name, array $tool_calls, string $content = '', string $reasoning_content = ''): void
     {
         $message = [
             'role'       => 'assistant',
             'tool_calls' => array_map(fn(array $tool_call): array => $this->normalizeToolCall($tool_call), $tool_calls)
         ];
 
+        if ('' !== $content) {
+            $message['content'] = $content;
+        }
+
+        if ('' !== $reasoning_content) {
+            $message['reasoning_content'] = $reasoning_content;
+        }
+
         $this->history[$session_id][$worker_name]   ??= [];
         $this->history[$session_id][$worker_name][] = $message;
 
-        unset($session_id, $worker_name, $tool_calls, $message);
+        unset($session_id, $worker_name, $tool_calls, $content, $reasoning_content, $message);
     }
 
     /**

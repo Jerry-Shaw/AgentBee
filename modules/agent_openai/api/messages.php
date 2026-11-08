@@ -431,20 +431,12 @@ class messages extends stream
                     }
                 }
 
-                if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
-                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
-
-                    if ('' !== $this->assistant_content) {
-                        $this->output('memory', 'save', $metadata, $this->assistant_content);
-                    }
-                }
-
                 if ([] !== $correct_calls) {
-                    $this->output('history', 'addToolCalls', $metadata, [
-                            'role'       => 'assistant',
-                            'tool_calls' => $correct_calls
-                        ]
+                    $this->output('history', 'addToolCalls', $metadata,
+                        $this->buildAssistantEvent() + ['tool_calls' => $correct_calls]
                     );
+                } elseif ('' !== $this->assistant_content || '' !== $this->reasons_content) {
+                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
 
                 foreach ($tool_results as $tool_result) {
@@ -477,6 +469,10 @@ class messages extends stream
                             'content' => '[系统提示] ' . implode('，', $error_types) . '，已自动过滤。请核对工具并补全参数后重新调用。',
                         ]],
                     ]);
+                }
+
+                if ('' !== $this->assistant_content) {
+                    $this->output('memory', 'save', $metadata, $this->assistant_content);
                 }
 
                 $this->output('end', 'tools', $metadata, $correct_calls);

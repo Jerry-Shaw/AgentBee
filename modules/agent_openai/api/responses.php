@@ -164,6 +164,7 @@ class responses extends stream
         }
 
         if (isset($data['error'])) {
+            $this->tool_calls    = [];
             $this->finish_reason = 'error';
             unset($this->options['previous_response_id']);
             $this->output('end', 'error', $metadata, $data['error']);
@@ -171,8 +172,8 @@ class responses extends stream
         }
 
         if (isset($data['status']) && 'aborted' === $data['status']) {
-            $this->finish_reason = 'abort';
             $this->tool_calls    = [];
+            $this->finish_reason = 'abort';
             $this->output('end', 'abort', $metadata, ['message' => '已停止生成']);
             return;
         }

@@ -172,14 +172,15 @@ class completions extends stream
         }
 
         if (isset($data['error'])) {
+            $this->tool_calls    = [];
             $this->finish_reason = 'error';
             $this->output('end', 'error', $metadata, $data['error']);
             return;
         }
 
         if (isset($data['status']) && 'aborted' === $data['status']) {
-            $this->finish_reason = 'abort';
             $this->tool_calls    = [];
+            $this->finish_reason = 'abort';
             $this->output('end', 'abort', $metadata, ['message' => '已停止生成']);
             return;
         }

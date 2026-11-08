@@ -314,10 +314,9 @@ class completions extends stream
                         ],
                     ];
 
-                    $this->output('stream', 'tool_calls', $metadata, $tool_call);
-
                     try {
                         $exec_result = $this->core->execTools($fn_call['id'], $fn_call['function']['name'], $tool_args);
+                        $this->output('stream', 'tool_calls', $metadata, $tool_call);
                     } catch (\Throwable $throwable) {
                         $this->output('stream', 'tool_result', $metadata, [
                             'call_id'       => $fn_call['id'],

@@ -390,10 +390,9 @@ class messages extends stream
                         'arguments' => $fn_call['arguments'],
                     ];
 
-                    $this->output('stream', 'tool_calls', $metadata, $tool_call);
-
                     try {
                         $exec_result = $this->core->execTools($fn_call['id'], $fn_call['name'], $tool_args);
+                        $this->output('stream', 'tool_calls', $metadata, $tool_call);
                     } catch (\Throwable $throwable) {
                         $this->output('stream', 'tool_result', $metadata, [
                             'call_id'       => $fn_call['id'],

@@ -221,9 +221,9 @@ class completions extends stream
                 } elseif ('think' === $this->message_type) {
                     $this->reasons_content .= $delta['content'];
                 }
-
-                $this->output('stream', $this->message_type, $metadata, $delta['content']);
             }
+
+            $this->output('stream', $this->message_type, $metadata, $delta['content']);
         }
 
         if (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {

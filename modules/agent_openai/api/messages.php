@@ -26,7 +26,8 @@ class messages extends stream
 {
     public array $tool_calls = [];
 
-    public string $reasons_content   = '';
+    public string $tool_content      = '';
+    public string $reason_content    = '';
     public string $assistant_content = '';
 
     public string $message_type  = 'content';
@@ -215,7 +216,7 @@ class messages extends stream
         $this->finishStream($metadata);
 
         $this->tool_calls        = [];
-        $this->reasons_content   = '';
+        $this->reason_content    = '';
         $this->assistant_content = '';
         $this->message_type      = 'content';
         $this->finish_reason     = 'undefined';
@@ -274,7 +275,7 @@ class messages extends stream
                                 if ('content' === $this->message_type) {
                                     $this->assistant_content .= $delta['text'];
                                 } elseif ('think' === $this->message_type) {
-                                    $this->reasons_content .= $delta['text'];
+                                    $this->reason_content .= $delta['text'];
                                 }
 
                                 $this->output('stream', $this->message_type, $metadata, $delta['text']);
@@ -284,7 +285,7 @@ class messages extends stream
                         case 'thinking_delta':
                             if (isset($delta['thinking']) && '' !== $delta['thinking']) {
                                 if ($this->core->utils->agent_config['agent_llm']['keep_reasons'] ?? false) {
-                                    $this->reasons_content .= $delta['thinking'];
+                                    $this->reason_content .= $delta['thinking'];
                                 }
 
                                 $this->output('stream', 'think', $metadata, $delta['thinking']);
@@ -330,7 +331,12 @@ class messages extends stream
 
         switch ($this->finish_reason) {
             case 'stop':
-                if ('' !== $this->assistant_content || '' !== $this->reasons_content) {
+                if ('' !== $this->tool_content) {
+                    $this->output('memory', 'save', $metadata, $this->tool_content);
+                    $this->tool_content = '';
+                }
+
+                if ('' !== $this->assistant_content || '' !== $this->reason_content) {
                     $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
 
@@ -365,6 +371,10 @@ class messages extends stream
                 $correct_calls = [];
                 $tool_results  = [];
                 $handler_calls = [];
+
+                if ('' !== $this->assistant_content) {
+                    $this->tool_content .= $this->assistant_content;
+                }
 
                 foreach ($this->tool_calls as $fn_call) {
                     if (!str_contains($fn_call['name'], '-')) {
@@ -436,7 +446,7 @@ class messages extends stream
                     $this->output('history', 'addToolCalls', $metadata,
                         $this->buildAssistantEvent() + ['tool_calls' => $correct_calls]
                     );
-                } elseif ('' !== $this->assistant_content || '' !== $this->reasons_content) {
+                } elseif ('' !== $this->assistant_content || '' !== $this->reason_content) {
                     $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
 
@@ -513,8 +523,8 @@ class messages extends stream
     {
         $event = ['role' => 'assistant', 'content' => $this->assistant_content];
 
-        if ('' !== $this->reasons_content) {
-            $event['reasoning_content'] = $this->reasons_content;
+        if ('' !== $this->reason_content) {
+            $event['reasoning_content'] = $this->reason_content;
         }
 
         return $event;

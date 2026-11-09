@@ -47,8 +47,6 @@ class utils extends Factory
     public array  $agent_config;
     public string $pid_file_path;
 
-    public string $memory_buffer = '';
-
     public array $wait_until      = [];
     public array $wait_status     = [];
     public array $model_list      = [];

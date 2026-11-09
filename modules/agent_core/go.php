@@ -783,17 +783,7 @@ class go extends Factory
             return;
         }
 
-        switch ($payload['type']) {
-            case 'add':
-                $this->utils->memory_buffer .= $payload['data'];
-                break;
-
-            case 'save':
-                $this->utils->memory_buffer .= $payload['data'];
-                $this->memory->save('misc', 'assistant', $this->utils->memory_buffer, 0, $payload['sessionId']);
-                $this->utils->memory_buffer = '';
-                break;
-        }
+        $this->memory->save('misc', 'assistant', $payload['data'], 0, $payload['sessionId']);
 
         unset($payload);
     }

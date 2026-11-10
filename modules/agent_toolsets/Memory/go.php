@@ -53,6 +53,15 @@ class go extends Factory
             last_time      INTEGER NOT NULL DEFAULT 0
         )';
 
+    private const DDL_CHAT = '
+        CREATE TABLE IF NOT EXISTS agent_chat (
+            create_id   INTEGER PRIMARY KEY,
+            session_id  CHAR(36) DEFAULT NULL,
+            worker_name VARCHAR(64) NOT NULL,
+            type        VARCHAR(16) NOT NULL,
+            data        TEXT NOT NULL
+        )';
+
     private const DDL_MEMORY = '
         CREATE TABLE IF NOT EXISTS agent_memory (
             create_id  INTEGER PRIMARY KEY,
@@ -77,14 +86,15 @@ class go extends Factory
 
     private const DDL_INDEXES = [
         'CREATE INDEX IF NOT EXISTS idx_session_status ON agent_session(session_status)',
-        'CREATE INDEX IF NOT EXISTS idx_last_time ON agent_session(last_time)',
-        'CREATE INDEX IF NOT EXISTS idx_mem_date ON agent_memory(date_key)',
-        'CREATE INDEX IF NOT EXISTS idx_mem_expire ON agent_memory(expire_at)',
-        'CREATE INDEX IF NOT EXISTS idx_mem_level_create ON agent_memory(level, create_id DESC)',
-        'CREATE INDEX IF NOT EXISTS idx_mem_lvl_date_create ON agent_memory(level, date_key, create_id DESC)',
-        'CREATE INDEX IF NOT EXISTS idx_mem_session ON agent_memory(session_id)',
-        'CREATE INDEX IF NOT EXISTS idx_session_id ON agent_task(session_id)',
-        'CREATE INDEX IF NOT EXISTS idx_task_runat ON agent_task(run_at)',
+        'CREATE INDEX IF NOT EXISTS idx_session_last_time ON agent_session(last_time)',
+        'CREATE INDEX IF NOT EXISTS idx_mem_level ON agent_memory(level)',
+        'CREATE INDEX IF NOT EXISTS idx_mem_session_id ON agent_memory(session_id)',
+        'CREATE INDEX IF NOT EXISTS idx_mem_date_key ON agent_memory(date_key)',
+        'CREATE INDEX IF NOT EXISTS idx_mem_expire_at ON agent_memory(expire_at)',
+        'CREATE INDEX IF NOT EXISTS idx_mem_level_session_id_create_id ON agent_memory(level, session_id, create_id DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_chat_session_id_worker_name_create_id ON agent_chat(session_id, worker_name, create_id DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_task_session_id ON agent_task(session_id)',
+        'CREATE INDEX IF NOT EXISTS idx_task_run_at ON agent_task(run_at)',
     ];
 
     private const DDL_FTS = '
@@ -298,6 +308,95 @@ class go extends Factory
     }
 
     // =========================================================================
+    //  Chat CRUD
+    //  Not for Tools
+    // =========================================================================
+
+    /**
+     * @param string $session_id
+     * @param string $worker_name
+     * @param string $type
+     * @param array  $data
+     *
+     * @return bool
+     * @throws \ReflectionException
+     */
+    public function saveChat(string $session_id, string $worker_name, string $type, array $data): bool
+    {
+        $create_id = $this->generateMicroTimestamp('agent_chat');
+
+        $saved = $this->libSQLite->table('agent_chat')
+            ->insert([
+                'create_id'   => $create_id,
+                'session_id'  => $session_id,
+                'worker_name' => $worker_name,
+                'type'        => $type,
+                'data'        => json_encode($data, JSON_FORMAT)
+            ])
+            ->execute();
+
+        unset($session_id, $worker_name, $type, $data, $create_id);
+        return $saved;
+    }
+
+    /**
+     * @param string $session_id
+     * @param string $worker_name
+     * @param int    $create_id
+     * @param int    $limit
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function readChat(string $session_id, string $worker_name, int $create_id = 0, int $limit = 10): array
+    {
+        $query = $this->libSQLite
+            ->table('agent_chat')
+            ->where(['session_id', $session_id], ['worker_name', $worker_name])
+            ->select('create_id', 'worker_name', 'type', 'data');
+
+        if (0 < $create_id) {
+            $query->where(['create_id', '<', $create_id]);
+        }
+
+        if (0 < $limit) {
+            $query->limit($limit);
+        }
+
+        $query->order(['create_id' => 'DESC']);
+
+        $data = $query->fetchAll();
+        $data = array_reverse($data);
+
+        foreach ($data as &$item) {
+            $item['create_time'] = date('Y-m-d H:i:s', (int)($item['create_id'] / 1000000));
+            $item['data']        = json_decode($item['data'], true);
+        }
+
+        unset($session_id, $worker_name, $create_id, $limit, $query, $item);
+        return $data;
+    }
+
+    /**
+     * @param string $session_id
+     * @param int    $create_id
+     *
+     * @return bool
+     * @throws \ReflectionException
+     */
+    public function deleteChat(string $session_id, int $create_id): bool
+    {
+        $delete = $this->libSQLite
+            ->delete()
+            ->table('agent_chat')
+            ->where(['create_id', $create_id], ['session_id', $session_id])
+            ->execute();
+
+        unset($session_id, $create_id);
+        return $delete;
+    }
+
+    // =========================================================================
     //  Memory CRUD
     // =========================================================================
 
@@ -486,12 +585,12 @@ class go extends Factory
             }
         }
 
-        if (0 < $date) {
-            $query->where(['date_key', $date]);
-        }
-
         if (0 < $create_id) {
             $query->where(['create_id', '<', $create_id]);
+        }
+
+        if (0 < $date) {
+            $query->where(['date_key', $date]);
         }
 
         $query->order(['create_id' => 'DESC']);
@@ -899,6 +998,9 @@ class go extends Factory
 
         // Create memory table if not exists
         $this->libSQLite->exec(self::DDL_MEMORY);
+
+        // Create chat table if not exists
+        $this->libSQLite->exec(self::DDL_CHAT);
 
         // Create task table if not exists
         $this->libSQLite->exec(self::DDL_TASK);

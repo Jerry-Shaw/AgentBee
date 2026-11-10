@@ -26,7 +26,6 @@ class completions extends stream
 {
     public array $tool_calls = [];
 
-    public string $tool_content      = '';
     public string $reason_content    = '';
     public string $assistant_content = '';
 
@@ -67,22 +66,18 @@ class completions extends stream
                     break;
 
                 case 'assistant':
-                    if (isset($event['content']) && '' !== $event['content']) {
-                        $contents['content'] = $event['content'];
-                    }
+                    $contents['content'] = $event['content'] ?? '';
 
                     if (isset($event['reasoning_content']) && '' !== $event['reasoning_content']) {
                         $contents['reasoning_content'] = $event['reasoning_content'];
                     }
 
                     if (isset($event['tool_calls']) && [] !== $event['tool_calls']) {
-                        foreach ($event['tool_calls'] as $tool_call) {
-                            $contents['tool_calls'][] = [
-                                'id'       => $tool_call['id'],
-                                'type'     => $tool_call['type'],
-                                'function' => ['name' => $tool_call['name'], 'arguments' => $tool_call['arguments']],
-                            ];
-                        }
+                        $contents['tool_calls'][] = [
+                            'id'       => $event['tool_calls']['id'],
+                            'type'     => $event['tool_calls']['type'],
+                            'function' => ['name' => $event['tool_calls']['name'], 'arguments' => $event['tool_calls']['arguments']],
+                        ];
                     }
 
                     $messages[] = ['role' => 'assistant'] + $contents;
@@ -91,7 +86,7 @@ class completions extends stream
                 case 'tool':
                     $messages[] = [
                         'role'         => 'tool',
-                        'tool_call_id' => $event['call_id'],
+                        'tool_call_id' => $event['id'],
                         'content'      => $event['content']
                     ];
                     break;
@@ -253,11 +248,6 @@ class completions extends stream
     {
         switch ($this->finish_reason) {
             case 'stop':
-                if ('' !== $this->tool_content) {
-                    $this->output('memory', 'save', $metadata, $this->tool_content);
-                    $this->tool_content = '';
-                }
-
                 if ('' !== $this->assistant_content || '' !== $this->reason_content) {
                     $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
@@ -290,13 +280,8 @@ class completions extends stream
                 $error_args    = 0;
                 $error_names   = 0;
                 $error_calls   = 0;
-                $correct_calls = [];
-                $tool_results  = [];
+                $tool_calls    = [];
                 $handler_calls = [];
-
-                if ('' !== $this->assistant_content) {
-                    $this->tool_content .= $this->assistant_content;
-                }
 
                 foreach ($this->tool_calls as $fn_call) {
                     if (!str_contains($fn_call['function']['name'], '-')) {
@@ -318,7 +303,7 @@ class completions extends stream
 
                     $tool_call = [
                         'id'       => $fn_call['id'],
-                        'type'     => ($fn_call['type'] ?? 'function'),
+                        'type'     => $fn_call['type'],
                         'function' => [
                             'name'      => $fn_call['function']['name'],
                             'arguments' => $fn_call['function']['arguments'],
@@ -327,62 +312,70 @@ class completions extends stream
 
                     try {
                         $exec_result = $this->core->execTools($fn_call['id'], $fn_call['function']['name'], $tool_args);
-                        $this->output('stream', 'tool_calls', $metadata, $tool_call);
+                        $result_data = json_decode($exec_result['content'], true);
+
+                        if (!isset($result_data['handler'])) {
+                            // Sync tool calls
+                            $tool_calls[$fn_call['id']] = [
+                                'call'   => $tool_call,
+                                'result' => [
+                                    'id'      => $exec_result['id'],
+                                    'content' => $exec_result['content']
+                                ]
+                            ];
+                        } else {
+                            // Async tool calls
+                            $result_data['session_id']   = $metadata['sessionId'];
+                            $result_data['process_name'] = $metadata['workerName'];
+
+                            $handler_calls[] = [
+                                'tool_calls'   => [
+                                    'id'        => $fn_call['id'],
+                                    'type'      => $fn_call['type'],
+                                    'name'      => $fn_call['function']['name'],
+                                    'arguments' => $fn_call['function']['arguments']
+                                ],
+                                'handler_args' => $result_data,
+                            ];
+                        }
                     } catch (\Throwable $throwable) {
-                        $this->output('stream', 'tool_result', $metadata, [
-                            'call_id'       => $fn_call['id'],
-                            'function_name' => $fn_call['function']['name'],
-                            'error'         => $throwable->getMessage(),
-                        ]);
+                        // Tool calls with errors
+                        $tool_calls[$fn_call['id']] = [
+                            'call'   => $tool_call,
+                            'result' => [
+                                'id'      => $fn_call['id'],
+                                'content' => $throwable->getMessage()
+                            ]
+                        ];
 
                         unset($throwable);
                         ++$error_calls;
                         continue;
                     }
+                }
 
-                    $result_data = json_decode($exec_result['call_result'], true);
-
-                    if (!isset($result_data['handler'])) {
+                // Process sync tool calls and tool results
+                if ([] !== $tool_calls) {
+                    foreach ($tool_calls as $tool_call) {
+                        // Stream
+                        $this->output('stream', 'tool_calls', $metadata, [
+                            'id'        => $tool_call['call']['id'],
+                            'name'      => $tool_call['call']['function']['name'],
+                            'arguments' => $tool_call['call']['function']['arguments']
+                        ]);
                         $this->output('stream', 'tool_result', $metadata, [
-                            'call_id'       => $exec_result['call_id'],
-                            'function_name' => $exec_result['call_name'],
-                            'content'       => $exec_result['call_result'],
+                            'id'      => $tool_call['result']['id'],
+                            'name'    => $tool_call['call']['function']['name'],
+                            'content' => $tool_call['result']['content']
                         ]);
 
-                        $correct_calls[] = $tool_call;
-                        $tool_results[]  = [
-                            'role'    => 'tool',
-                            'call_id' => $exec_result['call_id'],
-                            'content' => $exec_result['call_result'],
-                        ];
-                    } else {
-                        $result_data['session_id']   = $metadata['sessionId'];
-                        $result_data['process_name'] = $metadata['workerName'];
-
-                        $handler_calls[] = [
-                            'tool_calls'   => [
-                                'id'        => $fn_call['id'],
-                                'type'      => $fn_call['type'],
-                                'name'      => $fn_call['function']['name'],
-                                'arguments' => $fn_call['function']['arguments'],
-                            ],
-                            'handler_args' => $result_data,
-                        ];
+                        // Context history
+                        $this->output('history', 'addToolCalls', $metadata, $this->buildToolEvent($tool_call['call']));
+                        $this->output('history', 'addToolResults', $metadata, $tool_call['result']);
                     }
                 }
 
-                if ([] !== $correct_calls) {
-                    $this->output('history', 'addToolCalls', $metadata,
-                        $this->buildAssistantEvent() + ['tool_calls' => $correct_calls]
-                    );
-                } elseif ('' !== $this->assistant_content || '' !== $this->reason_content) {
-                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
-                }
-
-                foreach ($tool_results as $tool_result) {
-                    $this->output('history', 'addToolResults', $metadata, $tool_result);
-                }
-
+                // Process async calls (Forward to main process)
                 if ([] !== $handler_calls) {
                     $this->output('toolCalls', 'callHandler', $metadata, $handler_calls);
                 }
@@ -411,9 +404,9 @@ class completions extends stream
                     ]);
                 }
 
-                $this->output('end', 'tools', $metadata, $correct_calls);
+                $this->output('end', 'tools', $metadata);
 
-                unset($error_args, $error_names, $error_calls, $correct_calls, $tool_results, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $tool_result, $error_types);
+                unset($error_args, $error_names, $error_calls, $tool_calls, $handler_calls, $fn_call, $tool_args, $tool_call, $exec_result, $result_data, $error_types);
                 break;
 
             case 'content_filter':
@@ -456,6 +449,27 @@ class completions extends stream
             $event['reasoning_content'] = $this->reason_content;
         }
 
+        return $event;
+    }
+
+    /**
+     * @param array $tool_calls
+     *
+     * @return array
+     */
+    private function buildToolEvent(array $tool_calls): array
+    {
+        $event = ['role' => 'assistant', 'tool_calls' => $tool_calls];
+
+        if ('' !== $this->assistant_content) {
+            $event['content'] = $this->assistant_content;
+        }
+
+        if ('' !== $this->reason_content) {
+            $event['reasoning_content'] = $this->reason_content;
+        }
+
+        unset($tool_calls);
         return $event;
     }
 

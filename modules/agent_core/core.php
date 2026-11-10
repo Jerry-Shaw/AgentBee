@@ -171,9 +171,9 @@ final class core extends Factory
         $this->IOData->src_argv = [];
 
         $results = [
-            'call_id'     => $call_id,
-            'call_name'   => $call_name,
-            'call_result' => $call_result
+            'id'      => $call_id,
+            'name'    => $call_name,
+            'content' => $call_result
         ];
 
         unset($call_id, $call_name, $tool_call_args, $module_name, $method_name, $fn_params, $fn_args, $tool_result, $call_result);

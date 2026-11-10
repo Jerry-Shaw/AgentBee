@@ -281,7 +281,7 @@ describe('abort event handling', () => {
     emit({
       type: 'tool_result',
       messageId,
-      data: { call_id: 'call-1', function_name: 'Memory-read', content: '{}' },
+      data: { id: 'call-1', name: 'Memory-read', content: '{}' },
     });
     emit({ type: 'end', messageId });
     expect(assistantOf(messageId)?.status).toBe('done');

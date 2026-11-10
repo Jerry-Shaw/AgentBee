@@ -84,11 +84,11 @@ export function normalizeToolEvent(
   const data = msg.data && typeof msg.data === 'object' && !Array.isArray(msg.data) ? asRecord(msg.data) : {};
 
   return {
-    id: msg.toolCallId || asString(data.tool_call_id) || makeId(),
+    id: msg.toolCallId || asString(data.id) || makeId(),
     kind,
-    name: asString(data.function_name) || msg.name || msg.tool || '',
+    name: asString(data.name) || msg.name || msg.tool || '',
     ok: msg.ok ?? asBoolean(data.ok),
-    summary: asString(data.function_name) || asString(data.tool_call_id) || '',
+    summary: asString(data.name) || asString(data.id) || '',
     data: formatToolResult(data, msg),
     time: nowTime(),
   };

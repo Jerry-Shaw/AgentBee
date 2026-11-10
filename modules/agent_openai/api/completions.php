@@ -459,11 +459,11 @@ class completions extends stream
      */
     private function buildToolEvent(array $tool_calls): array
     {
-        $event = ['role' => 'assistant', 'tool_calls' => $tool_calls];
-
-        if ('' !== $this->assistant_content) {
-            $event['content'] = $this->assistant_content;
-        }
+        $event = [
+            'role'       => 'assistant',
+            'content'    => $this->assistant_content,
+            'tool_calls' => $tool_calls
+        ];
 
         if ('' !== $this->reason_content) {
             $event['reasoning_content'] = $this->reason_content;

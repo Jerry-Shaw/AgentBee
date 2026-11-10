@@ -744,10 +744,10 @@ class go extends Factory
                 $this->handleMemory($payload);
                 break;
 
-            // Add session history
-            case 'history':
+            // Add session context
+            case 'context':
                 // addUserMessage/addAssistantMessage/addToolCalls/addToolResults
-                $this->handleHistory($payload);
+                $this->handleContext($payload);
                 break;
 
             // toolCalls call handler
@@ -792,8 +792,9 @@ class go extends Factory
      * @param array $payload
      *
      * @return void
+     * @throws \ReflectionException
      */
-    private function handleHistory(array $payload): void
+    private function handleContext(array $payload): void
     {
         switch ($payload['type']) {
             case 'addUserMessage':
@@ -811,6 +812,16 @@ class go extends Factory
                     $payload['data']['content'],
                     $payload['data']['reasoning_content'] ?? ''
                 );
+
+                $this->memory->saveChat(
+                    $payload['sessionId'],
+                    $payload['workerName'],
+                    'assistant',
+                    [
+                        'content'           => $payload['data']['content'],
+                        'reasoning_content' => $payload['data']['reasoning_content'] ?? ''
+                    ]
+                );
                 break;
 
             case 'addToolCalls':
@@ -827,7 +838,7 @@ class go extends Factory
                 $this->core->context->addToolResults(
                     $payload['sessionId'],
                     $payload['workerName'],
-                    $payload['data']['call_id'],
+                    $payload['data']['id'],
                     $payload['data']['content']
                 );
                 break;
@@ -886,9 +897,9 @@ class go extends Factory
 
             $tool_calls[]   = $data['tool_calls'];
             $tool_results[] = [
-                'call_id'     => $data['tool_calls']['id'],
-                'call_name'   => $data['tool_calls']['name'],
-                'call_result' => $result
+                'id'      => $data['tool_calls']['id'],
+                'name'    => $data['tool_calls']['name'],
+                'content' => $result
             ];
         }
 
@@ -912,16 +923,16 @@ class go extends Factory
             $this->core->context->addToolResults(
                 $payload['sessionId'],
                 $payload['workerName'],
-                $tool_result['call_id'],
-                $tool_result['call_result']
+                $tool_result['id'],
+                $tool_result['content']
             );
 
             $msg_data = [
                 'type' => 'tool_result',
                 'data' => [
-                    'call_id'       => $tool_result['call_id'],
-                    'function_name' => $tool_result['call_name'],
-                    'content'       => $tool_result['call_result'],
+                    'id'      => $tool_result['id'],
+                    'name'    => $tool_result['name'],
+                    'content' => $tool_result['content'],
                 ]
             ];
 

@@ -329,7 +329,7 @@ class messages extends stream
         switch ($this->finish_reason) {
             case 'stop':
                 if ('' !== $this->assistant_content || '' !== $this->reason_content) {
-                    $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
+                    $this->output('context', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
                 }
 
                 if ('' !== $this->assistant_content) {
@@ -340,8 +340,8 @@ class messages extends stream
                 break;
 
             case 'length':
-                $this->output('history', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
-                $this->output('history', 'addUserMessage', $metadata, [
+                $this->output('context', 'addAssistantMessage', $metadata, $this->buildAssistantEvent());
+                $this->output('context', 'addUserMessage', $metadata, [
                     'role'    => 'user',
                     'content' => [[
                         'type'    => 'text',
@@ -448,8 +448,8 @@ class messages extends stream
                         ]);
 
                         // Context history
-                        $this->output('history', 'addToolCalls', $metadata, $this->buildToolEvent($tool_call['call']));
-                        $this->output('history', 'addToolResults', $metadata, $tool_call['result']);
+                        $this->output('context', 'addToolCalls', $metadata, $this->buildToolEvent($tool_call['call']));
+                        $this->output('context', 'addToolResults', $metadata, $tool_call['result']);
                     }
                 }
 
@@ -473,7 +473,7 @@ class messages extends stream
                 }
 
                 if ([] !== $error_types) {
-                    $this->output('history', 'addUserMessage', $metadata, [
+                    $this->output('context', 'addUserMessage', $metadata, [
                         'role'    => 'user',
                         'content' => [[
                             'type'    => 'text',
@@ -494,7 +494,7 @@ class messages extends stream
 
             case 'undefined':
                 if ([] !== $this->tool_calls) {
-                    $this->output('history', 'addUserMessage', $metadata, [
+                    $this->output('context', 'addUserMessage', $metadata, [
                         'role'    => 'user',
                         'content' => [[
                             'type'    => 'text',

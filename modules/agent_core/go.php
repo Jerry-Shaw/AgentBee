@@ -856,8 +856,7 @@ class go extends Factory
      */
     private function handleToolCalls(array $payload): void
     {
-        $tool_calls   = [];
-        $tool_results = [];
+        $tool_calls = [];
 
         foreach ($payload['data'] as $data) {
             if (!isset($data['handler_args']['action'])) {
@@ -867,16 +866,44 @@ class go extends Factory
 
             $this->utils->debug('Handler', 'Calling ' . $data['tool_calls']['name'], 'trace');
 
+            $tool_calls[$data['tool_calls']['id']]['response'] = [
+                'content' => $data['tool_calls']['content']
+            ];
+
+            if (isset($data['tool_calls']['reasoning_content']) && '' !== $data['tool_calls']['reasoning_content']) {
+                $tool_calls[$data['tool_calls']['id']]['response']['reasoning_content'] = $data['tool_calls']['reasoning_content'];
+            }
+
+            $tool_calls[$data['tool_calls']['id']]['call'] = [
+                'id'        => $data['tool_calls']['id'],
+                'type'      => $data['tool_calls']['type'],
+                'name'      => $data['tool_calls']['name'],
+                'arguments' => json_encode($data['handler_args'], JSON_FORMAT)
+            ];
+
             try {
                 $this->core->IOData->src_cmd  = $data['tool_calls']['name'];
                 $this->core->IOData->src_argv = $data['handler_args'];
 
                 $handler = $data['handler_args']['handler']::new();
                 $result  = $handler->{$data['handler_args']['action']}($data['handler_args'], $this) ?? '工具执行完成，但未返回数据。';
+
+                if (!is_string($result)) {
+                    $result = json_encode($result, JSON_FORMAT);
+
+                    if (false === $result) {
+                        $result = 'Handler ERROR: ' . $data['tool_calls']['name'] . ' -> ' . json_last_error_msg();
+                    }
+                }
+
+                $tool_calls[$data['tool_calls']['id']]['result'] = [
+                    'id'      => $data['tool_calls']['id'],
+                    'content' => $result
+                ];
             } catch (\Throwable $throwable) {
-                $result = [
-                    'status' => 'error',
-                    'error'  => $throwable->getMessage(),
+                $tool_calls[$data['tool_calls']['id']]['result'] = [
+                    'id'      => $data['tool_calls']['id'],
+                    'content' => $throwable->getMessage()
                 ];
 
                 $this->utils->debug('Handler', $data['tool_calls']['name'] . ' => ' . $throwable->getMessage(), 'trace');
@@ -886,60 +913,62 @@ class go extends Factory
 
             $this->core->IOData->src_cmd  = '';
             $this->core->IOData->src_argv = [];
-
-            if (!is_string($result)) {
-                $result = json_encode($result, JSON_FORMAT);
-
-                if (false === $result) {
-                    $result = 'Handler ERROR: ' . $data['tool_calls']['name'] . ' -> ' . json_last_error_msg();
-                }
-            }
-
-            $tool_calls[]   = $data['tool_calls'];
-            $tool_results[] = [
-                'id'      => $data['tool_calls']['id'],
-                'name'    => $data['tool_calls']['name'],
-                'content' => $result
-            ];
         }
 
-        if ([] === $tool_calls) {
-            return;
-        }
-
-        $metadata = $this->utils->getMarker(
-            $payload['sender'],
-            $payload['workerName'],
-            $payload['workerRole'],
-            $payload['workerName'],
-            $payload['isSubTalk'],
-            $payload['sessionId'],
-            $payload['messageId']
-        );
-
-        $this->core->context->addToolCalls($payload['sessionId'], $payload['workerName'], $tool_calls);
-
-        foreach ($tool_results as $tool_result) {
-            $this->core->context->addToolResults(
-                $payload['sessionId'],
+        if ([] !== $tool_calls) {
+            $metadata = $this->utils->getMarker(
+                $payload['sender'],
                 $payload['workerName'],
-                $tool_result['id'],
-                $tool_result['content']
+                $payload['workerRole'],
+                $payload['workerName'],
+                $payload['isSubTalk'],
+                $payload['sessionId'],
+                $payload['messageId']
             );
 
-            $msg_data = [
-                'type' => 'tool_result',
-                'data' => [
-                    'id'      => $tool_result['id'],
-                    'name'    => $tool_result['name'],
-                    'content' => $tool_result['content'],
-                ]
-            ];
+            foreach ($tool_calls as $tool_call) {
+                // Stream
+                $this->core->sendMessage($metadata + [
+                        'type' => 'tool_calls',
+                        'data' => [
+                            'id'        => $tool_call['call']['id'],
+                            'name'      => $tool_call['call']['name'],
+                            'arguments' => $tool_call['call']['arguments']
+                        ]
+                    ]
+                );
 
-            $this->core->sendMessage($metadata + $msg_data);
+                $this->core->sendMessage($metadata + [
+                        'type' => 'tool_result',
+                        'data' => [
+                            'id'      => $tool_call['result']['id'],
+                            'name'    => $tool_call['call']['name'],
+                            'content' => $tool_call['result']['content']
+                        ]
+                    ]
+                );
+
+                // Context history
+                $this->core->context->addToolCalls(
+                    $payload['sessionId'],
+                    $payload['workerName'],
+                    $tool_call['call'],
+                    $tool_call['response']['content'],
+                    $tool_call['response']['reasoning_content'] ?? ''
+                );
+
+                $this->core->context->addToolResults(
+                    $payload['sessionId'],
+                    $payload['workerName'],
+                    $tool_call['result']['id'],
+                    $tool_call['result']['content']
+                );
+            }
+
+            unset($metadata, $tool_call);
         }
 
-        unset($payload, $tool_calls, $tool_results, $data, $handler, $result, $metadata, $tool_result, $msg_data);
+        unset($payload, $tool_calls, $data, $handler, $result);
     }
 
     /**

@@ -809,16 +809,21 @@ class go extends Factory
                     $payload['data']['reasoning_content'] ?? ''
                 );
 
+                $content = ['content' => $payload['data']['content']];
+
+                if (isset($payload['data']['reasoning_content']) && '' !== $payload['data']['reasoning_content']) {
+                    $content['reasoning_content'] = $payload['data']['reasoning_content'];
+                }
+
                 $this->core->memory->saveChat(
                     $payload['sessionId'],
                     $payload['workerName'],
                     $payload['isSubTalk'],
                     1 === $payload['isSubTalk'] && WORKER_MAIN === $payload['workerName'] ? 'user' : 'assistant',
-                    [
-                        'content'           => $payload['data']['content'],
-                        'reasoning_content' => $payload['data']['reasoning_content'] ?? ''
-                    ]
+                    $content
                 );
+
+                unset($content);
                 break;
 
             case 'addToolCalls':

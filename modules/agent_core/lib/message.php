@@ -289,9 +289,15 @@ class message extends Factory
                     }
 
                     try {
-                        $data_url  = $this->utils->resizeImage($binary);
-                        $content[] = ['type' => 'text', 'content' => '"' . $data['file']['filename'] . '"：图片已加载到上下文，无需读取文件，直接识别。'];
-                        $content[] = ['type' => 'image', 'content' => $data_url];
+                        $save_file   = $this->saveUploadFile($data['file']['filename'], $binary);
+                        $prompt_text = '"' . $data['file']['filename'] . '"：图片已附在上下文中，可直接查看，无需读取文件。';
+
+                        if ($save_file['uploaded']) {
+                            $prompt_text .= "\n" . '原图路径：`' . $save_file['file_path'] . '`，需要时可读取。';
+                        }
+
+                        $content[] = ['type' => 'text', 'content' => $prompt_text];
+                        $content[] = ['type' => 'image', 'content' => $this->utils->resizeImage($binary)];
                     } catch (\Throwable $throwable) {
                         $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();
                         unset($throwable);
@@ -311,14 +317,22 @@ class message extends Factory
                             throw new \RuntimeException('文本提取失败');
                         }
 
+                        $save_file   = $this->saveUploadFile($data['file']['filename'], $binary);
+                        $prompt_text = '--- 文件信息 ---' . "\n"
+                            . '文件名: ' . $data['file']['filename'] . "\n"
+                            . 'MIME类型: ' . $data['file']['mimeType'] . "\n";
+
+                        if ($save_file['uploaded']) {
+                            $prompt_text .= '文件路径：`' . $save_file['file_path'] . '`，需要时可读取。' . "\n";
+                        }
+
+                        $prompt_text .= '--- 文件内容（开始） ---' . "\n"
+                            . $file_text . "\n"
+                            . '--- 文件内容（结束） ---';
+
                         $content[] = [
                             'type'    => 'text',
-                            'content' => '--- 文件信息 ---' . "\n"
-                                . '文件名: ' . $data['file']['filename'] . "\n"
-                                . 'MIME类型: ' . $data['file']['mimeType'] . "\n"
-                                . '--- 文件内容（开始） ---' . "\n"
-                                . $file_text . "\n"
-                                . '--- 文件内容（结束） ---'
+                            'content' => $prompt_text
                         ];
                     } catch (\Throwable $throwable) {
                         $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();
@@ -329,26 +343,14 @@ class message extends Factory
                 }
 
                 // 2.3 Process other type of files
-                $upload_path = $this->upload_path . DIRECTORY_SEPARATOR . date('Ymd');
+                $save_file = $this->saveUploadFile($data['file']['filename'], $binary);
 
-                if (!is_dir($upload_path)) {
-                    try {
-                        mkdir($upload_path, 0777, true);
-                    } catch (\Throwable) {
-                    }
+                if ($save_file['uploaded']) {
+                    $files[] = [
+                        'filename' => $data['file']['filename'],
+                        'filepath' => $save_file['file_path']
+                    ];
                 }
-
-                $file_path  = $upload_path . DIRECTORY_SEPARATOR . $data['file']['filename'];
-                $save_bytes = file_put_contents($file_path, $binary);
-
-                if (false === $save_bytes || 0 === $save_bytes) {
-                    continue;
-                }
-
-                $files[] = [
-                    'filename' => $data['file']['filename'],
-                    'filepath' => $file_path
-                ];
             }
         }
 
@@ -356,8 +358,7 @@ class message extends Factory
             $file_list = '';
 
             foreach ($files as $i => $file) {
-                $file_list .= ($i + 1) . '. 文件名: ' . $file['filename'] . "\n"
-                    . '   文件路径: ' . $file['filepath'] . "\n";
+                $file_list .= ($i + 1) . '. 文件名: ' . $file['filename'] . "\n" . '   文件路径: ' . $file['filepath'] . "\n";
             }
 
             $content[] = [
@@ -390,7 +391,7 @@ class message extends Factory
             ];
         }
 
-        unset($data_content, $content, $errors, $saves, $files, $reset, $data, $text, $binary, $data_url, $detected, $file_text, $upload_path, $file_path);
+        unset($data_content, $content, $errors, $saves, $files, $reset, $data, $text, $binary, $save_file, $prompt_text, $detected, $file_text);
         return $result;
     }
 
@@ -424,6 +425,34 @@ class message extends Factory
 
         unset($data_content, $msg_marker, $msg_list, $data, $text);
         return $message;
+    }
+
+    /**
+     * @param string $filename
+     * @param string $binary
+     *
+     * @return array|false[]
+     */
+    private function saveUploadFile(string $filename, string $binary): array
+    {
+        $upload_path = $this->upload_path . DIRECTORY_SEPARATOR . date('Ymd');
+
+        if (!is_dir($upload_path)) {
+            try {
+                mkdir($upload_path, 0777, true);
+            } catch (\Throwable) {
+            }
+        }
+
+        $file_path  = $upload_path . DIRECTORY_SEPARATOR . $filename;
+        $save_bytes = file_put_contents($file_path, $binary);
+
+        $result = false !== $save_bytes && 0 < $save_bytes
+            ? ['uploaded' => true, 'file_path' => $file_path]
+            : ['uploaded' => false];
+
+        unset($filename, $binary, $upload_path, $file_path, $save_bytes);
+        return $result;
     }
 
     /**

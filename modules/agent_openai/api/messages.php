@@ -410,8 +410,8 @@ class messages extends stream
                                 'tool_calls'   => [
                                     'id'        => $fn_call['id'],
                                     'type'      => $fn_call['type'],
-                                    'name'      => $fn_call['function']['name'],
-                                    'arguments' => $fn_call['function']['arguments']
+                                    'name'      => $fn_call['name'],
+                                    'arguments' => $fn_call['arguments']
                                 ],
                                 'handler_args' => $result_data,
                             ];

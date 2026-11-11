@@ -27,8 +27,6 @@ use Nervsys\Core\Factory;
 
 class context extends Factory
 {
-    public config $config;
-
     public responses|completions|messages $api_object;
 
     public array $tools   = [];
@@ -39,12 +37,15 @@ class context extends Factory
     public array $message_pending = [];
 
     /**
+     * @param string $api_type
+     *
+     * @return void
      * @throws \ReflectionException
      */
-    public function __construct()
+    public function setApiType(string $api_type): void
     {
-        $this->config     = config::new();
-        $this->api_object = parent::getObj('\\modules\\agent_openai\\api\\' . $this->config->config['agent_llm']['api_type']);
+        $this->api_object = parent::getObj('\\modules\\agent_openai\\api\\' . $api_type);
+        unset($api_type);
     }
 
     /**

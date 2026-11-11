@@ -60,6 +60,7 @@ final class core extends Factory
         $this->socketMgr = SocketMgr::new(WORKER_MAIN);
 
         $this->utils->agent_config = $this->utils->config->get(true, $reload);
+        $this->context->setApiType($this->utils->agent_config['agent_llm']['api_type']);
     }
 
     /**

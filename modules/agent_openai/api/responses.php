@@ -372,10 +372,12 @@ class responses extends stream
 
                             $handler_calls[] = [
                                 'tool_calls'   => [
-                                    'id'        => $fn_call['id'],
-                                    'type'      => $fn_call['type'],
-                                    'name'      => $fn_call['name'],
-                                    'arguments' => $fn_call['arguments']
+                                    'id'             => $fn_call['id'],
+                                    'type'           => $fn_call['type'],
+                                    'name'           => $fn_call['name'],
+                                    'arguments'      => $fn_call['arguments'],
+                                    'content'        => $this->assistant_content,
+                                    'reason_content' => $this->reason_content
                                 ],
                                 'handler_args' => $result_data,
                             ];
@@ -485,7 +487,7 @@ class responses extends stream
      */
     private function buildAssistantEvent(): array
     {
-        $event = ['role' => 'assistant', 'content' => $this->assistant_content];
+        $event = ['content' => $this->assistant_content];
 
         if ('' !== $this->reason_content) {
             $event['reasoning_content'] = $this->reason_content;
@@ -502,7 +504,6 @@ class responses extends stream
     private function buildToolEvent(array $tool_calls): array
     {
         $event = [
-            'role'       => 'assistant',
             'content'    => $this->assistant_content,
             'tool_calls' => $tool_calls
         ];

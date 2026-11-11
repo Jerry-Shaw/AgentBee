@@ -786,8 +786,8 @@ class go extends Factory
             // Save to chat history
             case 'saveToolCalls':
                 $content = [
-                    'tools'  => $payload['data']['tools'],
-                    'result' => $payload['data']['result']
+                    'tools'   => $payload['data']['tools'],
+                    'results' => $payload['data']['results']
                 ];
 
                 if (isset($payload['data']['content']) && '' !== $payload['data']['content']) {
@@ -905,7 +905,7 @@ class go extends Factory
                 $tool_calls[$data['tool_calls']['id']]['response']['reasoning_content'] = $data['tool_calls']['reasoning_content'];
             }
 
-            $tool_calls[$data['tool_calls']['id']]['call'] = [
+            $tool_calls[$data['tool_calls']['id']]['tools'] = [
                 'id'        => $data['tool_calls']['id'],
                 'type'      => $data['tool_calls']['type'],
                 'name'      => $data['tool_calls']['name'],
@@ -927,12 +927,12 @@ class go extends Factory
                     }
                 }
 
-                $tool_calls[$data['tool_calls']['id']]['result'] = [
+                $tool_calls[$data['tool_calls']['id']]['results'] = [
                     'id'      => $data['tool_calls']['id'],
                     'content' => $result
                 ];
             } catch (\Throwable $throwable) {
-                $tool_calls[$data['tool_calls']['id']]['result'] = [
+                $tool_calls[$data['tool_calls']['id']]['results'] = [
                     'id'      => $data['tool_calls']['id'],
                     'content' => $throwable->getMessage()
                 ];
@@ -962,9 +962,9 @@ class go extends Factory
                 $this->core->sendMessage($metadata + [
                         'type' => 'tool_calls',
                         'data' => [
-                            'id'        => $tool_call['call']['id'],
-                            'name'      => $tool_call['call']['name'],
-                            'arguments' => $tool_call['call']['arguments']
+                            'id'        => $tool_call['tools']['id'],
+                            'name'      => $tool_call['tools']['name'],
+                            'arguments' => $tool_call['tools']['arguments']
                         ]
                     ]
                 );
@@ -972,9 +972,9 @@ class go extends Factory
                 $this->core->sendMessage($metadata + [
                         'type' => 'tool_result',
                         'data' => [
-                            'id'      => $tool_call['result']['id'],
-                            'name'    => $tool_call['call']['name'],
-                            'content' => $tool_call['result']['content']
+                            'id'      => $tool_call['results']['id'],
+                            'name'    => $tool_call['tools']['name'],
+                            'content' => $tool_call['results']['content']
                         ]
                     ]
                 );
@@ -983,7 +983,7 @@ class go extends Factory
                 $this->core->context->addToolCalls(
                     $payload['sessionId'],
                     $payload['workerName'],
-                    $tool_call['call'],
+                    $tool_call['tools'],
                     $tool_call['response']['content'],
                     $tool_call['response']['reasoning_content'] ?? ''
                 );
@@ -991,11 +991,41 @@ class go extends Factory
                 $this->core->context->addToolResults(
                     $payload['sessionId'],
                     $payload['workerName'],
-                    $tool_call['result']['id'],
-                    $tool_call['result']['content']
+                    $tool_call['results']['id'],
+                    $tool_call['results']['content']
                 );
 
                 // Chat history
+                $content = [
+                    'tools'   => [
+                        'id'        => $tool_call['tools']['id'],
+                        'name'      => $tool_call['tools']['name'],
+                        'arguments' => $tool_call['tools']['arguments']
+                    ],
+                    'results' => [
+                        'id'      => $tool_call['results']['id'],
+                        'name'    => $tool_call['tools']['name'],
+                        'content' => $tool_call['results']['content']
+                    ]
+                ];
+
+                if (isset($tool_call['response']['content']) && '' !== $tool_call['response']['content']) {
+                    $content['content'] = $tool_call['response']['content'];
+                }
+
+                if (isset($tool_call['response']['reasoning_content']) && '' !== $tool_call['response']['reasoning_content']) {
+                    $content['reasoning_content'] = $tool_call['response']['reasoning_content'];
+                }
+
+                $this->core->memory->saveChat(
+                    $payload['sessionId'],
+                    $payload['workerName'],
+                    $payload['isSubTalk'],
+                    'assistant',
+                    $content
+                );
+
+                unset($content);
             }
 
             unset($metadata, $tool_call);

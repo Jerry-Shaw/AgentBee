@@ -395,8 +395,8 @@ class messages extends stream
                         if (!isset($result_data['handler'])) {
                             // Sync tool calls
                             $tool_calls[$fn_call['id']] = [
-                                'call'   => $tool_call,
-                                'result' => [
+                                'tools'   => $tool_call,
+                                'results' => [
                                     'id'      => $exec_result['id'],
                                     'content' => $exec_result['content']
                                 ]
@@ -421,8 +421,8 @@ class messages extends stream
                     } catch (\Throwable $throwable) {
                         // Tool calls with errors
                         $tool_calls[$fn_call['id']] = [
-                            'call'   => $tool_call,
-                            'result' => [
+                            'tools'   => $tool_call,
+                            'results' => [
                                 'id'      => $fn_call['id'],
                                 'content' => $throwable->getMessage()
                             ]
@@ -439,31 +439,31 @@ class messages extends stream
                     foreach ($tool_calls as $tool_call) {
                         // Stream
                         $this->output('stream', 'tool_calls', $metadata, [
-                            'id'        => $tool_call['call']['id'],
-                            'name'      => $tool_call['call']['name'],
-                            'arguments' => $tool_call['call']['arguments']
+                            'id'        => $tool_call['tools']['id'],
+                            'name'      => $tool_call['tools']['name'],
+                            'arguments' => $tool_call['tools']['arguments']
                         ]);
                         $this->output('stream', 'tool_result', $metadata, [
-                            'id'      => $tool_call['result']['id'],
-                            'name'    => $tool_call['call']['name'],
-                            'content' => $tool_call['result']['content']
+                            'id'      => $tool_call['results']['id'],
+                            'name'    => $tool_call['tools']['name'],
+                            'content' => $tool_call['results']['content']
                         ]);
 
                         // Context history
-                        $this->output('context', 'addToolCalls', $metadata, $this->buildToolEvent($tool_call['call']));
-                        $this->output('context', 'addToolResults', $metadata, $tool_call['result']);
+                        $this->output('context', 'addToolCalls', $metadata, $this->buildToolEvent($tool_call['tools']));
+                        $this->output('context', 'addToolResults', $metadata, $tool_call['results']);
 
                         // Save chat history
                         $this->output('memory', 'saveToolCalls', $metadata, [
                             'tools'          => [
-                                'id'        => $tool_call['call']['id'],
-                                'name'      => $tool_call['call']['name'],
-                                'arguments' => $tool_call['call']['arguments']
+                                'id'        => $tool_call['tools']['id'],
+                                'name'      => $tool_call['tools']['name'],
+                                'arguments' => $tool_call['tools']['arguments']
                             ],
-                            'result'         => [
-                                'id'      => $tool_call['result']['id'],
-                                'name'    => $tool_call['call']['name'],
-                                'content' => $tool_call['result']['content']
+                            'results'        => [
+                                'id'      => $tool_call['results']['id'],
+                                'name'    => $tool_call['tools']['name'],
+                                'content' => $tool_call['results']['content']
                             ],
                             'content'        => $this->assistant_content,
                             'reason_content' => $this->reason_content

@@ -374,6 +374,22 @@ class completions extends stream
                         // Context history
                         $this->output('context', 'addToolCalls', $metadata, $this->buildToolEvent($tool_call['call']));
                         $this->output('context', 'addToolResults', $metadata, $tool_call['result']);
+
+                        // Save chat history
+                        $this->output('memory', 'saveToolCalls', $metadata, [
+                            'tools'          => [
+                                'id'        => $tool_call['call']['id'],
+                                'name'      => $tool_call['call']['function']['name'],
+                                'arguments' => $tool_call['call']['function']['arguments']
+                            ],
+                            'result'         => [
+                                'id'      => $tool_call['result']['id'],
+                                'name'    => $tool_call['call']['function']['name'],
+                                'content' => $tool_call['result']['content']
+                            ],
+                            'content'        => $this->assistant_content,
+                            'reason_content' => $this->reason_content
+                        ]);
                     }
                 }
 

@@ -775,11 +775,40 @@ class go extends Factory
      */
     private function handleMemory(array $payload): void
     {
-        if (WORKER_MAIN !== $payload['sender'] || '' === ($payload['data'] ?? '')) {
-            return;
-        }
+        switch ($payload['type']) {
+            // Save misc level memory
+            case 'save':
+                if (WORKER_MAIN === $payload['sender'] && '' !== ($payload['data'] ?? '')) {
+                    $this->core->memory->save('misc', 'assistant', $payload['data'], 0, $payload['sessionId']);
+                }
+                break;
 
-        $this->core->memory->save('misc', 'assistant', $payload['data'], 0, $payload['sessionId']);
+            // Save to chat history
+            case 'saveToolCalls':
+                $content = [
+                    'tools'  => $payload['data']['tools'],
+                    'result' => $payload['data']['result']
+                ];
+
+                if (isset($payload['data']['content']) && '' !== $payload['data']['content']) {
+                    $content['content'] = $payload['data']['content'];
+                }
+
+                if (isset($payload['data']['reasoning_content']) && '' !== $payload['data']['reasoning_content']) {
+                    $content['reasoning_content'] = $payload['data']['reasoning_content'];
+                }
+
+                $this->core->memory->saveChat(
+                    $payload['sessionId'],
+                    $payload['workerName'],
+                    $payload['isSubTalk'],
+                    'assistant',
+                    $content
+                );
+
+                unset($content);
+                break;
+        }
 
         unset($payload);
     }
@@ -965,6 +994,8 @@ class go extends Factory
                     $tool_call['result']['id'],
                     $tool_call['result']['content']
                 );
+
+                // Chat history
             }
 
             unset($metadata, $tool_call);

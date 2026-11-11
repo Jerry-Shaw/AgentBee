@@ -47,6 +47,14 @@ class handler extends Factory
 
         $init_prompt = $payload_data['init_prompt'] . "\n" . '先阅读用户要求，用一句话介绍你的名字和角色，并回复“已就绪”。';
 
+        $agent_core->core->memory->saveChat(
+            $payload_data['session_id'],
+            $payload_data['worker_name'],
+            1,
+            'user',
+            ['content' => $init_prompt]
+        );
+
         $worker_info = [
             'proc_idx'    => $proc_idx,
             'worker_name' => $payload_data['worker_name'],
@@ -123,6 +131,14 @@ class handler extends Factory
 
             return '[协作者] "`' . $payload_data['worker_name'] . '`" 的交流已结束，消息发送失败';
         }
+
+        $agent_core->core->memory->saveChat(
+            $payload_data['session_id'],
+            $payload_data['worker_name'],
+            1,
+            'user',
+            ['content' => $payload_data['content']]
+        );
 
         if ('ready' !== $worker_info['status']) {
             $agent_core->utils->debug('Collaborator', $worker_info['worker_name'] . ' is busy, new message queued.', 'trace');

@@ -22,6 +22,7 @@ namespace modules\agent_core;
 
 use modules\agent_core\lib\context;
 use modules\agent_core\lib\utils;
+use modules\agent_toolsets\Memory\go as memory;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Lib\Error;
 use Nervsys\Core\Lib\IOData;
@@ -34,6 +35,7 @@ final class core extends Factory
     use System;
 
     public utils     $utils;
+    public memory    $memory;
     public context   $context;
     public SocketMgr $socketMgr;
 
@@ -56,6 +58,7 @@ final class core extends Factory
         $this->utils     = utils::new();
         $this->error     = Error::new();
         $this->IOData    = IOData::new();
+        $this->memory    = memory::new();
         $this->context   = context::new();
         $this->socketMgr = SocketMgr::new(WORKER_MAIN);
 

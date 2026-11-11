@@ -58,7 +58,8 @@ class go extends Factory
             create_id   INTEGER PRIMARY KEY,
             session_id  CHAR(36) DEFAULT NULL,
             worker_name VARCHAR(64) NOT NULL,
-            type        VARCHAR(16) NOT NULL,
+            type        INTEGER NOT NULL,
+            role        VARCHAR(16) NOT NULL,
             data        TEXT NOT NULL
         )';
 
@@ -92,7 +93,8 @@ class go extends Factory
         'CREATE INDEX IF NOT EXISTS idx_mem_date_key ON agent_memory(date_key)',
         'CREATE INDEX IF NOT EXISTS idx_mem_expire_at ON agent_memory(expire_at)',
         'CREATE INDEX IF NOT EXISTS idx_mem_level_session_id_create_id ON agent_memory(level, session_id, create_id DESC)',
-        'CREATE INDEX IF NOT EXISTS idx_chat_session_id_worker_name_create_id ON agent_chat(session_id, worker_name, create_id DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_chat_worker_name ON agent_chat(worker_name)',
+        'CREATE INDEX IF NOT EXISTS idx_chat_session_id_type_create_id ON agent_chat(session_id, type, create_id DESC)',
         'CREATE INDEX IF NOT EXISTS idx_task_session_id ON agent_task(session_id)',
         'CREATE INDEX IF NOT EXISTS idx_task_run_at ON agent_task(run_at)',
     ];
@@ -315,13 +317,14 @@ class go extends Factory
     /**
      * @param string $session_id
      * @param string $worker_name
-     * @param string $type
+     * @param int    $type
+     * @param string $role
      * @param array  $data
      *
      * @return bool
      * @throws \ReflectionException
      */
-    public function saveChat(string $session_id, string $worker_name, string $type, array $data): bool
+    public function saveChat(string $session_id, string $worker_name, int $type, string $role, array $data): bool
     {
         $create_id = $this->generateMicroTimestamp('agent_chat');
 
@@ -331,16 +334,18 @@ class go extends Factory
                 'session_id'  => $session_id,
                 'worker_name' => $worker_name,
                 'type'        => $type,
+                'role'        => $role,
                 'data'        => json_encode($data, JSON_FORMAT)
             ])
             ->execute();
 
-        unset($session_id, $worker_name, $type, $data, $create_id);
+        unset($session_id, $worker_name, $type, $role, $data, $create_id);
         return $saved;
     }
 
     /**
      * @param string $session_id
+     * @param int    $type
      * @param string $worker_name
      * @param int    $create_id
      * @param int    $limit
@@ -348,12 +353,16 @@ class go extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    public function readChat(string $session_id, string $worker_name, int $create_id = 0, int $limit = 10): array
+    public function readChat(string $session_id, int $type, string $worker_name = '', int $create_id = 0, int $limit = 10): array
     {
         $query = $this->libSQLite
             ->table('agent_chat')
-            ->where(['session_id', $session_id], ['worker_name', $worker_name])
-            ->select('create_id', 'worker_name', 'type', 'data');
+            ->where(['session_id', $session_id], ['type', $type])
+            ->select('create_id', 'worker_name', 'type', 'role', 'data');
+
+        if ('' !== $worker_name) {
+            $query->where(['worker_name', $worker_name]);
+        }
 
         if (0 < $create_id) {
             $query->where(['create_id', '<', $create_id]);
@@ -373,7 +382,7 @@ class go extends Factory
             $item['data']        = json_decode($item['data'], true);
         }
 
-        unset($session_id, $worker_name, $create_id, $limit, $query, $item);
+        unset($session_id, $type, $worker_name, $create_id, $limit, $query, $item);
         return $data;
     }
 

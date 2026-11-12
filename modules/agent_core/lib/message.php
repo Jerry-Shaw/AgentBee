@@ -244,9 +244,12 @@ class message extends Factory
      */
     public function process_chat(array $data_content): array
     {
+        $user_text   = [];
+        $user_files  = [];
+        $user_images = [];
+
         $content = [];
         $errors  = [];
-        $saves   = [];
         $files   = [];
         $reset   = false;
 
@@ -264,8 +267,8 @@ class message extends Factory
                 }
 
                 if ('/reset' !== $text) {
-                    $saves[]   = $text;
-                    $content[] = ['type' => 'text', 'content' => $text];
+                    $user_text[] = $text;
+                    $content[]   = ['type' => 'text', 'content' => $text];
                 } else {
                     $reset = true;
                 }
@@ -298,6 +301,12 @@ class message extends Factory
 
                         $content[] = ['type' => 'text', 'content' => $prompt_text];
                         $content[] = ['type' => 'image', 'content' => $this->utils->resizeImage($binary)];
+
+                        $user_images[] = [
+                            'filename'   => $data['file']['filename'],
+                            'file_path'  => $save_file['file_path'] ?? '',
+                            'img_base64' => $this->utils->resizeImage($binary, 320, 320)
+                        ];
                     } catch (\Throwable $throwable) {
                         $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();
                         unset($throwable);
@@ -334,6 +343,11 @@ class message extends Factory
                             'type'    => 'text',
                             'content' => $prompt_text
                         ];
+
+                        $user_files[] = [
+                            'filename'  => $data['file']['filename'],
+                            'file_path' => $save_file['file_path'] ?? ''
+                        ];
                     } catch (\Throwable $throwable) {
                         $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();
                         unset($throwable);
@@ -349,6 +363,11 @@ class message extends Factory
                     $files[] = [
                         'filename' => $data['file']['filename'],
                         'filepath' => $save_file['file_path']
+                    ];
+
+                    $user_files[] = [
+                        'filename'  => $data['file']['filename'],
+                        'file_path' => $save_file['file_path']
                     ];
                 }
             }
@@ -374,24 +393,40 @@ class message extends Factory
         }
 
         if ([] !== $content) {
+            $full_chat = [];
+            $full_text = [] !== $user_text ? implode(' ', $user_text) : '';
+
+            if ('' !== $full_text) {
+                $full_chat['content'] = $full_text;
+            }
+            if ([] !== $user_images) {
+                $full_chat['images'] = $user_images;
+            }
+            if ([] !== $user_files) {
+                $full_chat['files'] = $user_files;
+            }
+
             $result = [
+                'type'     => 'chat',
                 'need_llm' => true,
                 'content'  => $content,
                 'errors'   => $errors,
-                'saves'    => $saves,
-                'type'     => 'chat'
+                'memory'   => $full_text,
+                'chat'     => $full_chat
             ];
+
+            unset($full_chat, $full_text);
         } else {
             $result = [
+                'type'     => 'message',
                 'need_llm' => false,
                 'content'  => $reset
                     ? ['status' => 'success', 'act' => 'reset', 'content' => '好了，上下文已重置，我们继续吧。']
-                    : ['status' => 'success', 'act' => 'idle', 'content' => '我在呢。有需要就告诉我，没事也可以聊两句。'],
-                'type'     => 'message'
+                    : ['status' => 'success', 'act' => 'idle', 'content' => '我在呢。有需要就告诉我，没事也可以聊两句。']
             ];
         }
 
-        unset($data_content, $content, $errors, $saves, $files, $reset, $data, $text, $binary, $save_file, $prompt_text, $detected, $file_text);
+        unset($data_content, $user_text, $user_files, $user_images, $content, $errors, $files, $reset, $data, $text, $binary, $save_file, $prompt_text, $detected, $file_text);
         return $result;
     }
 

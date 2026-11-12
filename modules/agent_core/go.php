@@ -591,19 +591,20 @@ class go extends Factory
                 return;
             }
 
-            // Save to misc memory
-            if (isset($result['saves']) && [] !== $result['saves']) {
-                $memory = implode(' ', $result['saves']);
+            // Save to session chat
+            if ([] !== $result['chat']) {
+                $this->core->memory->saveChat($data['sessionId'], WORKER_MAIN, 0, 'user', $result['chat']);
+            }
 
+            // Save to misc memory
+            if ('' !== $result['memory']) {
                 // Save to session
                 if (!in_array($data['sessionId'], $this->session_list)) {
                     $this->session_list[] = $data['sessionId'];
-                    $this->core->memory->createSession($data['sessionId'], mb_substr($memory, 0, 32, 'UTF-8'));
+                    $this->core->memory->createSession($data['sessionId'], mb_substr($result['memory'], 0, 32, 'UTF-8'));
                 }
 
-                $this->core->memory->save('misc', 'user', $memory, 0, $data['sessionId']);
-
-                unset($memory);
+                $this->core->memory->save('misc', 'user', $result['memory'], 0, $data['sessionId']);
             }
 
             if (isset($result['errors']) && [] !== $result['errors']) {

@@ -348,12 +348,12 @@ class go extends Factory
      * @param int    $type
      * @param string $worker_name
      * @param int    $create_id
-     * @param int    $limit
+     * @param int    $length
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function readChat(string $session_id, int $type, string $worker_name = '', int $create_id = 0, int $limit = 10): array
+    public function readChat(string $session_id, int $type, string $worker_name = '', int $create_id = 0, int $length = 10): array
     {
         $query = $this->libSQLite
             ->table('agent_chat')
@@ -368,8 +368,8 @@ class go extends Factory
             $query->where(['create_id', '<', $create_id]);
         }
 
-        if (0 < $limit) {
-            $query->limit($limit);
+        if (0 < $length) {
+            $query->limit(0, $length);
         }
 
         $query->order(['create_id' => 'DESC']);
@@ -382,7 +382,7 @@ class go extends Factory
             $item['data']        = json_decode($item['data'], true);
         }
 
-        unset($session_id, $type, $worker_name, $create_id, $limit, $query, $item);
+        unset($session_id, $type, $worker_name, $create_id, $length, $query, $item);
         return $data;
     }
 
@@ -403,6 +403,24 @@ class go extends Factory
 
         unset($session_id, $create_id);
         return $delete;
+    }
+
+    /**
+     * @param string $session_id
+     *
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function readChatGroups(string $session_id): array
+    {
+        $data = $this->libSQLite
+            ->table('agent_chat')
+            ->where(['session_id', $session_id], ['type', 1])
+            ->select('DISTINCT(worker_name)')
+            ->fetchAll(\PDO::FETCH_COLUMN);
+
+        unset($session_id);
+        return $data;
     }
 
     // =========================================================================

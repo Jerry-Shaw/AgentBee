@@ -166,17 +166,46 @@ class message extends Factory
 
         switch ($act) {
             case 'read':
-                $content = $data_content['memory']->read('misc', 0, 0, $data_content['length'], $session_id, $data_content['create_id'] ?? 0, true);
+                $data_content['create_id']   ??= 0;
+                $data_content['window_type'] ??= 0;
+                $data_content['worker_name'] ??= WORKER_MAIN;
 
-                $content['act'] = $act;
+                $content = [
+                    'act'         => $act,
+                    'session_id'  => $session_id,
+                    'window_type' => $data_content['window_type'],
+                    'worker_name' => $data_content['worker_name'],
+                    'data'        => $data_content['memory']->readChat(
+                        $session_id,
+                        $data_content['window_type'],
+                        $data_content['worker_name'],
+                        $data_content['create_id'],
+                        $data_content['length']
+                    )
+                ];
                 break;
 
             case 'delete':
-                $content = [] !== $data_content['create_ids']
-                    ? $data_content['memory']->delete('misc', $data_content['create_ids'])
-                    : ['status' => 'error', 'error' => '缺少目标记忆ID'];
+                $content = ['act' => $act, 'status' => 'success'];
 
-                $content['act'] = $act;
+                if (isset($data_content['create_id']) && is_int($data_content['create_id'])) {
+                    if ($data_content['memory']->deleteChat($session_id, $data_content['create_id'])) {
+                        $content['deleted_id'] = $data_content['create_id'];
+                    } else {
+                        $content['status'] = 'error';
+                        $content['error']  = '删除失败，请重试';
+                    }
+                } else {
+                    $content['status'] = 'error';
+                    $content['error']  = '缺少目标记忆ID';
+                }
+                break;
+
+            case 'readGroups':
+                $content = [
+                    'act'  => $act,
+                    'data' => $data_content['memory']->readChatGroups($session_id)
+                ];
                 break;
 
             case 'listSessions':

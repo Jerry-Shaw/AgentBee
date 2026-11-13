@@ -220,8 +220,8 @@ class pptxHandler extends Factory
                         if (!in_array($ext, $allowed, true)) {
                             $ext = 'png';
                         }
-                        $image_file_name = 'img_' . uniqid() . '.' . $ext;
-                        $image_full_path = $temp_dir . '/' . $image_file_name;
+                        $image_filename = 'img_' . uniqid() . '.' . $ext;
+                        $image_full_path = $temp_dir . '/' . $image_filename;
                         file_put_contents($image_full_path, $image_data);
 
                         // Get dimensions

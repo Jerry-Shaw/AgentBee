@@ -128,6 +128,9 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
   let connectionRequested = false;
   let hiddenAt: number | null = null;
   let queuedTextSend: QueuedTextSend | null = null;
+  // readGroups has no response correlation ID: keep exactly one request in flight.
+  let groupsRequestSessionId = '';
+  let queuedGroupsSessionId = '';
 
   const canSend = computed(() => connected.value && socket.value?.readyState === WebSocket.OPEN);
   const hasPendingTurns = computed(() => pendingTurns.value.size > 0);
@@ -240,6 +243,8 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
       if (socket.value !== nextSocket) return;
       connected.value = false;
       connecting.value = false;
+      groupsRequestSessionId = '';
+      queuedGroupsSessionId = '';
       retryScheduled.value = false;
       const reason = event.reason ? `, reason: ${event.reason}` : '';
       finishAllPendingWithoutResponse();
@@ -478,6 +483,10 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
 
     // 后端把 `/abort` 当作指令前缀处理（`go.php` 里 `'/abort' === $data['type']`），
     // 不会反射成 `process_abort`；服务端「已停止生成」的回执仍然是 `type: 'abort'`。
+    console.info('[abort-debug] send', {
+      sessionId: session.id, messageId: targetMessageId,
+      userIds: session.messages.filter(message => message.role === 'user').map(message => message.id),
+    });
     sendJson({ type: '/abort', sessionId: session.id, messageId: targetMessageId || makeId() });
 
     // 不在本地收尾，也不写 "Stop request sent." 日志：
@@ -518,7 +527,7 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
    * `$this->message->$type_method($socket_id, $data['content'], $data['sessionId'] ?? '')`——
    * `sessionId` 只从**顶层**读，再作为第三个参数进 `process_*`。
    * 所以：**`sessionId` 一律放顶层，`content` 里只放 act 自己的参数**
-   * （`session_name` / `create_ids` / `length` / `create_id` …）。
+   * （`session_name` / `length` / `create_id` …）。
    * 目前只有 `process_memory` 真正用它（read 的会话过滤、renameSession / deleteSession 的目标会话）；
    * 其余 `process_*` 是两参数签名，多传一个会被 PHP 忽略。
    */
@@ -528,20 +537,41 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     return options.activeSession()?.id || '';
   }
 
-  function readMemory(length: number, createId = 0) {
+  function readGroups(targetSessionId?: string): boolean {
+    const sessionId = currentSessionId(targetSessionId);
+    if (!canSend.value || !sessionId) return false;
+    if (groupsRequestSessionId) {
+      queuedGroupsSessionId = sessionId;
+      return true;
+    }
+    groupsRequestSessionId = sessionId;
+    sendJson({ type: 'memory', sessionId, content: { act: 'readGroups' } });
+    return true;
+  }
+
+  /** Shared history request: main window by default; child windows supply their target. */
+  function readMemory(
+    length = 10,
+    createId = 0,
+    target: { sessionId?: string; window_type?: 0 | 1; worker_name?: string } = {},
+  ) {
     if (!canSend.value) {
       options.addMessage('error', 'Not connected, memory history was not loaded.');
       return false;
     }
-    // 顶层 sessionId 会作为第三个参数进 `process_memory`，read 分支再把它传给
-    // `Memory::read(..., $session_id, ...)`——那里对 `daily`/`misc` 只在非空时才加
-    // `where session_id`。**漏掉这个字段后端就返回全局历史**，
-    // 表现就是「新建会话还能看到旧会话的记录」。
+    const sessionId = currentSessionId(target.sessionId);
+    if (!sessionId) return false;
+    const windowType = target.window_type ?? 0;
+    // Default to the main worker only for the main window; child callers supply the list value.
+    const workerName = (target.worker_name ?? (windowType === 0 ? 'AgentBee' : '')).trim();
+    if (!workerName) return false;
     sendJson({
       type: 'memory',
-      sessionId: currentSessionId(),
+      sessionId,
       content: {
         act: 'read',
+        window_type: windowType,
+        worker_name: workerName,
         length: Math.max(1, Math.floor(length)),
         create_id: Math.max(0, Math.floor(createId)),
       },
@@ -601,19 +631,18 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     return sendSessionAct('renameSession', id, { session_name: name });
   }
 
-  function deleteMemory(createIds: number[]) {
+  function deleteMemory(createId: number) {
     if (!canSend.value) {
       options.addMessage('error', 'Not connected, memory history was not deleted.');
       return false;
     }
-    const ids = Array.from(new Set(createIds.filter((id) => Number.isSafeInteger(id) && id > 0)));
-    if (!ids.length) return false;
+    if (!Number.isSafeInteger(createId) || createId <= 0) return false;
     sendJson({
       type: 'memory',
       // 后端的 delete 分支不按会话过滤（`create_id` 是主键），但会话相关请求一律带上顶层
       // sessionId，保持和 read / renameSession / deleteSession 一致。
       sessionId: currentSessionId(),
-      content: { act: 'delete', create_ids: ids },
+      content: { act: 'delete', create_id: createId },
     });
     return true;
   }
@@ -672,6 +701,15 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
 
   function handleServerMessage(raw: string) {
     const parsed = parseServerMessage(raw);
+    if (raw.includes('"delete"') && raw.includes('"memory"')) {
+      console.info('[memory-delete-debug] parsed', {
+        parsedAs: typeof parsed,
+        type: typeof parsed === 'object' ? parsed.type : undefined,
+        act: typeof parsed === 'object' ? parsed.act : undefined,
+        createId: typeof parsed === 'object' ? parsed.create_id : undefined,
+        frameLines: raw.trim().split(/\r?\n/).length,
+      });
+    }
     if (typeof parsed === 'string') {
       // 在收包时绑定唯一在途轮次，不能等缓冲刷新时再猜归属。
       if (pendingTurns.value.size !== 1) return;
@@ -697,8 +735,17 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
       options.onSystemMessage?.(act, content, msg);
       return;
     }
-    if (type === 'memory') {
+    if (type === 'memory' || (!type && msg.act === 'readGroups')) {
       const { act } = unwrapActContent(msg);
+      if (act === 'readGroups') {
+        const sessionId = msg.sessionId || msg.session_id || groupsRequestSessionId;
+        groupsRequestSessionId = '';
+        if (sessionId) options.onMemoryMessage?.(act, { ...msg, sessionId });
+        const queued = queuedGroupsSessionId;
+        queuedGroupsSessionId = '';
+        if (queued) readGroups(queued);
+        return;
+      }
       options.onMemoryMessage?.(act, msg);
       return;
     }
@@ -987,6 +1034,10 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
       : options.activeSession()?.id === sessionId ? options.activeSession() : null;
     if (!session) return;
 
+    console.info('[abort-debug] receipt', {
+      sessionId: session.id, messageId: msg.messageId,
+      userIds: session.messages.filter(message => message.role === 'user').map(message => message.id),
+    });
     const stopRequest = getActiveStopRequest(session.id);
     const messageId = (msg.messageId || '').trim();
     let assistant = stopRequest
@@ -1025,6 +1076,9 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
 
     if (assistant.status !== 'loading' && !stopRequest) return;
 
+    // Flush already received text before marking stopped; a delayed flush must not
+    // change this reply back to loading after the abort receipt.
+    if (assistant.messageId) flushPendingStreamUpdates(assistant.messageId);
     assistant.status = 'stopped';
     const statusMessage = extractAbortMessage(msg);
     if (statusMessage) assistant.statusMessage = statusMessage;
@@ -1352,6 +1406,7 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     reconnect,
     resumeConnection,
     readMemory,
+    readGroups,
     listSessions,
     renameSession,
     resendEditedText,

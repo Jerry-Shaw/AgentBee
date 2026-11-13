@@ -37,6 +37,8 @@ import {
   type ConnectionIssue,
 } from './composables/useWebSocketAgent';
 import { normalizeServerError } from './protocol/normalizers';
+import { decodeMemoryData } from './protocol/memoryData';
+import { mergeToolOnlyMessages } from './utils/mergeToolOnlyMessages';
 import { extractMessageArtifacts, isAutoOpenCandidate } from './utils/artifacts';
 import { isBrowserLoadableUrl, resolveFileUrl } from './utils/fileUrl';
 import type {
@@ -74,6 +76,23 @@ type VisibleChatItem =
   };
 
 const chatContainer = ref<HTMLElement | null>(null);
+const chatContents = ref<HTMLElement | null>(null);
+const hasNewChatContent = ref(false);
+let contentResizeObserver: ResizeObserver | null = null;
+let lastChatScrollTop = 0;
+let lastChatScrollHeight = 0;
+let lastChatClientHeight = 0;
+function pauseChatFollowing() { shouldAutoScroll.value = false; }
+function onChatWheel(event: WheelEvent) {
+  if (event.deltaY < 0) pauseChatFollowing();
+}
+function onChatInteraction(event: MouseEvent) {
+  // Expanding/collapsing a tool is reading, not a request to follow the stream.
+  if ((event.target as Element)?.closest('.tool-stack button')) pauseChatFollowing();
+}
+function onChatKeydown(event: KeyboardEvent) {
+  if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) pauseChatFollowing();
+}
 const chatShell = ref<HTMLElement | null>(null);
 const shouldAutoScroll = ref(true);
 /**
@@ -90,13 +109,69 @@ const settingStatus = ref('');
 const settingStatusTone = ref<SettingStatusTone>('success');
 const availableModels = ref<string[]>([]);
 const memoryLoading = ref(false);
-const memoryDeleting = ref(false);
 const memoryDeleteCandidateId = ref<number | null>(null);
 const memoryError = ref('');
 const memoryHasMore = ref(true);
 const memoryReadMode = ref<MemoryReadMode | null>(null);
 const showDebugInfo = ref(false);
 const selectedSubAgentName = ref<string | null>(null);
+const subAgentGroups = ref<Record<string, string[]>>({});
+interface ChildHistory {
+  records: MemoryRecord[];
+  loading: boolean;
+  error: string;
+  hasMore: boolean;
+  mode: 'latest' | 'older';
+}
+const childHistories = ref<Record<string, ChildHistory>>({});
+const childTimers = new Map<string, number>();
+function childKey(sessionId: string, worker: string) { return JSON.stringify([sessionId, worker]); }
+const selectedChildHistory = computed(() => childHistories.value[childKey(
+  sessions.activeSession.value?.id || '', selectedSubAgentName.value || '',
+)]);
+function requestChildHistory(older = false) {
+  const sessionId = sessions.activeSession.value?.id;
+  const worker = selectedSubAgentName.value;
+  if (!sessionId || !worker || !agent.canSend.value) return;
+  const key = childKey(sessionId, worker);
+  childHistories.value[key] ||= {
+    records: [], loading: false, error: '', hasMore: true, mode: 'latest',
+  };
+  const state = childHistories.value[key];
+  if (state.loading || (older && !state.hasMore)) return;
+  const createId = older ? state.records[0]?.create_id || 0 : 0;
+  const mode = createId ? 'older' : 'latest';
+  if (!agent.readMemory(mode === 'older' ? MEMORY_PAGE_SIZE : MEMORY_LATEST_PAGE_SIZE, createId, {
+    sessionId, window_type: 1, worker_name: worker,
+  })) return;
+  state.mode = mode;
+  state.loading = true;
+  state.error = '';
+  childTimers.set(key, window.setTimeout(() => {
+    state.loading = false;
+    state.error = t.value.memoryReadTimeout || 'History request timed out.';
+    childTimers.delete(key);
+  }, MEMORY_RESPONSE_TIMEOUT_MS));
+}
+function handleChildHistory(msg: ServerMessage) {
+  if (!msg.session_id || !msg.worker_name) return;
+  const key = childKey(msg.session_id, msg.worker_name);
+  const state = childHistories.value[key];
+  if (!state?.loading) return;
+  window.clearTimeout(childTimers.get(key));
+  childTimers.delete(key);
+  state.loading = false;
+  state.error = normalizeServerError(msg) || '';
+  if (state.error) return;
+  const page = sortUniqueMemoryRecords(parseMemoryRecords(msg.data));
+  const previousCount = state.records.length;
+  state.records = state.mode === 'older'
+    ? sortUniqueMemoryRecords([...page, ...state.records]) : page;
+  const total = toNonNegativeInteger(msg.total);
+  state.hasMore = total !== null ? state.records.length < total
+    : page.length >= (state.mode === 'older' ? MEMORY_PAGE_SIZE : MEMORY_LATEST_PAGE_SIZE);
+  if (state.mode === 'older' && state.records.length === previousCount) state.hasMore = false;
+}
 const previewFile = ref<ChatFile | null>(null);
 const subAgentPaneWidth = ref(readSubAgentPaneWidth());
 const isSubAgentResizing = ref(false);
@@ -124,7 +199,7 @@ const memoryRecords = ref<MemoryRecord[]>([]);
 let memoryRequestSessionId = '';
 /** 服务端历史已经加载过的会话 id，用来避免对同一个会话重复拉取。 */
 let historyLoadedForSession = '';
-let pendingMemoryDeleteIds: number[] = [];
+const memoryDeleteTargets = new Map<number, { sessionId: string; localMessageId?: string }>();
 let memoryResponseTimer: number | null = null;
 let pendingMemoryReadMode: MemoryReadMode | null = null;
 const sessionLoading = ref(false);
@@ -213,6 +288,13 @@ const agent = useWebSocketAgent({
   touchSession: sessions.touchSession,
 });
 const connectionErrorText = computed(() => formatConnectionIssue(agent.connectionError.value));
+watch([() => agent.canSend.value, () => sessions.activeSession.value?.id], ([canSend, sessionId]) => {
+  if (canSend && sessionId) agent.readGroups(sessionId);
+});
+watch(() => agent.streamingSessionIds.value.slice(), (next, previous) => {
+  const sessionId = sessions.activeSession.value?.id;
+  if (sessionId && previous.includes(sessionId) && !next.includes(sessionId)) agent.readGroups(sessionId);
+});
 watch(() => agent.canSend.value, (canSend) => {
   if (canSend) {
     showLoginWindow.value = false;
@@ -229,10 +311,8 @@ watch(() => agent.canSend.value, (canSend) => {
     return;
   }
   memoryLoading.value = false;
-  memoryDeleting.value = false;
   memoryDeleteCandidateId.value = null;
   memoryReadMode.value = null;
-  pendingMemoryDeleteIds = [];
   pendingMemoryReadMode = null;
   clearMemoryResponseTimer();
   clearSessionResponseTimer();
@@ -306,7 +386,7 @@ const visibleChatItems = computed<VisibleChatItem[]>(() => {
     pendingSystemMessages = [];
   }
 
-  visibleMainMessages.value.forEach((message) => {
+  mergeToolOnlyMessages(visibleMainMessages.value).forEach((message) => {
     // 过滤掉子agent的消息，不在主聊天区显示
     if (message.isSubTalk === 1) {
       return;
@@ -329,13 +409,39 @@ const visibleChatItems = computed<VisibleChatItem[]>(() => {
   return items;
 });
 
+// Watch only live output, not history pagination or local disclosure state.
+watch(() => localMainMessages.value.map(message => [message.id, message.content?.length,
+  message.think?.length, message.toolEvents?.length, message.images?.length,
+  message.files?.length, message.status].join(':')).join('|'), () => {
+  if (!shouldAutoScroll.value) hasNewChatContent.value = true;
+  maybeScrollAfterUpdate();
+});
+watch(() => sessions.activeSessionId.value, () => {
+  shouldAutoScroll.value = true;
+  hasNewChatContent.value = false;
+});
+watch(chatContents, (next, previous) => {
+  if (previous) contentResizeObserver?.unobserve(previous);
+  if (next) contentResizeObserver?.observe(next);
+});
+
 const subAgentMessages = computed(() => {
   const messages = sessions.activeSession.value?.messages || [];
-  return messages.filter((msg) => msg.isSubTalk === 1);
+  const live = messages.filter((msg) => msg.isSubTalk === 1);
+  const worker = selectedSubAgentName.value;
+  if (!worker) return live;
+  const history = selectedChildHistory.value?.records || [];
+  const merged = mergeLocalAndMemoryMessages(live.filter(msg => msg.WindowName === worker), history)
+    .map(msg => ({ ...msg, isSubTalk: 1, WindowName: worker }));
+  return [...live.filter(msg => msg.WindowName !== worker), ...merged];
 });
 
 const subAgents = computed<SubAgentSummary[]>(() => {
   const agents = new Map<string, SubAgentSummary>();
+  const sessionId = sessions.activeSession.value?.id || '';
+  for (const name of subAgentGroups.value[sessionId] || []) {
+    agents.set(name, { name, count: 0, lastActive: '', role: '', status: '' });
+  }
   subAgentMessages.value.forEach((msg) => {
     const name = msg.WindowName;
     if (name) {
@@ -422,6 +528,10 @@ function scrollToBottom() {
   if (!chatContainer.value) return;
   chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
   shouldAutoScroll.value = true;
+  hasNewChatContent.value = false;
+  lastChatScrollTop = chatContainer.value.scrollTop;
+  lastChatScrollHeight = chatContainer.value.scrollHeight;
+  lastChatClientHeight = chatContainer.value.clientHeight;
 }
 
 function scrollToLatestAfterRender() {
@@ -435,7 +545,18 @@ function scrollToLatestAfterRender() {
 function onScroll() {
   const el = chatContainer.value;
   if (!el) return;
-  shouldAutoScroll.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  // Layout changes (images/tools/composer) must not change the user's follow choice.
+  const layoutChanged = el.scrollHeight !== lastChatScrollHeight || el.clientHeight !== lastChatClientHeight;
+  if (!layoutChanged && !restoringHistoryScroll) {
+    if (el.scrollTop < lastChatScrollTop) pauseChatFollowing();
+    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 8) {
+      shouldAutoScroll.value = true;
+      hasNewChatContent.value = false;
+    }
+  }
+  lastChatScrollTop = el.scrollTop;
+  lastChatScrollHeight = el.scrollHeight;
+  lastChatClientHeight = el.clientHeight;
   if (restoringHistoryScroll || el.scrollTop >= 80) return;
 
   if (hasOlderMessages.value) {
@@ -486,7 +607,7 @@ function requestMemoryRead(mode: MemoryReadMode) {
   if (!sessions.activeSessionId.value) return false;
   if (mode === 'older' && !memoryHasMore.value) return false;
 
-  if (memoryReadMode.value !== null || memoryDeleting.value) {
+  if (memoryReadMode.value !== null) {
     if (mode === 'latest') pendingMemoryReadMode = 'latest';
     if (mode === 'older' && pendingMemoryReadMode !== 'latest') {
       pendingMemoryReadMode = 'older';
@@ -501,7 +622,11 @@ function requestMemoryRead(mode: MemoryReadMode) {
     requestMemoryRead('latest');
     return false;
   }
-  if (!agent.readMemory(length, createId)) return false;
+  if (!agent.readMemory(length, createId, {
+    sessionId: sessions.activeSession.value?.id,
+    window_type: 0,
+    worker_name: 'AgentBee',
+  })) return false;
 
   // 记下这次请求属于哪个会话，回来时用来丢弃「已经切走」的响应。
   memoryRequestSessionId = sessions.activeSessionId.value;
@@ -509,12 +634,12 @@ function requestMemoryRead(mode: MemoryReadMode) {
   if (mode === 'older') preserveHistoryScrollAfterUpdate();
   memoryLoading.value = mode === 'older' || (mode === 'latest' && !memoryRecords.value.length);
   memoryError.value = '';
-  startMemoryResponseTimer('read');
+  startMemoryResponseTimer();
   return true;
 }
 
 function runPendingMemoryRead() {
-  if (memoryReadMode.value !== null || memoryDeleting.value) return;
+  if (memoryReadMode.value !== null) return;
   const mode = pendingMemoryReadMode;
   pendingMemoryReadMode = null;
   if (!mode) return;
@@ -522,7 +647,7 @@ function runPendingMemoryRead() {
 }
 
 function deleteMemoryMessage(createId: number) {
-  if (!agent.canSend.value || memoryReadMode.value !== null || memoryDeleting.value) return;
+  if (!agent.canSend.value || memoryReadMode.value !== null) return;
   memoryDeleteCandidateId.value = createId;
 }
 
@@ -533,35 +658,38 @@ function cancelMemoryDelete() {
 function confirmMemoryDelete() {
   const createId = memoryDeleteCandidateId.value;
   if (createId === null) return;
-  if (!agent.deleteMemory([createId])) return;
+  const sessionId = sessions.activeSessionId.value;
+let localMessageId: string | undefined;
+mergeLocalAndMemoryMessages(localMainMessages.value, memoryRecords.value, (record, local) => {
+  if (record.create_id === createId) localMessageId = local.id;
+});
+memoryDeleteTargets.set(createId, { sessionId, localMessageId });
+console.info('[memory-delete-debug] send', {
+  createId, sessionId, localMessageId,
+  visibleTarget: visibleMainMessages.value.filter(message => message.memoryCreateId === createId).map(message => ({ id: message.id, memoryCreateId: message.memoryCreateId })),
+  request: { type: 'memory', sessionId, content: { act: 'delete', create_id: createId } },
+});
+if (!agent.deleteMemory(createId)) {
+  memoryDeleteTargets.delete(createId);
+  return;
+}
   memoryDeleteCandidateId.value = null;
-  pendingMemoryDeleteIds = [createId];
-  memoryDeleting.value = true;
   memoryError.value = '';
-  startMemoryResponseTimer('delete');
+  
 }
 
-function startMemoryResponseTimer(act: 'delete' | 'read') {
+function startMemoryResponseTimer() {
   clearMemoryResponseTimer();
   memoryResponseTimer = window.setTimeout(() => {
     memoryResponseTimer = null;
-    if (act === 'read') {
-      const mode = memoryReadMode.value;
-      memoryReadMode.value = null;
-      if (mode === 'older') preserveHistoryScrollAfterUpdate();
-      memoryLoading.value = false;
-      if (mode === 'older' || (mode === 'latest' && !memoryRecords.value.length)) {
-        memoryError.value = t.value.memoryReadTimeout;
-      }
-      runPendingMemoryRead();
-      return;
+    const mode = memoryReadMode.value;
+    memoryReadMode.value = null;
+    if (mode === 'older') preserveHistoryScrollAfterUpdate();
+    memoryLoading.value = false;
+    if (mode === 'older' || (mode === 'latest' && !memoryRecords.value.length)) {
+      memoryError.value = t.value.memoryReadTimeout;
     }
-    if (act === 'delete') {
-      memoryDeleting.value = false;
-      pendingMemoryDeleteIds = [];
-      memoryError.value = t.value.memoryDeleteTimeout;
-      runPendingMemoryRead();
-    }
+    runPendingMemoryRead();
   }, MEMORY_RESPONSE_TIMEOUT_MS);
 }
 
@@ -572,6 +700,14 @@ function clearMemoryResponseTimer() {
 }
 
 function updateAndResendUserMessage(messageId: string, content: string) {
+  const historyMessage = visibleMainMessages.value.find(item =>
+    item.id === messageId && item.role === 'user' && item.isRemoteHistory);
+  if (historyMessage) {
+    if (!content.trim()) return;
+    agent.sendText(content);
+    maybeScrollAfterUpdate();
+    return;
+  }
   const updated = sessions.updateMessageContent(messageId, content);
   if (updated) {
     agent.resendEditedText(messageId, content);
@@ -579,15 +715,19 @@ function updateAndResendUserMessage(messageId: string, content: string) {
     return;
   }
 
-  const remoteMessage = visibleMainMessages.value.find((item) => (
-    item.id === messageId && item.role === 'user' && item.isRemoteHistory
-  ));
-  if (!remoteMessage) return;
-  agent.sendText(content);
-  maybeScrollAfterUpdate();
+
 }
 
 function resendUserMessage(messageId: string) {
+  // Prefer rendered history metadata: a merged record can retain a local message id.
+  const historyMessage = visibleMainMessages.value.find(item =>
+    item.id === messageId && item.role === 'user' && item.isRemoteHistory);
+  if (historyMessage) {
+    if (!historyMessage.content.trim()) return;
+    agent.sendText(historyMessage.content);
+    maybeScrollAfterUpdate();
+    return;
+  }
   const message = sessions.activeSession.value.messages.find((item) => (
     item.id === messageId && item.role === 'user'
   )) || visibleMainMessages.value.find((item) => (
@@ -605,6 +745,7 @@ function deleteSubAgent(agentName: string) {
   const session = sessions.activeSession.value;
   if (!session) return;
   session.messages = session.messages.filter((msg) => msg.WindowName !== agentName);
+  subAgentGroups.value[session.id] = (subAgentGroups.value[session.id] || []).filter(name => name !== agentName);
   if (selectedSubAgentName.value === agentName) {
     selectedSubAgentName.value = null;
   }
@@ -614,6 +755,7 @@ function deleteSubAgent(agentName: string) {
 function selectSubAgent(agentName: string) {
   previewFile.value = null;
   selectedSubAgentName.value = agentName;
+  requestChildHistory();
   nextTick(() => {
     subAgentPaneWidth.value = clampSubAgentPaneWidth(subAgentPaneWidth.value);
   });
@@ -902,6 +1044,20 @@ function sendSettingRequest(act: ClientSettingAct, content?: unknown) {
 }
 
 function handleMemoryMessage(act: string, msg: ServerMessage) {
+  if (act === 'readGroups') {
+    const sessionId = msg.sessionId || msg.session_id;
+    const error = normalizeServerError(msg);
+    if (error) {
+      toasts.pushToast(error, 'error');
+      return;
+    }
+    if (sessionId && Array.isArray(msg.data)) {
+      subAgentGroups.value[sessionId] = [...new Set(msg.data.filter(
+        (name): name is string => typeof name === 'string' && Boolean(name.trim()),
+      ))];
+    }
+    return;
+  }
   // 会话 CRUD 目前是 memory 类型下的 act，转发给会话处理。
   if (act === 'listSessions' || act === 'deleteSession' || act === 'renameSession') {
     handleSessionMessage(act, msg);
@@ -922,6 +1078,13 @@ function handleMemoryMessage(act: string, msg: ServerMessage) {
   const errorMessage = normalizeServerError(msg);
 
   if (act === 'read') {
+    if (msg.window_type === 1) {
+      handleChildHistory(msg);
+      return;
+    }
+    // Never let a child or a previous session's receipt consume the main request.
+    if (msg.window_type !== 0 || msg.worker_name !== 'AgentBee' ||
+        msg.session_id !== memoryRequestSessionId) return;
     const mode = memoryReadMode.value;
     if (!mode) return;
     // 会话已经切走之后才回来的响应：直接丢掉，否则会把上一个会话的历史画进新会话。
@@ -951,29 +1114,54 @@ function handleMemoryMessage(act: string, msg: ServerMessage) {
   }
 
   if (act === 'delete') {
-    if (!memoryDeleting.value) return;
-    clearMemoryResponseTimer();
-    preserveHistoryScrollAfterUpdate();
-    memoryDeleting.value = false;
-    if (errorMessage) {
+    console.info('[memory-delete-debug] handler', {
+      createId: msg.deleted_id, status: msg.status,
+      target: memoryDeleteTargets.get(Number(msg.deleted_id)),
+      requestedIds: Array.from(memoryDeleteTargets.keys()),
+      activeSessionId: sessions.activeSessionId.value,
+      historyMatches: memoryRecords.value.filter(record => record.create_id === Number(msg.deleted_id)).length,
+      visibleMatches: visibleMainMessages.value.filter(message => message.memoryCreateId === Number(msg.deleted_id)).map(message => message.id),
+    });
+
+    const createId = toNonNegativeInteger(msg.deleted_id);
+    if (createId === null || createId <= 0) return;
+    const target = memoryDeleteTargets.get(createId);
+    
+    if (errorMessage || msg.status !== 'success') {
       memoryError.value = errorMessage;
-      pendingMemoryDeleteIds = [];
+      memoryDeleteTargets.delete(createId);
+      
       return;
     }
-
-    const deleted = toNonNegativeInteger(msg.deleted);
-    const expected = pendingMemoryDeleteIds.length;
-    const deletedIds = new Set(pendingMemoryDeleteIds);
-    pendingMemoryDeleteIds = [];
-
-    if (deleted !== expected) {
-      memoryError.value = t.value.memoryDeleteMismatch;
-      return;
+    // Success remains valid after timeout or a session switch.
+    const session = target ? sessions.getSessionById(target.sessionId) : sessions.activeSession.value;
+    let localMessageId = target?.localMessageId;
+    if (!target && session) {
+      mergeLocalAndMemoryMessages(localMainMessages.value, memoryRecords.value, (record, local) => {
+        if (record.create_id === createId) localMessageId = local.id;
+      });
     }
+    if (session) {
+      const index = session.messages.findIndex((message) =>
+        message.memoryCreateId === createId || (localMessageId !== undefined && message.id === localMessageId));
+      if (index >= 0) session.messages.splice(index, 1);
+    }
+    if (!target || target.sessionId === sessions.activeSessionId.value) {
+      preserveHistoryScrollAfterUpdate();
+      memoryRecords.value = memoryRecords.value.filter((record) => record.create_id !== createId);
+      memoryError.value = '';
+    }
+    memoryDeleteTargets.delete(createId);
+    nextTick(() => {
+      console.info('[memory-delete-debug] after', {
+        createId, localMessageId,
+        historyRemaining: memoryRecords.value.filter(record => record.create_id === createId).length,
+        localRemaining: session?.messages.filter(message => message.id === localMessageId || message.memoryCreateId === createId).map(message => message.id),
+        visibleRemaining: visibleMainMessages.value.filter(message => message.memoryCreateId === createId).map(message => message.id),
+      });
+    });
 
-    memoryRecords.value = memoryRecords.value
-      .filter((record) => !deletedIds.has(record.create_id));
-    memoryError.value = '';
+    
   }
 }
 
@@ -1401,12 +1589,18 @@ function parseMemoryRecords(value: unknown): MemoryRecord[] {
     const role = typeof item.role === 'string' && ['user', 'assistant', 'system', 'tool'].includes(item.role)
       ? item.role as MemoryRecord['role']
       : 'system';
+    const time = typeof item.create_time === 'string' && item.create_time
+      ? item.create_time : new Date(Math.floor(createId / 1000)).toLocaleString('zh-CN');
+    const payload = 'data' in item ? decodeMemoryData(item.data, createId, time) : undefined;
     const content = typeof item.content === 'string'
       ? item.content
       : JSON.stringify(item.content ?? '', null, 2);
 
     return [{
-      content,
+      content: payload?.content ?? content,
+      payload,
+      rawData: JSON.stringify(item.data),
+      worker_name: typeof item.worker_name === 'string' ? item.worker_name : undefined,
       create_id: createId,
       create_time: typeof item.create_time === 'string' && item.create_time
         ? item.create_time
@@ -1489,13 +1683,16 @@ function memoryRecordListsEqual(left: MemoryRecord[], right: MemoryRecord[]): bo
       record.create_time === candidate.create_time &&
       record.role === candidate.role &&
       record.level === candidate.level &&
-      record.content === candidate.content;
+      record.content === candidate.content &&
+      record.rawData === candidate.rawData &&
+      record.worker_name === candidate.worker_name;
   });
 }
 
 function mergeLocalAndMemoryMessages(
   localMessages: AgentChatMessage[],
   records: MemoryRecord[],
+  onMatch?: (record: MemoryRecord, local: AgentChatMessage) => void,
 ): AgentChatMessage[] {
   const memoryToLocalIndex = new Map<number, number>();
   let localSearchEnd = localMessages.length;
@@ -1506,12 +1703,14 @@ function mergeLocalAndMemoryMessages(
     let localIndex = localSearchEnd - 1;
     while (
       localIndex >= 0 &&
-      getMessageSignature(localMessages[localIndex].role, localMessages[localIndex].content) !== signature
+      (localMessages[localIndex].status === 'loading' ||
+        getMessageSignature(localMessages[localIndex].role, localMessages[localIndex].content) !== signature)
     ) {
       localIndex -= 1;
     }
     if (localIndex < 0) continue;
     memoryToLocalIndex.set(memoryIndex, localIndex);
+    onMatch?.(record, localMessages[localIndex]);
     localSearchEnd = localIndex;
   }
 
@@ -1530,6 +1729,9 @@ function mergeLocalAndMemoryMessages(
     }
     messages.push({
       ...localMessages[matchedLocalIndex],
+      ...(record.payload || {}),
+      // Structured history owns its image/file lists; do not duplicate local attachments.
+      attachments: record.payload ? undefined : localMessages[matchedLocalIndex].attachments,
       isRemoteHistory: true,
       memoryCreateId: record.create_id,
     });
@@ -1547,7 +1749,10 @@ function memoryRecordToChatMessage(record: MemoryRecord): AgentChatMessage {
   return {
     id: `memory-${record.create_id}`,
     role: record.role,
+    ...record.payload,
     content: record.content,
+    sender: record.payload?.sender || record.worker_name,
+    senderName: record.payload?.senderName || record.worker_name,
     time: record.create_time,
     status: record.role === 'assistant' ? 'done' : undefined,
     memoryCreateId: record.create_id,
@@ -1570,10 +1775,8 @@ function resetMemoryHistory() {
   memoryRecords.value = [];
   memoryHasMore.value = true;
   memoryLoading.value = false;
-  memoryDeleting.value = false;
   memoryError.value = '';
   memoryReadMode.value = null;
-  pendingMemoryDeleteIds = [];
   pendingMemoryReadMode = null;
   memoryRequestSessionId = '';
   historyLoadedForSession = '';
@@ -1609,6 +1812,10 @@ function handlePageShow(event: PageTransitionEvent) {
 }
 
 onMounted(() => {
+  contentResizeObserver = new ResizeObserver(() => {
+    if (shouldAutoScroll.value && !restoringHistoryScroll) scrollToBottom();
+  });
+  if (chatContents.value) contentResizeObserver.observe(chatContents.value);
   mobileMediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
   syncMobileLayout(mobileMediaQuery.matches);
   mobileMediaQuery.addEventListener('change', onMobileMediaQueryChange);
@@ -1632,6 +1839,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  childTimers.forEach(timer => window.clearTimeout(timer));
+  childTimers.clear();
+  contentResizeObserver?.disconnect();
+  contentResizeObserver = null;
   stopSubAgentResize();
   clearMemoryResponseTimer();
   clearSessionResponseTimer();
@@ -2012,7 +2223,10 @@ function redactConnectionUrl(value: string): string {
         :style="{ '--subagent-pane-width': `${subAgentPaneWidth}px` }"
       >
         <div class="chat-pane">
-          <section ref="chatContainer" class="chat-area" @scroll="onScroll">
+          <section ref="chatContainer" class="chat-area" @scroll="onScroll"
+            @wheel.passive="onChatWheel" @touchmove.passive="pauseChatFollowing"
+            @keydown="onChatKeydown" @click.capture="onChatInteraction">
+            <div ref="chatContents" class="chat-contents">
             <div v-if="memoryLoading" class="history-load-state" role="status">
               <LoaderCircle class="spin" :size="15" aria-hidden="true" />
               <span>{{ t.loadingMemory }}</span>
@@ -2050,23 +2264,25 @@ function redactConnectionUrl(value: string): string {
                 :labels="t"
                 :message="item.message"
                 :show-debug-info="showDebugInfo"
-                :deleting-memory="memoryDeleting && pendingMemoryDeleteIds.includes(item.message.memoryCreateId || 0)"
-                :memory-delete-disabled="!agent.canSend.value || memoryReadMode !== null || memoryDeleting"
+                :memory-delete-disabled="!agent.canSend.value || memoryReadMode !== null"
                 @delete-memory-message="deleteMemoryMessage"
                 @resend-user-message="resendUserMessage"
                 @update-user-message="updateAndResendUserMessage"
                 @preview-file="openFilePreview"
               />
             </template>
+            </div>
           </section>
           <button
             v-if="!shouldAutoScroll"
             type="button"
             class="scroll-bottom-floating"
-            :title="t.scrollToBottom"
+            :title="hasNewChatContent ? t.newChatContent : t.scrollToBottom"
+            :class="{ 'has-new-content': hasNewChatContent }"
             @click="scrollToBottom"
           >
             <ArrowDownToLine :size="18" aria-hidden="true" />
+            <span v-if="hasNewChatContent">{{ t.newChatContent }}</span>
           </button>
         </div>
 
@@ -2094,6 +2310,11 @@ function redactConnectionUrl(value: string): string {
           :agent="selectedSubAgent"
           :labels="t"
           :messages="subAgentMessages"
+          :loading="selectedChildHistory?.loading || false"
+          :history-error="selectedChildHistory?.error || ''"
+          :has-more="selectedChildHistory?.hasMore || false"
+          @load-older="requestChildHistory(true)"
+          @retry-history="requestChildHistory(selectedChildHistory?.mode === 'older')"
           :show-debug-info="showDebugInfo"
           @close="closeSubAgentPanel"
           @resend-user-message="resendUserMessage"
@@ -2201,6 +2422,11 @@ function redactConnectionUrl(value: string): string {
     :agents="subAgents"
     :labels="t"
     :messages="subAgentMessages"
+    :loading="selectedChildHistory?.loading || false"
+    :history-error="selectedChildHistory?.error || ''"
+    :has-more="selectedChildHistory?.hasMore || false"
+    @load-older="requestChildHistory(true)"
+    @retry-history="requestChildHistory(selectedChildHistory?.mode === 'older')"
     :open="subAgentDrawerOpen"
     :selected-agent-name="selectedSubAgentName"
     :show-debug-info="showDebugInfo"

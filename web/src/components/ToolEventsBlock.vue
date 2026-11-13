@@ -5,113 +5,147 @@ import type { ToolEvent } from '../protocol/types';
 
 const props = defineProps<{
   events: ToolEvent[];
+  title?: string;
   labels: Record<string, string>;
 }>();
-
 const expanded = ref(false);
-const openGroups = ref(new Set<ToolEvent['kind']>());
+const fullResults = ref(new Set<string>());
+const fullCalls = ref(new Set<string>());
+const TOOL_PREVIEW_CHARS = 1000;
+function callText(round: ToolRound): string {
+  const data = round.call?.data || '';
+  return fullCalls.value.has(round.key) ? data : data.slice(0, TOOL_PREVIEW_CHARS);
+}
+function toggleFullCall(key: string) {
+  const next = new Set(fullCalls.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  fullCalls.value = next;
+}
+function resultText(round: ToolRound): string {
+  const data = round.result?.data || '';
+  return fullResults.value.has(round.key) ? data : data.slice(0, TOOL_PREVIEW_CHARS);
+}
+function toggleFullResult(key: string) {
+  const next = new Set(fullResults.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  fullResults.value = next;
+}
 const openEvents = ref(new Set<string>());
-
-const groupedEvents = computed(() => {
-  const calls = props.events.filter((event) => event.kind === 'tool_calls');
-  const results = props.events.filter((event) => event.kind === 'tool_result');
-
-  return [
-    { kind: 'tool_calls' as const, title: props.labels.toolCalls, count: calls.length, events: calls },
-    { kind: 'tool_result' as const, title: props.labels.toolResults, count: results.length, events: results },
-  ].filter((group) => group.count > 0);
+interface ToolRound {
+  key: string;
+  call?: ToolEvent;
+  result?: ToolEvent;
+}
+const rounds = computed<ToolRound[]>(() => {
+  const events = props.events.flatMap(event => event.calls?.length ? event.calls : [event]);
+  const calls = events.filter(event => event.kind === 'tool_calls');
+  const results = events.filter(event => event.kind === 'tool_result');
+  const paired: ToolRound[] = calls.map((call, index) => ({ key: `call-${call.id}-${index}`, call }));
+  const used = new Set<ToolEvent>();
+  // Match explicit protocol IDs first, before name/order fallback can consume a result.
+  for (const round of paired) {
+    if (!round.call?.callId) continue;
+    const result = results.find(item => !used.has(item) && item.callId === round.call!.callId);
+    if (result) { round.result = result; used.add(result); }
+  }
+  for (const round of paired) {
+    if (round.result) continue;
+    const call = round.call!;
+    const compatible = (result: ToolEvent) => !used.has(result)
+      && !(call.callId && result.callId && call.callId !== result.callId);
+    const result = results.find(item => compatible(item) && Boolean(call.name) && item.name === call.name)
+      || results.find(item => compatible(item) && (!call.name || !item.name));
+    if (result) { round.result = result; used.add(result); }
+  }
+  results.forEach((result, index) => {
+    if (!used.has(result)) paired.push({ key: `result-${result.id}-${index}`, result });
+  });
+  return paired;
 });
-
-const toolNames = computed(() => {
-  const names = props.events.map((event) => event.name || event.summary).filter(Boolean);
-  return Array.from(new Set(names)).slice(0, 3);
-});
-
 const summary = computed(() => {
-  const calls = props.events.filter((event) => event.kind === 'tool_calls').length;
-  const total = calls || props.events.length;
-  const suffix = toolNames.value.length ? ` · ${toolNames.value.join(', ')}` : '';
-  const commandLabel = total === 1 ? props.labels.command : props.labels.commands;
-  return `${props.labels.ranCommands} ${total} ${commandLabel}${suffix}`;
+  const count = rounds.value.reduce((total, round) => total + (round.call?.callCount ?? 1), 0);
+  const names = Array.from(new Set(rounds.value.flatMap(round => {
+    const event = round.call || round.result;
+    return event?.names?.length ? event.names : [event?.name || ''];
+  }).filter(Boolean)));
+  const label = props.labels.executedTools.replace('{count}', String(count));
+  return names.length ? `${label} · ${names.join(', ')}` : label;
 });
-
-function groupIsOpen(kind: ToolEvent['kind']) {
-  return openGroups.value.has(kind);
-}
-
-function eventIsOpen(event: ToolEvent, index: number) {
-  return openEvents.value.has(eventKey(event, index));
-}
-
-function toggleGroup(kind: ToolEvent['kind']) {
-  const next = new Set(openGroups.value);
-  if (next.has(kind)) {
-    next.delete(kind);
-  } else {
-    next.add(kind);
-  }
-  openGroups.value = next;
-}
-
-function toggleEvent(event: ToolEvent, index: number) {
-  const key = eventKey(event, index);
+function toggleRound(key: string) {
   const next = new Set(openEvents.value);
-  if (next.has(key)) {
-    next.delete(key);
-  } else {
-    next.add(key);
-  }
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
   openEvents.value = next;
 }
-
-function eventKey(event: ToolEvent, index: number) {
-  return `${event.kind}-${event.id || index}`;
+function roundName(round: ToolRound) {
+  return round.call?.name || round.result?.name || props.labels.toolEvent;
 }
 </script>
 
 <template>
   <section class="codex-fold tool-stack" :class="{ expanded }">
-    <button
-      type="button"
-      class="codex-fold-head"
-      :title="expanded ? labels.collapse : labels.expand"
-      @click="expanded = !expanded"
-    >
+    <button type="button" class="codex-fold-head"
+      :aria-expanded="expanded"
+      :title="`${summary} · ${expanded ? labels.collapse : labels.expand}`"
+      @click="expanded = !expanded">
       <Wrench class="codex-fold-icon" :size="14" aria-hidden="true" />
-      <span class="codex-fold-title">{{ summary }}</span>
+      <span class="codex-fold-title">{{ title || summary }}</span>
     </button>
-
-    <div v-if="expanded" class="tool-stack-body">
-      <section
-        v-for="group in groupedEvents"
-        :key="group.kind"
-        class="tool-group"
-        :class="group.kind"
-      >
-        <button type="button" class="tool-group-head" @click="toggleGroup(group.kind)">
-          <span class="fold-chevron" :class="{ open: groupIsOpen(group.kind) }" aria-hidden="true"></span>
-          <span>{{ group.title }}</span>
-          <span class="tool-count">{{ group.count }}</span>
+    <div v-if="expanded" class="tool-stack-body tool-round-list">
+      <article v-for="round in rounds" :key="round.key" class="tool-round"
+        :class="{ failed: round.result?.ok === false || round.call?.ok === false }">
+        <button type="button" class="tool-event-head" :aria-expanded="openEvents.has(round.key)"
+          :title="roundName(round)" @click="toggleRound(round.key)">
+          <span class="fold-chevron" :class="{ open: openEvents.has(round.key) }" aria-hidden="true"></span>
+          <span class="tool-event-name">{{ roundName(round) }}</span>
+          <span v-if="round.result?.ok === false || round.call?.ok === false" class="tool-status-label">{{ labels.failed }}</span>
+          <span class="tool-event-time">{{ round.call?.time || round.result?.time }}</span>
         </button>
-
-        <div v-if="groupIsOpen(group.kind)" class="tool-event-list">
-          <article
-            v-for="(event, index) in group.events"
-            :key="eventKey(event, index)"
-            class="tool-event"
-            :class="{ open: eventIsOpen(event, index), failed: event.ok === false }"
-          >
-            <button type="button" class="tool-event-head" @click="toggleEvent(event, index)">
-              <span class="tool-status-dot"></span>
-              <span class="tool-event-name">{{ event.name || event.summary || labels.toolEvent }}</span>
-              <span v-if="event.ok === false" class="tool-status-label">{{ labels.failed }}</span>
-              <span class="tool-event-time">{{ event.time }}</span>
+        <div v-if="openEvents.has(round.key)" class="tool-round-body">
+          <section v-if="round.call" class="tool-round-content tool-round-call">
+            <div class="tool-round-label">{{ labels.toolCalls }}</div>
+            <pre class="tool-event-data">{{ callText(round) }}</pre>
+            <button v-if="round.call.data.length > TOOL_PREVIEW_CHARS" type="button"
+              class="tool-result-more" :aria-expanded="fullCalls.has(round.key)"
+              @click="toggleFullCall(round.key)">
+              {{ fullCalls.has(round.key) ? labels.showLessResult : labels.showFullResult }}
             </button>
-            <div v-if="event.summary" class="tool-event-summary">{{ event.summary }}</div>
-            <pre v-if="eventIsOpen(event, index)" class="tool-event-data">{{ event.data }}</pre>
-          </article>
+          </section>
+          <section v-if="round.result" class="tool-round-content tool-round-result">
+            <div class="tool-round-label">{{ labels.toolResults }}</div>
+            <pre class="tool-event-data">{{ resultText(round) }}</pre>
+            <button v-if="round.result.data.length > TOOL_PREVIEW_CHARS" type="button"
+              class="tool-result-more" :aria-expanded="fullResults.has(round.key)"
+              @click="toggleFullResult(round.key)">
+              {{ fullResults.has(round.key) ? labels.showLessResult : labels.showFullResult }}
+            </button>
+          </section>
+          <div v-else class="tool-round-pending">{{ labels.toolResultPending }}</div>
         </div>
-      </section>
+      </article>
     </div>
   </section>
 </template>
+
+<style scoped>
+.tool-round-list { min-width: 0; }
+.tool-round { padding: 6px 0; min-width: 0; }
+.tool-round + .tool-round { border-top: 1px solid color-mix(in srgb, var(--muted) 22%, transparent); }
+.tool-round-body { display: grid; gap: 8px; padding: 6px 0 6px 16px; min-width: 0; }
+.tool-round-content { border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.tool-round-call {
+  border-left: 2px solid #b39a62;
+  background: color-mix(in srgb, #b39a62 9%, transparent);
+}
+.tool-round-result {
+  border-left: 2px solid #568e80;
+  background: color-mix(in srgb, #568e80 9%, transparent);
+}
+.tool-round-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 5px; }
+.tool-round-content .tool-event-data { margin: 0; background: transparent; max-width: 100%; overflow-x: auto; }
+.tool-round-pending { font-size: 0.8rem; color: var(--muted); padding: 4px 0; }
+.tool-round.failed .tool-status-label { color: #d16a6a; }
+.tool-result-more { margin-top: 8px; color: var(--muted); background: transparent; border: 1px solid currentColor; border-radius: 5px; padding: 4px 9px; cursor: pointer; }
+</style>

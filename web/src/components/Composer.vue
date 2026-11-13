@@ -33,10 +33,10 @@ const sizeProbe = ref<HTMLTextAreaElement | null>(null);
 const uploadWarnings = ref<string[]>([]);
 const isComposing = ref(false);
 const submissionPending = ref(false);
+const pendingFileBatches = ref(0);
+let fileReadQueue: Promise<void> = Promise.resolve();
 const isDraggingFile = ref(false);
 const COMPOSITION_ENTER_GUARD_MS = 100;
-const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
-const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024;
 let ignoreEnterUntil = 0;
 let textareaResizeObserver: ResizeObserver | null = null;
 let textareaWidth = 0;
@@ -48,6 +48,7 @@ const sendHint = computed(() => (
 
 const canSubmit = computed(() => (
   !submissionPending.value &&
+  pendingFileBatches.value === 0 &&
   !isComposing.value &&
   (Boolean(text.value.trim()) || attachments.value.length > 0)
 ));
@@ -183,39 +184,70 @@ onBeforeUnmount(() => {
   textareaResizeObserver?.disconnect();
 });
 
+/** Native paste only: no background clipboard access or permission prompt. */
+function onPaste(event: ClipboardEvent) {
+  const clipboard = event.clipboardData;
+  if (!clipboard) return;
+  // Use items OR files, not both: browsers often expose the same image twice.
+  const itemFiles = Array.from(clipboard.items || [])
+    .filter(item => item.kind === 'file')
+    .map(item => item.getAsFile())
+    .filter((file): file is File => file !== null);
+  const files = itemFiles.length ? itemFiles : Array.from(clipboard.files || []);
+  if (!files.length) return; // Keep native text paste, selection and undo behavior.
+
+  event.preventDefault();
+  const pastedText = clipboard.getData('text/plain');
+  const input = textarea.value;
+  if (pastedText && input) {
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    text.value = text.value.slice(0, start) + pastedText + text.value.slice(end);
+    nextTick(() => {
+      input.setSelectionRange(start + pastedText.length, start + pastedText.length);
+      resize();
+    });
+  }
+  const stamp = Date.now();
+  const namedFiles = files.map((file, index) => {
+    if (file.name.trim() && file.name !== 'image.png') return file;
+    const extension = file.type === 'image/jpeg' ? 'jpg'
+      : file.type.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'bin';
+    const prefix = file.type.startsWith('image/') ? 'clipboard-image' : 'clipboard-file';
+    return new File([file], `${prefix}-${stamp}-${index + 1}.${extension}`, {
+      type: file.type, lastModified: file.lastModified,
+    });
+  });
+  void addFiles(namedFiles);
+}
+
 async function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
   await addFiles(Array.from(input.files || []));
   input.value = '';
 }
 
-/** 收单入口：文件选择器和拖拽放入共用同一套体积校验与读取逻辑。 */
-async function addFiles(files: File[]) {
+/** 收单入口：文件选择器、剪贴板粘贴和拖拽放入共用同一套读取逻辑。 */
+function addFiles(files: File[]): Promise<void> {
+  if (!files.length) return Promise.resolve();
+  pendingFileBatches.value += 1;
+  // Serialize attachment reads from all entry points and preserve insertion order.
+  const task = fileReadQueue.then(() => loadFiles(files)).catch(() => {
+    uploadWarnings.value.push(formatLabel(props.labels.fileReadFailed, {
+      name: files.map(file => file.name).join(', '),
+    }));
+  }).finally(() => {
+    pendingFileBatches.value -= 1;
+  });
+  fileReadQueue = task;
+  return task;
+}
+
+async function loadFiles(files: File[]) {
   if (!files.length) return;
 
   uploadWarnings.value = [];
-  let nextTotalSize = attachments.value.reduce((sum, attachment) => sum + attachment.size, 0);
-  const acceptedFiles: File[] = [];
-  files.forEach((file) => {
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      uploadWarnings.value.push(formatLabel(
-        props.labels.fileTooLargeDetail,
-        { limit: formatSize(MAX_ATTACHMENT_BYTES), name: file.name },
-      ));
-      return;
-    }
-    if (nextTotalSize + file.size > MAX_TOTAL_ATTACHMENT_BYTES) {
-      uploadWarnings.value.push(formatLabel(
-        props.labels.fileTotalTooLarge,
-        { limit: formatSize(MAX_TOTAL_ATTACHMENT_BYTES) },
-      ));
-      return;
-    }
-    nextTotalSize += file.size;
-    acceptedFiles.push(file);
-  });
-
-  const results = await Promise.allSettled(acceptedFiles.map(readAttachment));
+  const results = await Promise.allSettled(files.map(readAttachment));
   const loaded: ClientAttachment[] = [];
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') {
@@ -224,7 +256,7 @@ async function addFiles(files: File[]) {
     }
     uploadWarnings.value.push(formatLabel(
       props.labels.fileReadFailed,
-      { name: acceptedFiles[index].name },
+      { name: files[index].name },
     ));
   });
   attachments.value = [...attachments.value, ...loaded];
@@ -376,6 +408,7 @@ function formatLabel(template: string, values: Record<string, string>) {
           :aria-label="labels.composerPlaceholder"
           :placeholder="labels.composerPlaceholder"
           @input="resize"
+          @paste="onPaste"
           @keydown="onKeydown"
           @compositionstart="onCompositionStart"
           @compositionend="onCompositionEnd"
@@ -448,7 +481,7 @@ function formatLabel(template: string, values: Record<string, string>) {
             :disabled="!canSubmit"
             @click="submit"
           >
-            <LoaderCircle v-if="submissionPending" class="spin" :size="17" aria-hidden="true" />
+            <LoaderCircle v-if="submissionPending || pendingFileBatches > 0" class="spin" :size="17" aria-hidden="true" />
             <ArrowUp v-else :size="18" aria-hidden="true" />
           </button>
         </div>

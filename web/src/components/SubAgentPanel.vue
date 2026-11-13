@@ -4,18 +4,24 @@ import { computed, nextTick, ref, watch } from 'vue';
 import type { ChatFile, ChatMessage as AgentChatMessage } from '../protocol/types';
 import type { SubAgentSummary } from './SubAgentMenu.vue';
 import ChatMessage from './ChatMessage.vue';
+import { mergeToolOnlyMessages } from '../utils/mergeToolOnlyMessages';
 
 const props = defineProps<{
   agent: SubAgentSummary;
   labels: Record<string, string>;
   messages: AgentChatMessage[];
   showDebugInfo: boolean;
+  loading?: boolean;
+  historyError?: string;
+  hasMore?: boolean;
   /** 装在移动端抽屉里时，高度交给外层 flex 分配，不再自己撑满 100%。 */
   embedded?: boolean;
 }>();
 
 const emit = defineEmits<{
   close: [];
+  loadOlder: [];
+  retryHistory: [];
   resendUserMessage: [messageId: string];
   updateUserMessage: [messageId: string, content: string];
   previewFile: [file: ChatFile];
@@ -35,10 +41,13 @@ let shouldFollowBottom = true;
 
 const allFilteredMessages = computed(() => (
   props.messages.filter((message) => message.WindowName === props.agent.name)
+
 ));
 
 const filteredMessages = computed(() => (
-  allFilteredMessages.value.slice(-visibleMessageCount.value)
+  mergeToolOnlyMessages(allFilteredMessages.value.slice(-visibleMessageCount.value), { childWindow: true })
+    // Preserve original process identity until grouping has finished.
+    .map(message => ({ ...message, isSubTalk: 0 }))
 ));
 
 /** 滚到底部：面板内出现新消息、或刚打开时调用。 */
@@ -57,7 +66,7 @@ const messagesElement = ref<HTMLElement | null>(null);
  * （content/status 原地改）时靠下方 watchEffect 兜底。
  */
 watch(filteredMessages, () => {
-  if (shouldFollowBottom) scrollToBottom();
+  if (!restoringScroll && shouldFollowBottom) nextTick(scrollToBottom);
 });
 
 /**
@@ -77,7 +86,7 @@ watch(
     ].join('|');
   },
   () => {
-    if (shouldFollowBottom) scrollToBottom();
+    if (!restoringScroll && shouldFollowBottom) nextTick(scrollToBottom);
   },
 );
 
@@ -85,11 +94,28 @@ watch(
  * 用户手动滚动：滚到顶部附近触发「加载更早消息」；同时判断是否还在贴底，
  * 决定后续新消息要不要自动跟随。
  */
+function loadOlderFromButton() {
+  const element = messagesElement.value;
+  if (!element || props.loading) return;
+  restoreDistance = element.scrollHeight - element.scrollTop;
+  restoringScroll = true;
+  shouldFollowBottom = false;
+  emit('loadOlder');
+}
+
 function onScroll(event: Event) {
   const element = event.currentTarget as HTMLElement;
   shouldFollowBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
 
-  if (restoringScroll || element.scrollTop >= 80 || allFilteredMessages.value.length <= visibleMessageCount.value) return;
+  if (restoringScroll || element.scrollTop >= 80 || props.loading) return;
+  if (allFilteredMessages.value.length <= visibleMessageCount.value) {
+    if (!props.hasMore || props.historyError) return;
+    restoreDistance = element.scrollHeight - element.scrollTop;
+    restoringScroll = true;
+    shouldFollowBottom = false;
+    emit('loadOlder');
+    return;
+  }
   restoreDistance = element.scrollHeight - element.scrollTop;
   restoringScroll = true;
   visibleMessageCount.value += PAGE_SIZE;
@@ -101,6 +127,19 @@ function onScroll(event: Event) {
     restoringScroll = false;
   });
 }
+
+watch(() => props.loading, (loading, previous) => {
+  if (loading || !previous) return;
+  if (restoringScroll) {
+    visibleMessageCount.value = Math.max(visibleMessageCount.value, allFilteredMessages.value.length);
+    nextTick(() => {
+      const element = messagesElement.value;
+      if (element && restoreDistance !== null) element.scrollTop = Math.max(0, element.scrollHeight - restoreDistance);
+      restoreDistance = null;
+      restoringScroll = false;
+    });
+  } else if (shouldFollowBottom) nextTick(scrollToBottom);
+});
 
 /**
  * 切换 Agent（或面板首次挂载）：重置分页与滚动状态，并直接落底。
@@ -171,7 +210,15 @@ function getAgentStatusLabel(status: string) {
     </header>
 
     <div ref="messagesElement" class="subagent-messages" @scroll="onScroll">
-      <div v-if="!filteredMessages.length" class="subagent-empty">
+      <div v-if="loading" class="history-load-state" role="status">{{ labels.loadingMemory }}</div>
+      <div v-else-if="historyError" class="history-load-state error" role="alert">
+        {{ historyError }}
+        <button type="button" @click="emit('retryHistory')">{{ labels.retry || '重试' }}</button>
+      </div>
+      <button v-else-if="hasMore" type="button" class="history-retry-button" @click="loadOlderFromButton">
+        {{ labels.loadMore || '加载更早消息' }}
+      </button>
+      <div v-if="!loading && !historyError && !filteredMessages.length" class="subagent-empty">
         {{ labels.noMessages }}
       </div>
       <ChatMessage
@@ -180,6 +227,7 @@ function getAgentStatusLabel(status: string) {
         :labels="labels"
         :message="message"
         :show-debug-info="showDebugInfo"
+        server-identity-only
         @resend-user-message="onResendUserMessage"
         @update-user-message="onUpdateUserMessage"
         @preview-file="onPreviewFile"
@@ -296,5 +344,11 @@ function getAgentStatusLabel(status: string) {
   justify-content: center;
   color: var(--muted);
   font-size: 0.78rem;
+}
+/* Keep all shared message/tool styles; only child-user tint differs. */
+.subagent-messages :deep(.message.user) { align-self: flex-end; }
+.subagent-messages :deep(.message.assistant) { align-self: flex-start; }
+.subagent-messages :deep(.message.user .bubble) {
+  background: color-mix(in srgb, #b69bea 25%, var(--surface));
 }
 </style>

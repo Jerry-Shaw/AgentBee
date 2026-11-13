@@ -24,10 +24,15 @@ const props = defineProps<{
   open: boolean;
   selectedAgentName: string | null;
   showDebugInfo: boolean;
+  loading?: boolean;
+  historyError?: string;
+  hasMore?: boolean;
 }>();
 
 const emit = defineEmits<{
   close: [];
+  loadOlder: [];
+  retryHistory: [];
   deleteSubAgent: [agentName: string];
   previewFile: [file: ChatFile];
   resendUserMessage: [messageId: string];
@@ -118,6 +123,11 @@ onBeforeUnmount(() => {
           :agent="selectedAgent"
           :labels="labels"
           :messages="messages"
+          :loading="loading"
+          :history-error="historyError"
+          :has-more="hasMore"
+          @load-older="emit('loadOlder')"
+          @retry-history="emit('retryHistory')"
           :show-debug-info="showDebugInfo"
           @close="emit('close')"
           @preview-file="onPreviewFile"

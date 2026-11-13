@@ -17,15 +17,15 @@ import BeeLoader from './BeeLoader.vue';
 import FoldBlock from './FoldBlock.vue';
 import ToolEventsBlock from './ToolEventsBlock.vue';
 import {useMarkdown} from '../composables/useMarkdown';
-import {extractContentArtifacts, pickInlinePreviewArtifact} from '../utils/artifacts';
+import {extractContentArtifacts, extractContentLocalPaths, pickInlinePreviewArtifact} from '../utils/artifacts';
 import type {ChatFile, ChatImage, ChatMessage} from '../protocol/types';
 
 const props = defineProps<{
   labels: Record<string, string>;
   message: ChatMessage;
-  deletingMemory?: boolean;
   memoryDeleteDisabled?: boolean;
   showDebugInfo?: boolean;
+  serverIdentityOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -83,6 +83,7 @@ const isWaitingForResponse = computed(() => (
 const endedWithoutResponse = computed(() => (
     props.message.role === 'assistant' &&
     props.message.status !== 'loading' &&
+    !props.message.isRemoteHistory &&
     !hasAssistantOutput.value
 ));
 
@@ -123,6 +124,15 @@ const contentArtifacts = computed<ChatFile[]>(() => {
   return extractContentArtifacts({content: props.message.content || ''});
 });
 
+const localPathEntries = computed(() => props.message.role === 'assistant'
+    ? extractContentLocalPaths(props.message.content || '') : []);
+const copiedPath = ref('');
+async function copyLocalPath(path: string) {
+  await copyText(path);
+  copiedPath.value = path;
+  window.setTimeout(() => { if (copiedPath.value === path) copiedPath.value = ''; }, 1200);
+}
+
 const previewEntries = computed<ChatFile[]>(() => {
   const serverKeys = new Set(
       (props.message.files || []).map((file) => file.path || file.name),
@@ -144,7 +154,13 @@ const historyPreviewArtifact = computed<ChatFile | null>(() => {
 });
 
 const senderIdentity = computed(() => {
-  const senderName = props.message.senderName?.trim() || '';
+  // Child history has no streaming sender metadata: user records are the main agent.
+  if (props.serverIdentityOnly && props.message.isRemoteHistory && props.message.role === 'user') {
+    const messageId = props.message.messageId?.trim();
+    return '蜂小秘 - AgentBee' + (props.showDebugInfo && messageId ? ` [${messageId}]` : '');
+  }
+  const senderName = props.message.senderName?.trim() ||
+      (props.serverIdentityOnly ? props.message.sender?.trim() || '' : '');
   const senderRole = props.message.senderRole?.trim() || '';
   const messageId = props.message.messageId?.trim() || '';
 
@@ -152,7 +168,7 @@ const senderIdentity = computed(() => {
   if (senderName && senderRole) {
     identity = `${senderName} - ${senderRole}`;
   } else {
-    identity = senderName || senderRole || roleName(props.message.role);
+    identity = senderName || senderRole || (props.serverIdentityOnly ? '' : roleName(props.message.role));
   }
 
   if (props.showDebugInfo && messageId) {
@@ -278,7 +294,7 @@ function previewImage(image: ChatImage) {
   const mimeType = image.src.slice(5, image.src.indexOf(';')) || 'image/png';
   emit('previewFile', {
     id: image.id,
-    name: `image-${image.id}.${extensionForMime(mimeType)}`,
+    name: image.name || `image-${image.id}.${extensionForMime(mimeType)}`,
     mimeType,
     content: image.src,
     encoding: 'text',
@@ -417,7 +433,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
       </div>
       <div class="bubble">
         <FoldBlock
-            v-if="message.think"
+            v-if="message.think?.trim()"
             class-name="think-card"
             :expand-label="labels.expand"
             :collapse-label="labels.collapse"
@@ -427,16 +443,18 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
 
         <ToolEventsBlock
             v-if="message.toolEvents?.length"
-            :events="message.toolEvents"
+                        :events="message.toolEvents"
             :labels="labels"
         />
 
         <div v-if="message.images?.length" class="message-images">
           <figure v-for="image in message.images" :key="image.id" class="message-image">
-            <button type="button" class="message-image-open" :title="labels.preview" @click="previewImage(image)">
+            <button v-if="message.role !== 'user'" type="button" class="message-image-open" :title="labels.preview" @click="previewImage(image)">
               <img :src="image.src" :alt="image.prompt || labels.imageAlt" loading="lazy" />
             </button>
-            <figcaption v-if="image.prompt">{{ image.prompt }}</figcaption>
+            <img v-if="message.role === 'user'" :src="image.src" :alt="image.name || labels.imageAlt" loading="lazy" decoding="async" />
+            <figcaption v-if="image.name?.trim()" class="message-image-name" :title="image.name">{{ image.name }}</figcaption>
+            <figcaption v-if="image.prompt?.trim()">{{ image.prompt }}</figcaption>
           </figure>
         </div>
 
@@ -453,12 +471,23 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
             <FileText :size="16" aria-hidden="true" />
             <span class="message-file-copy">
             <strong>{{ file.name }}</strong>
-            <small>{{ file.mimeType }}</small>
+<small v-if="message.role !== 'user'">{{ file.mimeType }}</small>
           </span>
-            <button type="button" class="icon-button" :title="labels.preview" @click="emit('previewFile', file)">
+            <button v-if="message.role !== 'user'" type="button" class="icon-button" :title="labels.preview" @click="emit('previewFile', file)">
               <Eye :size="15" aria-hidden="true" />
             </button>
           </article>
+        </div>
+
+        <div v-if="localPathEntries.length" class="message-artifacts">
+          <button v-for="file in localPathEntries" :key="file.id" type="button"
+              class="html-preview-entry" :title="file.path"
+              @click="copyLocalPath(file.path || '')">
+            <Check v-if="copiedPath === file.path" :size="15" aria-hidden="true" />
+            <Copy v-else :size="15" aria-hidden="true" />
+            <span>{{ copiedPath === file.path ? labels.copied : labels.copyLocalPath }}</span>
+            <span class="artifact-name">{{ file.name }}</span>
+          </button>
         </div>
 
         <div v-if="previewEntries.length" class="message-artifacts">
@@ -485,7 +514,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         </div>
 
         <div
-            v-else-if="message.role === 'assistant'"
+            v-else-if="message.role === 'assistant' && message.content?.trim()"
             ref="markdownBody"
             class="markdown-body"
             @click="copyMarkdownBlock"
@@ -511,7 +540,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
             </button>
           </div>
         </div>
-        <div v-else class="markdown-body plain">{{ message.content }}</div>
+        <div v-else-if="message.role !== 'assistant' && message.content?.trim()" class="markdown-body plain">{{ message.content }}</div>
 
         <!-- 有内容又被中止的：内容照常渲染，末尾补一条说明（没内容的情况上面那条已经显示了）。 -->
         <div v-if="wasStopped && !endedWithoutResponse" class="message-stopped">
@@ -524,7 +553,9 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
             v-if="!isEditing"
             type="button"
             class="message-action-button"
-            :title="labels.resendMessage"
+            :title="message.isRemoteHistory ? labels.resendHistoryTextOnly : labels.resendMessage"
+            :aria-label="message.isRemoteHistory ? labels.resendHistoryTextOnly : labels.resendMessage"
+            :disabled="message.isRemoteHistory && !message.content?.trim()"
             @click="resendMessage"
         >
           <RotateCcw :size="14" aria-hidden="true" />
@@ -552,11 +583,10 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
             type="button"
             class="message-action-button history-delete-button"
             :title="labels.deleteMemoryRecord"
-            :disabled="deletingMemory || memoryDeleteDisabled"
+            :disabled="memoryDeleteDisabled"
             @click="emit('deleteMemoryMessage', message.memoryCreateId)"
         >
-          <LoaderCircle v-if="deletingMemory" class="spin" :size="14" aria-hidden="true" />
-          <Trash2 v-else :size="14" aria-hidden="true" />
+          <Trash2 :size="14" aria-hidden="true" />
         </button>
       </div>
     </template>
@@ -574,11 +604,10 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
           type="button"
           class="message-action-button history-delete-button"
           :title="labels.deleteMemoryRecord"
-          :disabled="deletingMemory || memoryDeleteDisabled"
+          :disabled="memoryDeleteDisabled"
           @click="emit('deleteMemoryMessage', message.memoryCreateId)"
       >
-        <LoaderCircle v-if="deletingMemory" class="spin" :size="14" aria-hidden="true" />
-        <Trash2 v-else :size="14" aria-hidden="true" />
+        <Trash2 :size="14" aria-hidden="true" />
       </button>
     </div>
   </article>

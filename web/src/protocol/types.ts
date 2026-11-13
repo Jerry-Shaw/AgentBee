@@ -58,6 +58,8 @@ export interface ChatAttachment {
 }
 
 export interface ChatImage {
+  name?: string;
+  path?: string;
   id: string;
   /** Data URL ready for an img src, built from the server base64 payload. */
   src: string;
@@ -111,6 +113,11 @@ export interface ChatSession {
 }
 
 export interface ToolEvent {
+  callId?: string;
+  calls?: ToolEvent[];
+  /** Number and names of calls contained in this event (not result count). */
+  callCount?: number;
+  names?: string[];
   id: string;
   kind: 'tool_calls' | 'tool_result';
   name: string;
@@ -153,19 +160,22 @@ export interface ClientHistoryRequest {
  * 会话 CRUD 目前复用 memory 这个 type：后端 `process_memory` 里
  * 直接 switch 了 read / delete / listSessions / deleteSession / renameSession。
  */
-export type ClientMemoryAct = 'read' | 'delete' | ClientSessionAct;
+export type ClientMemoryAct = 'read' | 'readGroups' | 'delete' | ClientSessionAct;
+export interface ClientMemoryGroupsRequest {
+  type: 'memory';
+  sessionId: string;
+  content: { act: 'readGroups' };
+}
 
 export interface ClientMemoryReadRequest {
   type: 'memory';
-  /**
-   * 必须带当前会话 id：`go.php` 把它作为第三个参数传进 `process_memory`，
-   * read 分支再传给 `Memory::read(..., $session_id, ...)`——
-   * 那里对 `daily`/`misc` 只在非空时才加 `where session_id`。
-   * 不带就等于「读全局历史」——新建的会话会看到别的会话的记录。
-   */
-  sessionId?: string;
+  /** Current/target session; passed to the server dispatcher at the top level. */
+  sessionId: string;
   content: {
     act: 'read';
+    /** Main window = 0, child window = 1. */
+    window_type: 0 | 1;
+    worker_name: string;
     length: number;
     create_id: number;
   };
@@ -177,7 +187,7 @@ export interface ClientMemoryDeleteRequest {
   sessionId?: string;
   content: {
     act: 'delete';
-    create_ids: number[];
+    create_id: number;
   };
 }
 
@@ -205,6 +215,9 @@ export interface ClientMemorySessionRequest {
 }
 
 export interface MemoryRecord {
+  payload?: Partial<ChatMessage>;
+  rawData?: string;
+  worker_name?: string;
   content: string;
   create_id: number;
   create_time: string;
@@ -274,6 +287,7 @@ export type ClientMessage =
   | ClientChatMessage
   | ClientHistoryRequest
   | ClientMemoryReadRequest
+| ClientMemoryGroupsRequest
   | ClientMemoryDeleteRequest
   | ClientMemorySessionRequest
   | ClientAbortRequest
@@ -282,6 +296,8 @@ export type ClientMessage =
   | ClientSessionRequest;
 
 export interface ServerMessage {
+  window_type?: 0 | 1;
+  worker_name?: string;
   session_id?: string;
   type?: ServerEventType | string;
   act?: string;
@@ -299,6 +315,8 @@ export interface ServerMessage {
   total?: number;
   deleted?: number;
   create_id?: number;
+  /** Target record ID returned by a memory/delete acknowledgement. */
+  deleted_id?: number;
   message?: string;
   error?: unknown;
   /** `renameSession` 成功后回传的会话名（后端把 content 展开到了顶层）。 */

@@ -61,11 +61,23 @@ export function normalizeToolEvent(
 ): ToolEvent {
   if (kind === 'tool_calls') {
     const calls = Array.isArray(msg.data) ? msg.data : [msg.data || msg];
-    const primary = asRecord(calls[0]);
+    if (calls.length > 1) {
+const entries = calls.map(call => normalizeToolEvent(kind, { ...msg, data: call, toolCallId: undefined }, makeId, nowTime));
+return { ...entries[0], calls: entries, callCount: entries.length,
+names: entries.map(entry => entry.name).filter(Boolean) };
+}
+const primary = asRecord(calls[0]);
     const fn = asRecord(primary.function);
+const names = calls.map((call) => {
+const record = asRecord(call);
+return asString(asRecord(record.function).name) || asString(record.name);
+}).filter(Boolean);
 
     return {
       id: msg.toolCallId || asString(primary.id) || makeId(),
+callId: msg.toolCallId || asString(primary.id) || undefined,
+callCount: calls.length,
+names: names.length ? names : [msg.name || msg.tool || ''].filter(Boolean),
       kind,
       name: asString(fn.name) || asString(primary.name) || msg.name || msg.tool || '',
       ok: msg.ok,
@@ -85,6 +97,7 @@ export function normalizeToolEvent(
 
   return {
     id: msg.toolCallId || asString(data.id) || makeId(),
+callId: msg.toolCallId || asString(data.tool_call_id) || asString(data.id) || undefined,
     kind,
     name: asString(data.name) || msg.name || msg.tool || '',
     ok: msg.ok ?? asBoolean(data.ok),

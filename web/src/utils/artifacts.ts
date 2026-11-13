@@ -196,7 +196,14 @@ function collectContentArtifacts(content: string, found: ChatFile[]) {
 
   const rest = remainder.join('');
   collectUrlArtifacts(rest, found);
-  collectPathArtifacts(rest, found);
+
+}
+
+/** Local mentions are copy-only, never preview artifacts. Preserve the original path. */
+export function extractContentLocalPaths(content: string): ChatFile[] {
+  const found: ChatFile[] = [];
+  collectPathArtifacts(content, found);
+  return found.filter((file) => /^(?:[A-Za-z]:[\\/]|\\\\|\/(?!\/))/.test(file.path || ''));
 }
 
 function looksLikeMarkdownDocument(content: string): boolean {
@@ -315,7 +322,7 @@ function buildPathArtifact(path: string): ChatFile {
     id: `artifact:path:${normalized.toLowerCase()}`,
     name,
     mimeType: inferMimeType(name),
-    path: normalized,
+    path,
     source: 'path',
     time: '',
   };

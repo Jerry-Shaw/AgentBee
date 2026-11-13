@@ -95,6 +95,21 @@ class handler extends Factory
                 $data_url,
                 $filename
             );
+
+            $agent_core->core->memory->saveChat(
+                $payload_data['session_id'],
+                $payload_data['process_name'],
+                0,
+                'assistant',
+                [
+                    'content' => $filename,
+                    'images'  => [
+                        'filename'   => $filename,
+                        'file_path'  => $file_path,
+                        'img_base64' => $data_url
+                    ]
+                ]
+            );
         }
 
         $result = [

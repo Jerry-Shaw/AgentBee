@@ -220,9 +220,11 @@ class handler extends Factory
             );
 
             foreach ($response['data'] as $value) {
+                $image_base64 = 'data:image/' . $output_format . ';base64,' . $value['b64_json'];
+
                 $agent_core->core->sendImageMessage(
                     $message,
-                    'data:image/' . $output_format . ';base64,' . $value['b64_json'],
+                    $image_base64,
                     $this->prompt,
                 );
 
@@ -233,18 +235,33 @@ class handler extends Factory
                     }
 
                     $micro_sec   = substr(microtime(), 2, 8);
-                    $file_name   = date('Y-m-d') . '_' . $micro_sec . '.' . $output_format;
-                    $file_path   = $this->save_path . $file_name;
+                    $filename    = date('Y-m-d') . '_' . $micro_sec . '.' . $output_format;
+                    $file_path   = $this->save_path . $filename;
                     $save_result = file_put_contents($file_path, $image_binary);
 
                     $saved_files[] = [
-                        'file_name'  => $file_name,
+                        'filename'   => $filename,
                         'file_path'  => $file_path,
                         'save_bytes' => $save_result ?: 0,
                     ];
+
+                    $agent_core->core->memory->saveChat(
+                        $session_id,
+                        $process_name,
+                        0,
+                        'assistant',
+                        [
+                            'content' => $this->prompt,
+                            'images'  => [
+                                'filename'   => $filename,
+                                'file_path'  => $file_path,
+                                'img_base64' => $image_base64
+                            ]
+                        ]
+                    );
                 }
 
-                unset($image_binary, $micro_sec, $file_name, $file_path, $save_result);
+                unset($image_base64, $image_binary, $micro_sec, $filename, $file_path, $save_result);
             }
 
             $response = [

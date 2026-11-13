@@ -1225,11 +1225,11 @@ body:has(.login-window-backdrop) {
 
 .scroll-bottom-floating {
   position: absolute;
-  right: 3px;
+  right: 32px;
   bottom: 3px;
   z-index: 5;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1237,9 +1237,9 @@ body:has(.login-window-backdrop) {
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   color: var(--muted);
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
-  transform: translateX(-50%);
+  transform: none;
 }
 
 .scroll-bottom-floating:hover {
@@ -3499,4 +3499,17 @@ body:has(.login-window-backdrop) {
   gap: 6px;
   padding: 0 12px;
   white-space: nowrap;
+}
+
+
+@media (max-width: 820px) {
+  .scroll-bottom-floating {
+    right: 16px;
+    width: 34px;
+    height: 34px;
+  }
+
+  .scroll-bottom-floating.has-new-content {
+    width: auto;
+  }
 }

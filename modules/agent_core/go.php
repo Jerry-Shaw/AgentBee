@@ -1201,7 +1201,11 @@ class go extends Factory
                 }
 
                 if (is_array($payload['data']) && isset($payload['data']['message'])) {
+                    // Send error message and stop
                     $this->core->sendMessage($payload);
+                } else {
+                    // Retry on other uncaught errors
+                    $this->core->context->messagePending($payload['sessionId'], true);
                 }
 
                 unset($error);

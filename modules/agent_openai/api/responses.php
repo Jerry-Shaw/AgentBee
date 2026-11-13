@@ -27,6 +27,9 @@ class responses extends stream
 {
     public array $tool_calls = [];
 
+    public int    $same_calls = 0;
+    public string $call_hash  = '';
+
     public string $reason_content    = '';
     public string $assistant_content = '';
 
@@ -338,6 +341,17 @@ class responses extends stream
                         continue;
                     }
 
+                    if ($this->tooManySameCalls($fn_call['name'], $fn_call['arguments'])) {
+                        $this->output('context', 'addUserMessage', $metadata, [
+                            'role'    => 'user',
+                            'content' => [[
+                                'type'    => 'text',
+                                'content' => '[系统提醒] 立即停止用相同参数重复调用`' . $fn_call['name'] . '`。重新审查需求，调整计划后再继续。',
+                            ]],
+                        ]);
+                        break;
+                    }
+
                     $tool_args = json_decode($fn_call['arguments'], true);
 
                     if (!is_array($tool_args)) {
@@ -530,6 +544,27 @@ class responses extends stream
 
         unset($tool_calls);
         return $event;
+    }
+
+    /**
+     * @param string $call_name
+     * @param string $call_argv
+     *
+     * @return bool
+     */
+    private function tooManySameCalls(string $call_name, string $call_argv): bool
+    {
+        $call_hash = hash('md5', $call_name . $call_argv);
+
+        if ($this->call_hash !== $call_hash) {
+            $this->call_hash  = $call_hash;
+            $this->same_calls = 0;
+        } else {
+            ++$this->same_calls;
+        }
+
+        unset($call_name, $call_argv, $call_hash);
+        return 3 <= $this->same_calls;
     }
 
     /**

@@ -1,0 +1,14 @@
+{
+  "name": "Migration",
+  "version": "1.0",
+  "description": "Migration memory data to chat table",
+  "author": "秋水之冰",
+  "email": "27206617@qq.com",
+  "entry": "go.php",
+  "repo": "",
+  "dependencies": {},
+  "requires": {
+    "php": ">=8.1"
+  },
+  "note": "NOT FOR TOOLS! Run command manually: php modules/agent_bee.php Migration/memoryToChat"
+}

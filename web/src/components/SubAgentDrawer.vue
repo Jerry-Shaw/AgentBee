@@ -130,6 +130,7 @@ onBeforeUnmount(() => {
           @retry-history="emit('retryHistory')"
           :show-debug-info="showDebugInfo"
           @close="emit('close')"
+          @delete-sub-agent="emit('deleteSubAgent', $event)"
           @preview-file="onPreviewFile"
           @resend-user-message="onResendUserMessage"
           @update-user-message="onUpdateUserMessage"

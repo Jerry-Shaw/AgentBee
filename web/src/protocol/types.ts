@@ -160,11 +160,17 @@ export interface ClientHistoryRequest {
  * 会话 CRUD 目前复用 memory 这个 type：后端 `process_memory` 里
  * 直接 switch 了 read / delete / listSessions / deleteSession / renameSession。
  */
-export type ClientMemoryAct = 'read' | 'readGroups' | 'delete' | ClientSessionAct;
+export type ClientMemoryAct = 'read' | 'listChatGroups' | 'deleteChatGroup' | 'delete' | ClientSessionAct;
+export interface ClientMemoryDeleteChatGroupRequest {
+  type: 'memory';
+  sessionId: string;
+  content: { act: 'deleteChatGroup'; worker_name: string };
+}
+
 export interface ClientMemoryGroupsRequest {
   type: 'memory';
   sessionId: string;
-  content: { act: 'readGroups' };
+  content: { act: 'listChatGroups' };
 }
 
 export interface ClientMemoryReadRequest {
@@ -288,6 +294,7 @@ export type ClientMessage =
   | ClientHistoryRequest
   | ClientMemoryReadRequest
 | ClientMemoryGroupsRequest
+  | ClientMemoryDeleteChatGroupRequest
   | ClientMemoryDeleteRequest
   | ClientMemorySessionRequest
   | ClientAbortRequest

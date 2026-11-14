@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bot, X } from 'lucide-vue-next';
+import { Bot, Trash2, X } from 'lucide-vue-next';
 import { computed, nextTick, ref, watch } from 'vue';
 import type { ChatFile, ChatMessage as AgentChatMessage } from '../protocol/types';
 import type { SubAgentSummary } from './SubAgentMenu.vue';
@@ -20,6 +20,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
+  deleteSubAgent: [agentName: string];
   loadOlder: [];
   retryHistory: [];
   resendUserMessage: [messageId: string];
@@ -204,6 +205,15 @@ function getAgentStatusLabel(status: string) {
         </span>
       </span>
       <Bot :size="16" class="subagent-type-icon" aria-hidden="true" />
+      <button
+        type="button"
+        class="icon-button subagent-delete"
+        :title="labels.deleteSubAgent"
+        :aria-label="labels.deleteSubAgent"
+        @click="emit('deleteSubAgent', agent.name)"
+      >
+        <Trash2 :size="16" aria-hidden="true" />
+      </button>
       <button type="button" class="icon-button" :title="labels.closeSubAgent" @click="emit('close')">
         <X :size="16" aria-hidden="true" />
       </button>
@@ -255,7 +265,7 @@ function getAgentStatusLabel(status: string) {
 .subagent-header {
   min-height: 54px;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 20px 32px;
+  grid-template-columns: 34px minmax(0, 1fr) 20px 32px 32px;
   align-items: center;
   gap: 9px;
   padding: 9px 10px 9px 12px;
@@ -320,6 +330,11 @@ function getAgentStatusLabel(status: string) {
 .subagent-identity span {
   color: var(--muted);
   font-size: 0.7rem;
+}
+
+.subagent-delete:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .subagent-type-icon {

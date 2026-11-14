@@ -130,11 +130,13 @@ function roundName(round: ToolRound) {
 </template>
 
 <style scoped>
-.tool-round-list { min-width: 0; }
+.tool-round-list { min-width: 0; padding-block: 0; }
 .tool-round { padding: 6px 0; min-width: 0; }
+.tool-round:first-child { padding-top: 0; }
+.tool-round:last-child { padding-bottom: 0; }
 .tool-round + .tool-round { border-top: 1px solid color-mix(in srgb, var(--muted) 22%, transparent); }
-.tool-round-body { display: grid; gap: 8px; padding: 6px 0 6px 16px; min-width: 0; }
-.tool-round-content { border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.tool-round-body { display: grid; gap: var(--message-inner-gap, 8px); margin-top: var(--message-inner-gap, 8px); padding: 0 0 0 16px; min-width: 0; }
+.tool-round-content { display: grid; gap: var(--message-inner-gap, 8px); border-radius: 6px; padding: 8px 10px; min-width: 0; }
 .tool-round-call {
   border-left: 2px solid #b39a62;
   background: color-mix(in srgb, #b39a62 9%, transparent);
@@ -143,9 +145,9 @@ function roundName(round: ToolRound) {
   border-left: 2px solid #568e80;
   background: color-mix(in srgb, #568e80 9%, transparent);
 }
-.tool-round-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 5px; }
-.tool-round-content .tool-event-data { margin: 0; background: transparent; max-width: 100%; overflow-x: auto; }
-.tool-round-pending { font-size: 0.8rem; color: var(--muted); padding: 4px 0; }
+.tool-round-label { font-size: 0.75rem; color: var(--muted); margin: 0; }
+.tool-round-content .tool-event-data { margin: 0; padding: 0; background: transparent; max-width: 100%; overflow-x: auto; }
+.tool-round-pending { font-size: 0.8rem; color: var(--muted); padding: 0; }
 .tool-round.failed .tool-status-label { color: #d16a6a; }
-.tool-result-more { margin-top: 8px; color: var(--muted); background: transparent; border: 1px solid currentColor; border-radius: 5px; padding: 4px 9px; cursor: pointer; }
+.tool-result-more { justify-self: start; margin: 0; color: var(--muted); background: transparent; border: 1px solid currentColor; border-radius: 5px; padding: 4px 9px; cursor: pointer; }
 </style>

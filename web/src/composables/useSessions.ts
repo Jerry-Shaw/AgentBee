@@ -234,7 +234,7 @@ export function useSessions(options: UseSessionsOptions = {}) {
     if (session.keepEmpty) delete session.keepEmpty;
     applyFirstMessageTitle(session, message, resolveDefaultTitle());
     touchSession(session);
-    registerSession();
+    scheduleCreateSession();
     return message;
   }
 

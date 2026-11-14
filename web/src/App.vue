@@ -109,13 +109,14 @@ const settingStatus = ref('');
 const settingStatusTone = ref<SettingStatusTone>('success');
 const availableModels = ref<string[]>([]);
 const memoryLoading = ref(false);
-const memoryDeleteCandidateId = ref<number | null>(null);
 const memoryError = ref('');
 const memoryHasMore = ref(true);
 const memoryReadMode = ref<MemoryReadMode | null>(null);
 const showDebugInfo = ref(false);
 const selectedSubAgentName = ref<string | null>(null);
 const subAgentGroups = ref<Record<string, string[]>>({});
+// Match deletion acknowledgements by both session and worker, never by active selection.
+const pendingGroupDeletes = new Map<string, number>();
 interface ChildHistory {
   records: MemoryRecord[];
   loading: boolean;
@@ -289,13 +290,18 @@ const agent = useWebSocketAgent({
 });
 const connectionErrorText = computed(() => formatConnectionIssue(agent.connectionError.value));
 watch([() => agent.canSend.value, () => sessions.activeSession.value?.id], ([canSend, sessionId]) => {
-  if (canSend && sessionId) agent.readGroups(sessionId);
+  if (canSend && sessionId) agent.listChatGroups(sessionId);
 });
 watch(() => agent.streamingSessionIds.value.slice(), (next, previous) => {
   const sessionId = sessions.activeSession.value?.id;
-  if (sessionId && previous.includes(sessionId) && !next.includes(sessionId)) agent.readGroups(sessionId);
+  if (sessionId && previous.includes(sessionId) && !next.includes(sessionId)) agent.listChatGroups(sessionId);
 });
 watch(() => agent.canSend.value, (canSend) => {
+  if (!canSend && pendingGroupDeletes.size) {
+    pendingGroupDeletes.forEach(timer => window.clearTimeout(timer));
+    pendingGroupDeletes.clear();
+    toasts.pushToast(t.value.subAgentDeleteFailed, 'error');
+  }
   if (canSend) {
     showLoginWindow.value = false;
     const sent = agent.sendSettingAct('getConfig');
@@ -311,7 +317,6 @@ watch(() => agent.canSend.value, (canSend) => {
     return;
   }
   memoryLoading.value = false;
-  memoryDeleteCandidateId.value = null;
   memoryReadMode.value = null;
   pendingMemoryReadMode = null;
   clearMemoryResponseTimer();
@@ -509,6 +514,8 @@ function onSend(
   onDispatched: (dispatched: boolean) => void,
 ) {
   currentView.value = 'chat';
+  shouldAutoScroll.value = true;
+  hasNewChatContent.value = false;
   // 会话列表可能被删空（空列表是合法状态）。直接发消息就先起一条，
   // 否则这一轮会挂到内存里的兜底会话上，既不在列表里也存不下来。
   if (!sessions.sessions.value.length) sessions.createSession();
@@ -648,16 +655,6 @@ function runPendingMemoryRead() {
 
 function deleteMemoryMessage(createId: number) {
   if (!agent.canSend.value || memoryReadMode.value !== null) return;
-  memoryDeleteCandidateId.value = createId;
-}
-
-function cancelMemoryDelete() {
-  memoryDeleteCandidateId.value = null;
-}
-
-function confirmMemoryDelete() {
-  const createId = memoryDeleteCandidateId.value;
-  if (createId === null) return;
   const sessionId = sessions.activeSessionId.value;
 let localMessageId: string | undefined;
 mergeLocalAndMemoryMessages(localMainMessages.value, memoryRecords.value, (record, local) => {
@@ -673,7 +670,6 @@ if (!agent.deleteMemory(createId)) {
   memoryDeleteTargets.delete(createId);
   return;
 }
-  memoryDeleteCandidateId.value = null;
   memoryError.value = '';
   
 }
@@ -742,14 +738,53 @@ function resendUserMessage(messageId: string) {
 }
 
 function deleteSubAgent(agentName: string) {
-  const session = sessions.activeSession.value;
-  if (!session) return;
-  session.messages = session.messages.filter((msg) => msg.WindowName !== agentName);
-  subAgentGroups.value[session.id] = (subAgentGroups.value[session.id] || []).filter(name => name !== agentName);
-  if (selectedSubAgentName.value === agentName) {
-    selectedSubAgentName.value = null;
+  const sessionId = sessions.activeSession.value?.id;
+  if (!sessionId || !agentName) return;
+  const key = childKey(sessionId, agentName);
+  if (pendingGroupDeletes.has(key)) return;
+  const timer = window.setTimeout(() => {
+    pendingGroupDeletes.delete(key);
+    toasts.pushToast(t.value.subAgentDeleteFailed, 'error');
+  }, 30_000);
+  pendingGroupDeletes.set(key, timer);
+  if (!agent.deleteChatGroup(sessionId, agentName)) {
+    window.clearTimeout(timer);
+    pendingGroupDeletes.delete(key);
+    toasts.pushToast(t.value.subAgentDeleteFailed, 'error');
   }
-  sessions.registerSession();
+}
+
+function handleDeleteChatGroup(msg: ServerMessage) {
+  const content = msg.content;
+  const nested = content && typeof content === 'object'
+    ? content as Record<string, unknown> : {};
+  const sessionId = msg.session_id || msg.sessionId
+    || (typeof nested.session_id === 'string' ? nested.session_id : '');
+  const workerName = msg.worker_name
+    || (typeof nested.worker_name === 'string' ? nested.worker_name : '');
+  if (!sessionId || !workerName) return;
+  const key = childKey(sessionId, workerName);
+  const timer = pendingGroupDeletes.get(key);
+  if (timer === undefined) return;
+  window.clearTimeout(timer);
+  pendingGroupDeletes.delete(key);
+  const data = msg.data ?? nested.data;
+  const error = normalizeServerError(msg);
+  if (error || data !== true) {
+    toasts.pushToast(error || t.value.subAgentDeleteFailed, 'error');
+    return;
+  }
+  const session = sessions.getSessionById(sessionId);
+  if (session) session.messages = session.messages.filter(message => message.WindowName !== workerName);
+  subAgentGroups.value[sessionId] = (subAgentGroups.value[sessionId] || []).filter(name => name !== workerName);
+  window.clearTimeout(childTimers.get(key));
+  childTimers.delete(key);
+  delete childHistories.value[key];
+  if (sessions.activeSession.value?.id === sessionId && selectedSubAgentName.value === workerName) {
+    selectedSubAgentName.value = null;
+    subAgentDrawerOpen.value = false;
+  }
+  sessions.scheduleCreateSession();
 }
 
 function selectSubAgent(agentName: string) {
@@ -1044,7 +1079,11 @@ function sendSettingRequest(act: ClientSettingAct, content?: unknown) {
 }
 
 function handleMemoryMessage(act: string, msg: ServerMessage) {
-  if (act === 'readGroups') {
+  if (act === 'deleteChatGroup') {
+    handleDeleteChatGroup(msg);
+    return;
+  }
+  if (act === 'listChatGroups') {
     const sessionId = msg.sessionId || msg.session_id;
     const error = normalizeServerError(msg);
     if (error) {
@@ -1771,7 +1810,6 @@ function toNonNegativeInteger(value: unknown): number | null {
 
 function resetMemoryHistory() {
   clearMemoryResponseTimer();
-  memoryDeleteCandidateId.value = null;
   memoryRecords.value = [];
   memoryHasMore.value = true;
   memoryLoading.value = false;
@@ -1839,6 +1877,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  pendingGroupDeletes.forEach(timer => window.clearTimeout(timer));
+  pendingGroupDeletes.clear();
   childTimers.forEach(timer => window.clearTimeout(timer));
   childTimers.clear();
   contentResizeObserver?.disconnect();
@@ -2317,6 +2357,7 @@ function redactConnectionUrl(value: string): string {
           @retry-history="requestChildHistory(selectedChildHistory?.mode === 'older')"
           :show-debug-info="showDebugInfo"
           @close="closeSubAgentPanel"
+          @delete-sub-agent="deleteSubAgent"
           @resend-user-message="resendUserMessage"
           @update-user-message="updateAndResendUserMessage"
           @preview-file="openFilePreview"
@@ -2378,16 +2419,6 @@ function redactConnectionUrl(value: string): string {
       />
     </main>
   </div>
-
-  <ConfirmDialog
-    v-if="memoryDeleteCandidateId !== null"
-    :cancel-label="t.cancel"
-    :confirm-label="t.deleteAction"
-    :message="t.deleteMemoryConfirm"
-    :title="t.deleteMemoryConfirmTitle"
-    @cancel="cancelMemoryDelete"
-    @confirm="confirmMemoryDelete"
-  />
 
   <ConfirmDialog
     v-if="sessionDeleteCandidateId !== null"

@@ -60,6 +60,43 @@ onUpdated(() => {
   });
 });
 
+// Keep attachment bytes for resending; derive image entries only for display.
+const attachmentImages = computed<ChatImage[]>(() => (
+    (props.message.attachments || [])
+        .filter((attachment) => Boolean(attachment.base64) && /^image\//i.test(attachment.type || ''))
+        .map((attachment) => ({
+          id: attachment.id,
+          name: attachment.name,
+          src: attachment.base64!.startsWith('data:')
+              ? attachment.base64!
+              : `data:${attachment.type};base64,${attachment.base64}`,
+          prompt: '',
+          time: props.message.time,
+        }))
+));
+
+const displayImages = computed<ChatImage[]>(() => {
+  const images = props.message.images || [];
+  const ids = new Set(images.map((image) => image.id));
+  return [...images, ...attachmentImages.value.filter((image) => !ids.has(image.id))];
+});
+
+const displayAttachments = computed(() => {
+  const imageIds = new Set(attachmentImages.value.map((image) => image.id));
+  return (props.message.attachments || []).filter((attachment) => !imageIds.has(attachment.id));
+});
+
+const MAX_VISIBLE_USER_FILES = 10;
+const filesExpanded = ref(false);
+const userFileEntries = computed(() => [
+  ...displayAttachments.value.map(attachment => ({
+    id: `attachment-${attachment.id}`, name: attachment.name,
+  })),
+  ...(props.message.files || []).map(file => ({id: `file-${file.id}`, name: file.name})),
+]);
+const visibleUserFiles = computed(() => filesExpanded.value
+    ? userFileEntries.value : userFileEntries.value.slice(0, MAX_VISIBLE_USER_FILES));
+
 const isMainProcessMessage = computed(() => (
     props.message.isSubTalk === 1 &&
     props.message.sender === 'AgentBee' &&
@@ -154,6 +191,12 @@ const historyPreviewArtifact = computed<ChatFile | null>(() => {
 });
 
 const senderIdentity = computed(() => {
+  // Human user bubbles use the localized role label, not transport sender metadata.
+  // Child-agent panels keep their separate server identity rules.
+  if (props.message.role === 'user' && !props.serverIdentityOnly) {
+    const messageId = props.message.messageId?.trim();
+    return props.labels.roleUser + (props.showDebugInfo && messageId ? ` [${messageId}]` : '');
+  }
   // Child history has no streaming sender metadata: user records are the main agent.
   if (props.serverIdentityOnly && props.message.isRemoteHistory && props.message.role === 'user') {
     const messageId = props.message.messageId?.trim();
@@ -443,37 +486,46 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
 
         <ToolEventsBlock
             v-if="message.toolEvents?.length"
-                        :events="message.toolEvents"
+            :events="message.toolEvents"
             :labels="labels"
         />
 
-        <div v-if="message.images?.length" class="message-images">
-          <figure v-for="image in message.images" :key="image.id" class="message-image">
-            <button v-if="message.role !== 'user'" type="button" class="message-image-open" :title="labels.preview" @click="previewImage(image)">
-              <img :src="image.src" :alt="image.prompt || labels.imageAlt" loading="lazy" />
+        <div v-if="displayImages.length" class="message-images">
+          <figure v-for="image in displayImages" :key="image.id" class="message-image">
+            <button type="button" class="message-image-open" :title="labels.preview" @click="previewImage(image)">
+              <img :src="image.src" :alt="(message.role === 'user' ? image.name : image.prompt) || labels.imageAlt" loading="lazy" decoding="async" />
             </button>
-            <img v-if="message.role === 'user'" :src="image.src" :alt="image.name || labels.imageAlt" loading="lazy" decoding="async" />
-            <figcaption v-if="image.name?.trim()" class="message-image-name" :title="image.name">{{ image.name }}</figcaption>
             <figcaption v-if="image.prompt?.trim()">{{ image.prompt }}</figcaption>
           </figure>
         </div>
 
-        <div v-if="message.attachments?.length" class="message-attachments">
-        <span v-for="attachment in message.attachments" :key="attachment.id" class="message-attachment-chip">
+        <div v-if="message.role === 'user' && userFileEntries.length" class="message-user-files">
+          <span v-for="file in visibleUserFiles" :key="file.id" class="message-user-file">
+            <FileText :size="14" aria-hidden="true" />
+            <span>{{ file.name }}</span>
+          </span>
+          <button v-if="userFileEntries.length > MAX_VISIBLE_USER_FILES" type="button" class="message-files-toggle"
+              :aria-expanded="filesExpanded" @click="filesExpanded = !filesExpanded">
+            {{ filesExpanded ? labels.collapse : labels.viewAllFiles }}
+          </button>
+        </div>
+
+        <div v-if="message.role !== 'user' && displayAttachments.length" class="message-attachments">
+        <span v-for="attachment in displayAttachments" :key="attachment.id" class="message-attachment-chip">
           <Paperclip :size="13" aria-hidden="true" />
           <span class="attachment-name">{{ attachment.name }}</span>
           <span class="attachment-size">{{ formatSize(attachment.size) }}</span>
         </span>
         </div>
 
-        <div v-if="message.files?.length" class="message-files">
+        <div v-if="message.role !== 'user' && message.files?.length" class="message-files">
           <article v-for="file in message.files" :key="file.id" class="message-file-card">
             <FileText :size="16" aria-hidden="true" />
             <span class="message-file-copy">
-            <strong>{{ file.name }}</strong>
-<small v-if="message.role !== 'user'">{{ file.mimeType }}</small>
-          </span>
-            <button v-if="message.role !== 'user'" type="button" class="icon-button" :title="labels.preview" @click="emit('previewFile', file)">
+              <strong>{{ file.name }}</strong>
+              <small>{{ file.mimeType }}</small>
+            </span>
+            <button type="button" class="icon-button" :title="labels.preview" @click="emit('previewFile', file)">
               <Eye :size="15" aria-hidden="true" />
             </button>
           </article>

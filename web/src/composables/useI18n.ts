@@ -6,6 +6,7 @@ const STORAGE_KEY = 'beeweb.locale';
 
 const messages = {
   zh: {
+viewAllFiles: '查看全部',
     copyLocalPath: '复制路径',
     activeWaiting: '等待连接',
     activeConnected: '已连接',
@@ -123,7 +124,7 @@ const messages = {
     sendShortcutHint: 'Enter 发送 · Ctrl/⌘+Enter 换行',
     sendShortcutHintMobile: 'Enter 换行 · 点右侧按钮发送',
     items: '条',
-    roleUser: '你',
+    roleUser: '我',
     roleAssistant: 'AgentBee',
     roleSystem: '系统',
     roleError: '错误',
@@ -192,6 +193,7 @@ const messages = {
     subAgent: '专家',
     subAgents: '专家',
     closeSubAgent: '关闭专家面板',
+    subAgentDeleteFailed: '删除专家失败，请检查连接后重试。',
     deleteSubAgent: '删除专家',
     resizeSubAgentPanel: '调整专家面板宽度',
     resizePreviewPanel: '调整文件预览面板宽度',
@@ -201,6 +203,7 @@ const messages = {
     subAgentStopped: '已停止',
   },
   en: {
+viewAllFiles: 'View all',
     copyLocalPath: 'Copy path',
     activeWaiting: 'Waiting',
     activeConnected: 'Connected',
@@ -387,6 +390,7 @@ const messages = {
     subAgent: 'Expert',
     subAgents: 'Experts',
     closeSubAgent: 'Close Expert panel',
+    subAgentDeleteFailed: 'Failed to delete the Expert. Check the connection and retry.',
     deleteSubAgent: 'Delete Expert',
     resizeSubAgentPanel: 'Resize Expert panel',
     resizePreviewPanel: 'Resize file preview panel',

@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type {
   ChatAttachment,
   ChatMessage,
@@ -128,7 +128,7 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
   let connectionRequested = false;
   let hiddenAt: number | null = null;
   let queuedTextSend: QueuedTextSend | null = null;
-  // readGroups has no response correlation ID: keep exactly one request in flight.
+  // listChatGroups has no response correlation ID: keep exactly one request in flight.
   let groupsRequestSessionId = '';
   let queuedGroupsSessionId = '';
 
@@ -399,12 +399,27 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     ensureAssistantMessage(messageId);
     startNoResponseTimer(messageId);
 
-    sendJson({
-      sessionId: session.id,
-      messageId,
-      createdAt: new Date().toISOString(),
-      ...createClientContentPayload(text, attachments),
-    });
+    const transport = socket.value;
+    const createdAt = new Date().toISOString();
+    const transmit = () => {
+      if (transport?.readyState !== WebSocket.OPEN) return;
+      transport.send(`${JSON.stringify({
+        sessionId: session.id,
+        messageId,
+        createdAt,
+        ...createClientContentPayload(text, attachments),
+      })}\n`);
+    };
+    // Local bubbles must paint before large attachment payloads are serialized.
+    // Hidden pages have no animation frames, so they use the immediate path.
+    if (document.visibilityState === 'visible' && typeof window.requestAnimationFrame === 'function') {
+      // Flush Vue's local user/assistant bubbles before scheduling the paint.
+      nextTick(() => {
+        window.requestAnimationFrame(() => window.setTimeout(transmit, 0));
+      });
+    } else {
+      transmit();
+    }
     return true;
   }
 
@@ -537,7 +552,7 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     return options.activeSession()?.id || '';
   }
 
-  function readGroups(targetSessionId?: string): boolean {
+  function listChatGroups(targetSessionId?: string): boolean {
     const sessionId = currentSessionId(targetSessionId);
     if (!canSend.value || !sessionId) return false;
     if (groupsRequestSessionId) {
@@ -545,7 +560,7 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
       return true;
     }
     groupsRequestSessionId = sessionId;
-    sendJson({ type: 'memory', sessionId, content: { act: 'readGroups' } });
+    sendJson({ type: 'memory', sessionId, content: { act: 'listChatGroups' } });
     return true;
   }
 
@@ -629,6 +644,16 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     const name = sessionName.trim();
     if (!id || !name) return false;
     return sendSessionAct('renameSession', id, { session_name: name });
+  }
+
+  function deleteChatGroup(sessionId: string, workerName: string): boolean {
+    if (!canSend.value || !sessionId.trim() || !workerName.trim()) return false;
+    sendJson({
+      type: 'memory',
+      sessionId,
+      content: { act: 'deleteChatGroup', worker_name: workerName },
+    });
+    return true;
   }
 
   function deleteMemory(createId: number) {
@@ -735,15 +760,15 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
       options.onSystemMessage?.(act, content, msg);
       return;
     }
-    if (type === 'memory' || (!type && msg.act === 'readGroups')) {
+    if (type === 'memory' || (!type && msg.act === 'listChatGroups')) {
       const { act } = unwrapActContent(msg);
-      if (act === 'readGroups') {
+      if (act === 'listChatGroups') {
         const sessionId = msg.sessionId || msg.session_id || groupsRequestSessionId;
         groupsRequestSessionId = '';
         if (sessionId) options.onMemoryMessage?.(act, { ...msg, sessionId });
         const queued = queuedGroupsSessionId;
         queuedGroupsSessionId = '';
-        if (queued) readGroups(queued);
+        if (queued) listChatGroups(queued);
         return;
       }
       options.onMemoryMessage?.(act, msg);
@@ -1399,6 +1424,7 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     connectionError,
     connectionState,
     disconnect,
+    deleteChatGroup,
     deleteMemory,
     deleteSession,
     autoConnectPaused,
@@ -1406,7 +1432,7 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
     reconnect,
     resumeConnection,
     readMemory,
-    readGroups,
+    listChatGroups,
     listSessions,
     renameSession,
     resendEditedText,

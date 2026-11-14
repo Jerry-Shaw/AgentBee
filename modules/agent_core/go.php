@@ -365,9 +365,10 @@ class go extends Factory
                 unset($this->last_response[$session['session_id']]);
             }
 
-            // Reset status to IDLE when now time is newer wait until time
+            // Reset status to IDLE when now time is newer than wait until time with message pending status
             if (!$this->utils->isPipeIdle($session['session_id']) && $this->utils->wait_until[$session['session_id']] < $now_time) {
                 $this->utils->setPipeStatus(utils::STATUS_IDLE, $session['session_id'], true);
+                $this->core->context->messagePending($session['session_id'], true);
             }
 
             // Remove session from list when active duration is too long

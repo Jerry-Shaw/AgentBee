@@ -201,10 +201,19 @@ class message extends Factory
                 }
                 break;
 
-            case 'readGroups':
+            case 'listChatGroups':
                 $content = [
                     'act'  => $act,
-                    'data' => $data_content['memory']->readChatGroups($session_id)
+                    'data' => $data_content['memory']->listChatGroups($session_id)
+                ];
+                break;
+
+            case 'deleteChatGroup':
+                $content = [
+                    'act'         => $act,
+                    'data'        => $data_content['memory']->deleteChatGroup($session_id, $data_content['worker_name']),
+                    'session_id'  => $session_id,
+                    'worker_name' => $data_content['worker_name']
                 ];
                 break;
 
@@ -334,7 +343,7 @@ class message extends Factory
                         $user_images[] = [
                             'filename'   => $data['file']['filename'],
                             'file_path'  => $save_file['file_path'] ?? '',
-                            'img_base64' => $this->utils->resizeImage($binary, 320, 320)
+                            'img_base64' => $this->utils->resizeImage($binary, 1024, 1024)
                         ];
                     } catch (\Throwable $throwable) {
                         $errors[] = $data['file']['filename'] . '：' . $throwable->getMessage();

@@ -411,7 +411,7 @@ class go extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    public function readChatGroups(string $session_id): array
+    public function listChatGroups(string $session_id): array
     {
         $data = $this->libSQLite
             ->table('agent_chat')
@@ -421,6 +421,25 @@ class go extends Factory
 
         unset($session_id);
         return $data;
+    }
+
+    /**
+     * @param string $session_id
+     * @param string $worker_name
+     *
+     * @return bool
+     * @throws \ReflectionException
+     */
+    public function deleteChatGroup(string $session_id, string $worker_name): bool
+    {
+        $delete = $this->libSQLite
+            ->delete()
+            ->table('agent_chat')
+            ->where(['session_id', $session_id], ['type', 1], ['worker_name', $worker_name])
+            ->execute();
+
+        unset($session_id, $worker_name);
+        return $delete;
     }
 
     // =========================================================================

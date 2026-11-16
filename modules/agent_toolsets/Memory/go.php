@@ -480,9 +480,9 @@ class go extends Factory
         $create_id = $this->generateMicroTimestamp('agent_memory');
 
         $expire_at = 'misc' === $level
-        && isset($this->utils->agent_config['misc_keep_days'])
-        && 0 < $this->utils->agent_config['misc_keep_days']
-            ? ($now_time + $this->utils->agent_config['misc_keep_days'] * 86400)
+        && isset($this->utils->config->agent_config['misc_keep_days'])
+        && 0 < $this->utils->config->agent_config['misc_keep_days']
+            ? ($now_time + $this->utils->config->agent_config['misc_keep_days'] * 86400)
             : 0;
 
         if (in_array($level, ['important', 'system'], true)) {
@@ -1079,7 +1079,7 @@ class go extends Factory
         $keep_ids = $this->libSQLite->table('agent_memory')
             ->select('create_id')
             ->where(['level', 'misc'])
-            ->limit($this->utils->agent_config['misc_save_len'] ?? 200)
+            ->limit($this->utils->config->agent_config['misc_save_len'] ?? 200)
             ->order(['create_id' => 'DESC'])
             ->fetchAll(\PDO::FETCH_COLUMN);
 

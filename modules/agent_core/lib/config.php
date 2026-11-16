@@ -31,7 +31,7 @@ class config extends Factory
     public App      $app;
     public libCrypt $libCrypt;
 
-    public array $config = [];
+    public array $agent_config = [];
 
     public string $config_dir  = '';
     public string $conf_system = '';
@@ -62,8 +62,8 @@ class config extends Factory
      */
     public function get(bool $decrypt = true, bool $reload = false): array
     {
-        if (!$reload && [] !== $this->config) {
-            $config_data = $this->config;
+        if (!$reload && [] !== $this->agent_config) {
+            $config_data = $this->agent_config;
         } else {
             $config_data = is_file($this->conf_system)
                 ? json_decode(file_get_contents($this->conf_system), true) ?? $this->getDefault()
@@ -92,7 +92,7 @@ class config extends Factory
                 $config_data['agent_llm']['hw_hash'] = $this->save($config_data);
             }
 
-            $this->config = $config_data;
+            $this->agent_config = $config_data;
         }
 
         $config_data['agent_llm']['api_type'] = in_array($config_data['agent_llm']['api_type'], ['completions', 'responses', 'messages'], true)
@@ -100,7 +100,7 @@ class config extends Factory
             : 'completions';
 
         if (!$decrypt) {
-            $key_data = $this->encryptKey($this->config['agent_llm']['api_key']);
+            $key_data = $this->encryptKey($this->agent_config['agent_llm']['api_key']);
 
             $config_data['agent_llm']['api_key'] = $key_data['api_key'];
             $config_data['agent_llm']['hw_hash'] = $key_data['hw_hash'];
@@ -139,7 +139,7 @@ class config extends Factory
             $config_data['agent_llm']['hw_hash'] = $key_data['hw_hash'];
         }
 
-        $config_data = array_merge($this->config, $config_data);
+        $config_data = array_merge($this->agent_config, $config_data);
         $config_json = json_encode($config_data, JSON_PRETTY);
         $config_hash = $config_data['agent_llm']['hw_hash'];
 

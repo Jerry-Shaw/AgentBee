@@ -117,7 +117,7 @@ class handler extends Factory
         }
 
         $config       = $this->loadConfig($agent_core);
-        $data_dir     = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . 'BrowserData';
+        $data_dir     = rtrim($agent_core->utils->config->agent_config['workspace_path'], '/\\') . DIRECTORY_SEPARATOR . 'BrowserData';
         $start_args[] = '--user-data-dir=' . $data_dir;
 
         $browser_idx = $agent_core->utils
@@ -931,7 +931,7 @@ class handler extends Factory
             return '';
         }
 
-        $save_path = rtrim($agent_core->utils->agent_config['workspace_path'], '/\\')
+        $save_path = rtrim($agent_core->utils->config->agent_config['workspace_path'], '/\\')
             . DIRECTORY_SEPARATOR . 'BrowserScreenshot'
             . DIRECTORY_SEPARATOR . date('Ymd');
 

@@ -20,15 +20,16 @@
 
 namespace modules\agent_openai\api;
 
-use modules\agent_core\lib\config;
+use modules\agent_core\lib\utils;
 use modules\agent_openai\lib\stream;
 
 class responses extends stream
 {
     public array $tool_calls = [];
 
-    public int    $same_calls = 0;
-    public string $call_hash  = '';
+    public int $same_calls = 0;
+
+    public string $call_hash = '';
 
     public string $reason_content    = '';
     public string $assistant_content = '';
@@ -201,7 +202,7 @@ class responses extends stream
     {
         switch ($chunk['type']) {
             case 'response.completed':
-                if (isset($chunk['response']['id']) && (config::new()->config['agent_llm']['keep_response_id'] ?? false)) {
+                if (isset($chunk['response']['id']) && (utils::new()->config->agent_config['agent_llm']['keep_response_id'] ?? false)) {
                     $this->options['previous_response_id'] = $chunk['response']['id'];
                 }
 
@@ -231,7 +232,7 @@ class responses extends stream
 
             case 'response.reasoning_summary_text.delta':
                 if (isset($chunk['delta']) && '' !== $chunk['delta']) {
-                    if ($this->core->utils->agent_config['agent_llm']['keep_reasons'] ?? false) {
+                    if ($this->core->utils->config->agent_config['agent_llm']['keep_reasons'] ?? false) {
                         $this->reason_content .= $chunk['delta'];
                     }
 

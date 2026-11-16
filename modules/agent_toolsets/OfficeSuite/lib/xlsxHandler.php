@@ -208,7 +208,7 @@ class xlsxHandler extends Factory
                 return ['error' => 'No data to write.'];
             }
 
-            $temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/xlsx_' . uniqid('', true);
+            $temp_dir = $this->utils->config->agent_config['workspace_path'] . '/OfficeTemp/xlsx_' . uniqid('', true);
             if (!mkdir($temp_dir, 0755, true)) {
                 return ['error' => 'Failed to create temp dir'];
             }

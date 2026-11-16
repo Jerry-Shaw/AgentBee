@@ -110,7 +110,7 @@ class pptxHandler extends Factory
         }
 
         // Create temp directory for extracted images
-        $temp_dir = $this->utils->agent_config['workspace_path'] . '/OfficeTemp/pptx_read_' . uniqid('', true);
+        $temp_dir = $this->utils->config->agent_config['workspace_path'] . '/OfficeTemp/pptx_read_' . uniqid('', true);
         if (!mkdir($temp_dir, 0755, true)) {
             $zip->close();
             return ['error' => 'Cannot create temporary directory for images'];

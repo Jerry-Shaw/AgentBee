@@ -226,7 +226,7 @@ class completions extends stream
         }
 
         if (isset($delta['reasoning_content']) && '' !== $delta['reasoning_content']) {
-            if ($this->core->utils->agent_config['agent_llm']['keep_reasons'] ?? false) {
+            if ($this->core->utils->config->agent_config['agent_llm']['keep_reasons'] ?? false) {
                 $this->reason_content .= $delta['reasoning_content'];
             }
 

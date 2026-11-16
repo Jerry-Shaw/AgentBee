@@ -251,7 +251,7 @@ class go extends Factory
      */
     public function exec(string $program, array|string $argv = [], int $timeout = 30, string $descriptor = 'socket', string $work_path = ''): array
     {
-        if ($this->utils->config->config['sandbox_mode'] ?? true) {
+        if ($this->utils->config->agent_config['sandbox_mode'] ?? true) {
             return [
                 'status' => 'error',
                 'error'  => '沙箱模式已开启，无法调用exec工具，请关闭沙箱模式后执行。'
@@ -265,7 +265,7 @@ class go extends Factory
         ];
 
         $work_path = '' === $work_path
-            ? $this->utils->agent_config['workspace_path']
+            ? $this->utils->config->agent_config['workspace_path']
             : $this->utils->securePath($work_path);
 
         if ([] === $argv && str_contains($program, ' ')) {

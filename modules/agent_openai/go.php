@@ -61,7 +61,7 @@ class go extends Factory
     {
         $this->init($reload);
 
-        if (!$this->utils->config->config['sandbox_mode']) {
+        if (!$this->utils->config->agent_config['sandbox_mode']) {
             $agent_toolsets = $this->utils->fetchToolset('modules/agent_toolsets');
             $this->core->addSkills($agent_toolsets);
         } else {
@@ -286,7 +286,7 @@ class go extends Factory
      */
     public function AgentBee(): void
     {
-        ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
+        ini_set('memory_limit', $this->utils->config->agent_config['memory_limit'] ?? '4G');
 
         $context = context::new();
 
@@ -347,7 +347,7 @@ class go extends Factory
      */
     public function Collaborator(): void
     {
-        ini_set('memory_limit', $this->utils->agent_config['memory_limit'] ?? '4G');
+        ini_set('memory_limit', $this->utils->config->agent_config['memory_limit'] ?? '4G');
 
         $context = context::new();
 
@@ -411,20 +411,20 @@ class go extends Factory
         }
 
         $this->libOpenAI = libOpenAI::new(
-            $llm_params['api_url'] ?? $this->utils->agent_config['agent_llm']['api_url'],
-            $llm_params['api_key'] ?? $this->utils->agent_config['agent_llm']['api_key'],
+            $llm_params['api_url'] ?? $this->utils->config->agent_config['agent_llm']['api_url'],
+            $llm_params['api_key'] ?? $this->utils->config->agent_config['agent_llm']['api_key'],
             'AgentBee'
         );
 
         $this->libOpenAI->setTimeout(
-            $llm_params['timeout'] ?? $this->utils->agent_config['agent_llm']['timeout'],
+            $llm_params['timeout'] ?? $this->utils->config->agent_config['agent_llm']['timeout'],
             10,
             1,
-            $llm_params['low_speed_time'] ?? $this->utils->agent_config['agent_llm']['low_speed_time']
+            $llm_params['low_speed_time'] ?? $this->utils->config->agent_config['agent_llm']['low_speed_time']
         );
 
-        $this->libOpenAI->setOrgId($llm_params['org_id'] ?? $this->utils->agent_config['agent_llm']['org_id']);
-        $this->libOpenAI->setApiModel($llm_params['model_id'] ?? $this->utils->agent_config['agent_llm']['model_id']);
+        $this->libOpenAI->setOrgId($llm_params['org_id'] ?? $this->utils->config->agent_config['agent_llm']['org_id']);
+        $this->libOpenAI->setApiModel($llm_params['model_id'] ?? $this->utils->config->agent_config['agent_llm']['model_id']);
 
         unset($reload, $llm_params);
     }

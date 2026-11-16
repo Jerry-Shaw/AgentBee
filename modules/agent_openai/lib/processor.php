@@ -159,14 +159,14 @@ class processor extends Factory
         };
 
         try {
-            $api_type = $this->core->utils->agent_config['agent_llm']['api_type'];
+            $api_type = $this->core->utils->config->agent_config['agent_llm']['api_type'];
             $libOpenAI->setEndMarker('responses' === $api_type ? 'response.completed' : '[DONE]');
             $libOpenAI->setModelParams($this->getParams($libOpenAI->getModelParams(), $api_type));
 
             $libOpenAI->$api_type(
                 $history,
                 $system,
-                $this->core->utils->agent_config['agent_llm']['model_id'],
+                $this->core->utils->config->agent_config['agent_llm']['model_id'],
                 $this->context->api_object->options,
                 $stream_handler
             );

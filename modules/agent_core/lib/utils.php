@@ -36,16 +36,15 @@ class utils extends Factory
 
     public App       $app;
     public OSMgr     $OSMgr;
+    public config    $config;
     public ProcMgr   $procMgr;
     public libFileIO $libFileIO;
-    public config    $config;
+
+    public string $pid_file_path;
 
     public int $main_idx   = 0;
     public int $proc_idx   = 10;
     public int $worker_idx = 1000;
-
-    public array  $agent_config;
-    public string $pid_file_path;
 
     public array $wait_until      = [];
     public array $wait_status     = [];
@@ -62,11 +61,12 @@ class utils extends Factory
     {
         $this->app       = App::new();
         $this->OSMgr     = OSMgr::new();
+        $this->config    = config::new();
         $this->procMgr   = ProcMgr::new('socket');
         $this->libFileIO = libFileIO::new();
-        $this->config    = config::new();
 
-        $this->agent_config  = $this->config->get();
+        $this->config->get();
+
         $this->pid_file_path = $this->config->config_dir . DIRECTORY_SEPARATOR . 'proc' . DIRECTORY_SEPARATOR;
 
         if (!is_dir($this->pid_file_path)) {
@@ -278,9 +278,9 @@ class utils extends Factory
      */
     public function securePath(string $input_path): string
     {
-        $sandbox_mode = $this->agent_config['sandbox_mode'] ?? true;
+        $sandbox_mode = $this->config->agent_config['sandbox_mode'] ?? true;
         $input_path   = strtr($input_path, ['\\' => DIRECTORY_SEPARATOR, '/' => DIRECTORY_SEPARATOR]);
-        $work_path    = rtrim($this->agent_config['workspace_path'], '\\/');
+        $work_path    = rtrim($this->config->agent_config['workspace_path'], '\\/');
         $work_path    = strtr($work_path, ['\\' => DIRECTORY_SEPARATOR, '/' => DIRECTORY_SEPARATOR]);
 
         if ($sandbox_mode) {
@@ -639,8 +639,8 @@ class utils extends Factory
     {
         $prompts   = [];
         $php_path  = $this->OSMgr->getPhpPath();
-        $work_url  = $this->agent_config['workspace_url'] ?? '';
-        $work_path = $this->agent_config['workspace_path'] ?? App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace';
+        $work_url  = $this->config->agent_config['workspace_url'] ?? '';
+        $work_path = $this->config->agent_config['workspace_path'] ?? App::new()->root_path . DIRECTORY_SEPARATOR . 'workspace';
 
         $prompts[] = '## 身份';
         $prompts[] = '你是 **' . AGENT_NAME . '**，人类助理。';
@@ -708,7 +708,7 @@ class utils extends Factory
 
         $prompts[] = '';
         $prompts[] = '## 执行安全';
-        if ($this->agent_config['sandbox_mode']) {
+        if ($this->config->agent_config['sandbox_mode']) {
             $prompts[] = '- 沙箱开启：文件操作仅限工作区`' . $work_path . '`，禁止`../`或符号链接逃逸。';
         } else {
             $prompts[] = '- 沙箱关闭：优先使用工作区目录或绝对路径；禁止借`../`或符号链接访问系统关键目录。';
@@ -750,7 +750,7 @@ class utils extends Factory
     public function getChildPrompt(string $worker_name, string $worker_role): string
     {
         $prompts   = [];
-        $work_path = $this->agent_config['workspace_path'];
+        $work_path = $this->config->agent_config['workspace_path'];
 
         $prompts[] = '## 身份';
         $prompts[] = '你是 **' . $worker_name . '**，' . $worker_role . '。';
@@ -783,7 +783,7 @@ class utils extends Factory
 
         $prompts[] = '';
         $prompts[] = '## 安全';
-        if ($this->agent_config['sandbox_mode']) {
+        if ($this->config->agent_config['sandbox_mode']) {
             $prompts[] = '- 沙箱开启：文件操作仅限工作区`' . $work_path . '`，禁止`../`或符号链接逃逸。';
         } else {
             $prompts[] = '- 沙箱关闭：优先使用绝对路径和工作区；禁止借`../`或符号链接访问系统关键目录。';
@@ -886,7 +886,7 @@ class utils extends Factory
             return;
         }
 
-        $this->wait_until[$session_id] = time() + ($this->agent_config['agent_llm']['wait_timeout'] ?? 600);
+        $this->wait_until[$session_id] = time() + ($this->config->agent_config['agent_llm']['wait_timeout'] ?? 600);
 
         if (($this->wait_status[$session_id] & $status) !== $status) {
             switch ($status) {
@@ -927,7 +927,7 @@ class utils extends Factory
      */
     public function debug(string $title, string $content, string $level = 'trace'): void
     {
-        $debug_level = strtolower($this->agent_config['agent_debug']);
+        $debug_level = strtolower($this->config->agent_config['agent_debug']);
 
         if ('none' === $debug_level) {
             return;

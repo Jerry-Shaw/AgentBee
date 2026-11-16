@@ -66,7 +66,7 @@ class handler extends Factory
         }
 
         $this->config    = $config;
-        $this->save_path = rtrim($agent_core->utils->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . 'ImageMaker' . DIRECTORY_SEPARATOR;
+        $this->save_path = rtrim($agent_core->utils->config->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . 'ImageMaker' . DIRECTORY_SEPARATOR;
 
         if (!is_dir($this->save_path)) {
             try {

@@ -52,7 +52,7 @@ class go extends Factory
         $this->openai  = openai::new();
         $this->message = message::new();
 
-        $this->core->app->setLocale($this->utils->agent_config['agent_server']['locale'] ?? 'zh_CN.UTF-8');
+        $this->core->app->setLocale($this->utils->config->agent_config['agent_server']['locale'] ?? 'zh_CN.UTF-8');
     }
 
     /**
@@ -66,13 +66,13 @@ class go extends Factory
         $this->core->initCore($reload);
 
         $this->utils->debug('System', $reload ? 'Reloading...' : 'Initializing...', 'trace');
-        $this->utils->debug('SandBox', $this->utils->agent_config['sandbox_mode'] ? 'ON' : 'OFF', 'trace');
-        $this->utils->debug('API-URL', $this->utils->agent_config['agent_llm']['api_url'] ?? 'NONE', 'trace');
-        $this->utils->debug('API-Type', $this->utils->agent_config['agent_llm']['api_type'], 'trace');
-        $this->utils->debug('Model-ID', $this->utils->agent_config['agent_llm']['model_id'] ?? 'NONE', 'trace');
-        $this->utils->debug('WS-Token', $this->utils->agent_config['agent_server']['ws_token'] ?? 'NONE', 'trace');
+        $this->utils->debug('SandBox', $this->utils->config->agent_config['sandbox_mode'] ? 'ON' : 'OFF', 'trace');
+        $this->utils->debug('API-URL', $this->utils->config->agent_config['agent_llm']['api_url'] ?? 'NONE', 'trace');
+        $this->utils->debug('API-Type', $this->utils->config->agent_config['agent_llm']['api_type'], 'trace');
+        $this->utils->debug('Model-ID', $this->utils->config->agent_config['agent_llm']['model_id'] ?? 'NONE', 'trace');
+        $this->utils->debug('WS-Token', $this->utils->config->agent_config['agent_server']['ws_token'] ?? 'NONE', 'trace');
 
-        $workspace_path = $this->utils->agent_config['workspace_path'] ?? '';
+        $workspace_path = $this->utils->config->agent_config['workspace_path'] ?? '';
         $this->utils->debug('Workspace', $workspace_path, 'trace');
 
         if ('' !== $workspace_path && !is_dir($workspace_path)) {
@@ -119,7 +119,7 @@ class go extends Factory
             [
                 'proc_idx'   => $proc_idx,
                 'worker_pid' => $worker_pid,
-                'llm_params' => $this->utils->agent_config['agent_llm']['params']
+                'llm_params' => $this->utils->config->agent_config['agent_llm']['params']
             ]
         );
 
@@ -166,10 +166,10 @@ class go extends Factory
 
         $this->utils->cleanPids(fgets($flock_fp) === $boot_time);
 
-        $occupied_pids = $this->core->OSMgr->findPidsByPortState($this->utils->agent_config['agent_server']['port'], 'LISTEN');
+        $occupied_pids = $this->core->OSMgr->findPidsByPortState($this->utils->config->agent_config['agent_server']['port'], 'LISTEN');
 
         if ([] !== $occupied_pids) {
-            $this->utils->debug('System', 'AgentBee failed to start. Port ' . $this->utils->agent_config['agent_server']['port'] . ' is occupied.', 'trace');
+            $this->utils->debug('System', 'AgentBee failed to start. Port ' . $this->utils->config->agent_config['agent_server']['port'] . ' is occupied.', 'trace');
             return;
         }
 
@@ -177,7 +177,7 @@ class go extends Factory
         ftruncate($flock_fp, 0);
         fwrite($flock_fp, $boot_time);
 
-        $memory_limit = $this->utils->agent_config['memory_limit'] ?? '4G';
+        $memory_limit = $this->utils->config->agent_config['memory_limit'] ?? '4G';
 
         ini_set('memory_limit', $memory_limit);
 
@@ -201,12 +201,12 @@ class go extends Factory
         $this->core->addSkills($custom_skills);
 
         try {
-            $server_host = 'tcp://' . $this->utils->agent_config['agent_server']['host'] . ':' . $this->utils->agent_config['agent_server']['port'];
+            $server_host = 'tcp://' . $this->utils->config->agent_config['agent_server']['host'] . ':' . $this->utils->config->agent_config['agent_server']['port'];
             $this->utils->debug('Local-IP', implode(', ', $this->core->OSMgr->getIPv4()), 'trace');
             $this->utils->debug('System', 'Ready to start server on ' . $server_host, 'trace');
             $this->core->socketMgr
                 ->setUserFuncInterval(10)
-                ->setAliveTimeout($this->utils->agent_config['agent_server']['ping_interval'])
+                ->setAliveTimeout($this->utils->config->agent_config['agent_server']['ping_interval'])
                 ->setEventListener('onUserFunc', [$this, 'scheduler'])
                 ->setEventListener('onHandshake', [$this, 'onHandshake'])
                 ->setEventListener('onMessage', [$this, 'onMessage'])
@@ -359,7 +359,7 @@ class go extends Factory
             if (
                 isset($this->last_response[$session['session_id']])
                 && 0 < $this->last_response[$session['session_id']]
-                && ($this->last_response[$session['session_id']] + $this->utils->agent_config['reset_interval']) < $now_time
+                && ($this->last_response[$session['session_id']] + $this->utils->config->agent_config['reset_interval']) < $now_time
             ) {
                 $this->core->context->removeHistory($session['session_id'], WORKER_MAIN);
                 unset($this->last_response[$session['session_id']]);
@@ -374,7 +374,7 @@ class go extends Factory
             // Remove session from list when active duration is too long
             if (
                 isset($session_active[$session['session_id']])
-                && ($session_active[$session['session_id']] + $this->utils->agent_config['reset_interval']) < $now_time
+                && ($session_active[$session['session_id']] + $this->utils->config->agent_config['reset_interval']) < $now_time
             ) {
                 $this->core->context->removeSessionList($session['session_id']);
             }
@@ -459,8 +459,8 @@ class go extends Factory
     public function onHandshake(string $socket_id, string $ws_protocol): bool
     {
         if (
-            isset($this->utils->agent_config['agent_server']['ws_token'])
-            && !in_array($this->utils->agent_config['agent_server']['ws_token'], ['', $ws_protocol], true)
+            isset($this->utils->config->agent_config['agent_server']['ws_token'])
+            && !in_array($this->utils->config->agent_config['agent_server']['ws_token'], ['', $ws_protocol], true)
         ) {
             $this->utils->debug('Socket', 'Client reject, protocol error: ' . ('' !== $ws_protocol ? $ws_protocol : 'None'), 'trace');
             return false;
@@ -578,7 +578,7 @@ class go extends Factory
                             WORKER_MAIN,
                             WORKER_MAIN,
                             'llm_params',
-                            $this->utils->agent_config['agent_llm']['params']
+                            $this->utils->config->agent_config['agent_llm']['params']
                         );
 
                         $this->openai->reload();
@@ -1242,7 +1242,7 @@ class go extends Factory
 
             // Send notice when token > 256
             if (256 < $remain_tokens) {
-                $this->utils->debug($payload['sender'], 'Remain tokens too low (' . $remain_tokens . '/' . $this->utils->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
+                $this->utils->debug($payload['sender'], 'Remain tokens too low (' . $remain_tokens . '/' . $this->utils->config->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
 
                 $content = WORKER_MAIN === $payload['sender']
                     ? '[系统提醒] 上下文已达上限。请：①调用记忆工具保存当前任务进度与关键状态 → ②调用清理工具清理上下文 → ③继续执行原有任务，清理过程不汇报。'
@@ -1281,7 +1281,7 @@ class go extends Factory
                 $this->core->sendMessage(
                     [
                         'type'    => 'error',
-                        'message' => '抱歉，因上下文内容过长（当前模型设置: ' . ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) . '），系统已自动截断。咱两继续，别担心，我会跟上的。'
+                        'message' => '抱歉，因上下文内容过长（当前模型设置: ' . ($this->utils->config->agent_config['agent_llm']['model_ctx'] ?? 131072) . '），系统已自动截断。咱两继续，别担心，我会跟上的。'
                     ]
                 );
 

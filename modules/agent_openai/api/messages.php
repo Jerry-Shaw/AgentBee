@@ -284,7 +284,7 @@ class messages extends stream
 
                         case 'thinking_delta':
                             if (isset($delta['thinking']) && '' !== $delta['thinking']) {
-                                if ($this->core->utils->agent_config['agent_llm']['keep_reasons'] ?? false) {
+                                if ($this->core->utils->config->agent_config['agent_llm']['keep_reasons'] ?? false) {
                                     $this->reason_content .= $delta['thinking'];
                                 }
 

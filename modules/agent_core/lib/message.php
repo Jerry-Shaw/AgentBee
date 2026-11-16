@@ -25,8 +25,7 @@ use Nervsys\Core\Factory;
 
 class message extends Factory
 {
-    public utils  $utils;
-    public config $config;
+    public utils $utils;
 
     public string $upload_path;
 
@@ -35,10 +34,8 @@ class message extends Factory
      */
     public function __construct()
     {
-        $this->utils  = utils::new();
-        $this->config = config::new();
-
-        $this->upload_path = rtrim($this->config->config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . 'UploadFiles';
+        $this->utils       = utils::new();
+        $this->upload_path = rtrim($this->utils->config->agent_config['workspace_path'], '\\/') . DIRECTORY_SEPARATOR . 'UploadFiles';
     }
 
     /**
@@ -54,7 +51,7 @@ class message extends Factory
 
         switch ($act) {
             case 'getConfig':
-                $current = $this->config->get(false);
+                $current = $this->utils->config->get(false);
                 $content = [
                     'status'  => 'success',
                     'act'     => $act,
@@ -65,7 +62,7 @@ class message extends Factory
                 break;
 
             case 'saveConfig':
-                $config_hash = $this->config->save($data_content['data']);
+                $config_hash = $this->utils->config->save($data_content['data']);
                 $content     = [
                     'status'  => 'success',
                     'act'     => $act,
@@ -76,7 +73,7 @@ class message extends Factory
                 break;
 
             case 'getDefaultConfig':
-                $defaults = $this->config->getDefault();
+                $defaults = $this->utils->config->getDefault();
                 $content  = [
                     'status'  => 'success',
                     'act'     => $act,

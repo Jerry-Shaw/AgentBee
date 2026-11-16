@@ -62,8 +62,8 @@ final class core extends Factory
         $this->context   = context::new();
         $this->socketMgr = SocketMgr::new(WORKER_MAIN);
 
-        $this->utils->agent_config = $this->utils->config->get(true, $reload);
-        $this->context->setApiType($this->utils->agent_config['agent_llm']['api_type']);
+        $this->utils->config->get(true, $reload);
+        $this->context->setApiType($this->utils->config->agent_config['agent_llm']['api_type']);
     }
 
     /**
@@ -101,7 +101,7 @@ final class core extends Factory
         $context    = json_encode($llm_params + $llm_tools + ['contents' => $history], JSON_FORMAT);
         $compressed = gzdeflate($context, 1);
         $inputs     = (int)(strlen($compressed) * 1.1);
-        $outputs    = ($this->utils->agent_config['agent_llm']['model_ctx'] ?? 131072) - $inputs;
+        $outputs    = ($this->utils->config->agent_config['agent_llm']['model_ctx'] ?? 131072) - $inputs;
 
         unset($type, $session_id, $worker_name, $llm_params, $llm_tools, $history, $key, $item, $contents, $context, $compressed, $inputs);
         return $outputs;

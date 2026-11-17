@@ -1230,8 +1230,8 @@ class go extends Factory
             $remain_tokens = $this->core->getMaxTokens($payload['sender'], $payload['sessionId'], $payload['workerName'], $llm_params);
             $this->utils->debug($payload['sender'], '#' . $payload['sessionId'] . ' has ' . $remain_tokens . ' tokens left.', 'trace');
 
-            // Skip when token > 1024
-            if (1024 < $remain_tokens) {
+            // Skip when token > 8192
+            if (8192 < $remain_tokens) {
                 if (WORKER_MAIN === $payload['sender']) {
                     $this->ctx_warning = false;
                     $this->keep_pairs  = 2;
@@ -1240,8 +1240,8 @@ class go extends Factory
                 break;
             }
 
-            // Send notice when token > 256
-            if (256 < $remain_tokens) {
+            // Send notice when token > 2048
+            if (2048 < $remain_tokens) {
                 $this->utils->debug($payload['sender'], 'Remain tokens too low (' . $remain_tokens . '/' . $this->utils->config->agent_config['agent_llm']['model_ctx'] . ')', 'trace');
 
                 $content = WORKER_MAIN === $payload['sender']
@@ -1269,7 +1269,7 @@ class go extends Factory
                 break;
             }
 
-            // Force clean history context when token < 256
+            // Force clean history context when token < 2048
             $history_count = $this->core->context->countHistory($payload['sessionId'], $payload['workerName']);
             $keep_count    = ceil($history_count * ($this->keep_pairs + 2) / 10);
             $this->core->context->cleanHistory($payload['sessionId'], $payload['workerName'], $keep_count, $this->keep_pairs);
@@ -1298,7 +1298,7 @@ class go extends Factory
             --$this->keep_pairs;
         }
 
-        $llm_params['max_tokens'] = max(128, $remain_tokens);
+        $llm_params['max_tokens'] = max(2048, $remain_tokens);
         $this->utils->setChildWorker($payload['sender'], $payload['workerName'], 'llm_params', $llm_params);
 
         unset($payload, $llm_params, $i, $remain_tokens, $content, $main_notice, $child_notice, $history_count, $keep_count, $now_count);

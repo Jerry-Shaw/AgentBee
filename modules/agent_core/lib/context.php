@@ -422,7 +422,7 @@ class context extends Factory
             if ('user' === $message['role'] || ('assistant' === $message['role'] && !isset($message['tool_calls']))) {
                 $normal_indices[] = $index;
             } elseif ('tool' === $message['role']) {
-                $results[$message['call_id']] = $index;
+                $results[$message['id']] = $index;
             } elseif ('assistant' === $message['role']) {
                 $groups[$index] = array_column($message['tool_calls'], 'id');
             }

@@ -157,7 +157,14 @@ class go extends Factory
     public function reload(): void
     {
         $this->init(true);
-        $this->utils->procMgr->writeProc($this->utils->main_idx, self::CMD_RELOAD);
+
+        try {
+            $this->utils->procMgr->writeProc($this->utils->main_idx, self::CMD_RELOAD);
+        } catch (\Throwable $throwable) {
+            $this->utils->debug('Process', 'Reloading FAILED: ' . $throwable->getMessage(), 'trace');
+            $this->pipe_dirty = true;
+            unset($throwable);
+        }
     }
 
     /**
@@ -228,11 +235,6 @@ class go extends Factory
             $this->utils->debug('Process', '#' . $session_id . ' sending completed.', 'trace');
         } catch (\Throwable $throwable) {
             $this->utils->debug('Process', '#' . $session_id . ' ERROR: ' . $throwable->getMessage(), 'trace');
-
-            if (WORKER_MAIN === $worker) {
-                $this->utils->setPipeStatus(utils::STATUS_IDLE, $session_id);
-            }
-
             $this->core->context->messagePending($session_id, true);
 
             // Mark pipe as dirty on partial writes

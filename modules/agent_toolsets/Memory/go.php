@@ -3,8 +3,8 @@
 /**
  * Memory module for AgentBee - Industrial Refactored Version
  *
- * This module provides high-efficiency web data acquisition tools for Agents,
- * focusing on noise reduction and structural extraction to optimize LLM token usage.
+ * This module provides memory management, session management
+ * and task scheduling for AgentBee.
  *
  * Copyright 2026 AgentBee self developed
  * Copyright 2026 秋水之冰 <27206617@qq.com>
@@ -149,6 +149,17 @@ class go extends Factory
      */
     public function createSession(string $session_id, string $session_name): array
     {
+        $session_id   = trim($session_id);
+        $session_name = trim($session_name);
+
+        if (36 < strlen($session_id)) {
+            return ['status' => 'error', 'error' => '会话ID须为UUID v4'];
+        }
+
+        if ('' === $session_name) {
+            return ['status' => 'error', 'error' => '会话名称不能为空'];
+        }
+
         $now_time = time();
 
         try {
@@ -186,8 +197,10 @@ class go extends Factory
      */
     public function listSessions(int $session_status = 1, string $session_id = '', bool $keep_datetime = false): array
     {
-        if (!in_array($session_status, [0, 1, 2], true)) {
-            $session_status = 0;
+        $session_id = trim($session_id);
+
+        if ('' === $session_id && !in_array($session_status, [0, 1, 2], true)) {
+            return ['status' => 'error', 'error' => '无效会话状态，可用：0/1/2'];
         }
 
         $now   = time();
@@ -197,9 +210,7 @@ class go extends Factory
 
         if ('' !== $session_id) {
             $query->where(['session_id', $session_id]);
-        }
-
-        if (0 !== $session_status) {
+        } elseif (0 !== $session_status) {
             $query->where(['session_status', $session_status]);
         }
 
@@ -232,6 +243,8 @@ class go extends Factory
      */
     public function renameSession(string $session_id, string $session_name): array
     {
+        $session_name = trim($session_name);
+
         if ('' === $session_name) {
             return ['status' => 'error', 'error' => '会话名称不能为空'];
         }
@@ -464,16 +477,28 @@ class go extends Factory
             return ['status' => 'error', 'error' => '内容为空'];
         }
 
-        if (!in_array($level, self::LEVELS)) {
+        if (!in_array($level, self::LEVELS, true)) {
             return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily'];
         }
 
-        if (!in_array($role, self::ROLES)) {
+        if (!in_array($role, self::ROLES, true)) {
             return ['status' => 'error', 'error' => '无效角色：' . $role . '，可用：user/assistant/system/tool'];
+        }
+
+        if (!$this->isValidDate($date)) {
+            return ['status' => 'error', 'error' => '日期须为有效的YYYYMMDD或0'];
         }
 
         if (0 === $date) {
             $date = (int)date('Ymd');
+        }
+
+        $session_id = trim($session_id);
+
+        if (in_array($level, ['important', 'system'], true)) {
+            $session_id = '';
+        } elseif ('' === $session_id) {
+            return ['status' => 'error', 'error' => '缺少会话ID'];
         }
 
         $now_time  = time();
@@ -484,12 +509,6 @@ class go extends Factory
         && 0 < $this->utils->config->agent_config['misc_keep_days']
             ? ($now_time + $this->utils->config->agent_config['misc_keep_days'] * 86400)
             : 0;
-
-        if (in_array($level, ['important', 'system'], true)) {
-            $session_id = '';
-        } elseif ('' === $session_id) {
-            return ['status' => 'error', 'error' => '缺少会话ID'];
-        }
 
         if ('' !== $session_id) {
             $this->libSQLite->table('agent_session')
@@ -519,43 +538,31 @@ class go extends Factory
 
     /**
      * @param int    $create_id
-     * @param string $level
-     * @param string $role
      * @param string $content
+     * @param string $role
      * @param int    $date
-     * @param string $expire_at
      *
      * @return array|string[]
      * @throws \ReflectionException
      */
-    public function update(int $create_id, string $level, string $role, string $content, int $date = 0, string $expire_at = ''): array
+    public function update(int $create_id, string $content, string $role = '', int $date = 0): array
     {
         $content = trim($content);
 
         if ('' === $content) {
-            return ['status' => 'error', 'error' => '内容为空'];
+            return ['status' => 'error', 'error' => '内容不能为空'];
         }
 
-        if (!in_array($level, self::LEVELS)) {
-            return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily'];
-        }
-
-        if (!in_array($role, self::ROLES)) {
+        if ('' !== $role && !in_array($role, self::ROLES, true)) {
             return ['status' => 'error', 'error' => '无效角色：' . $role . '，可用：user/assistant/system/tool'];
         }
 
-        if ('' === $expire_at) {
-            $expire_at = 0;
-        } else {
-            $expire_at = strtotime($expire_at);
-
-            if (false === $expire_at) {
-                return ['status' => 'error', 'error' => '过期时间格式无效，请使用YYYY-mm-dd HH:ii:ss'];
-            }
+        if (!$this->isValidDate($date)) {
+            return ['status' => 'error', 'error' => '日期须为有效的YYYYMMDD或0'];
         }
 
         $record = $this->libSQLite->table('agent_memory')
-            ->select('create_id', 'session_id', 'date_key')
+            ->select('create_id')
             ->where(['create_id', $create_id])
             ->limit(1)
             ->fetch();
@@ -564,23 +571,25 @@ class go extends Factory
             return ['status' => 'error', 'error' => '记录不存在：' . $create_id];
         }
 
-        if (0 === $date) {
-            $date = $record['date_key'];
+        $changes = [
+            'content' => $content,
+            'tokens'  => $this->buildTokens($content)
+        ];
+
+        if ('' !== $role) {
+            $changes['role'] = $role;
+        }
+
+        if (0 !== $date) {
+            $changes['date_key'] = $date;
         }
 
         $this->libSQLite->table('agent_memory')
             ->where(['create_id', $create_id])
-            ->update([
-                'date_key'  => $date,
-                'expire_at' => $expire_at,
-                'level'     => $level,
-                'role'      => $role,
-                'content'   => $content,
-                'tokens'    => $this->buildTokens($content)
-            ])
+            ->update($changes)
             ->execute();
 
-        unset($create_id, $level, $role, $content, $date, $expire_at, $record);
+        unset($create_id, $content, $role, $date, $record, $changes);
         return ['status' => 'success', 'affected_rows' => $this->libSQLite->getAffectedRows()];
     }
 
@@ -606,8 +615,22 @@ class go extends Factory
         bool   $keep_datetime = false
     ): array
     {
-        if (!in_array($level, self::ALL_LEVELS)) {
+        if (!in_array($level, self::ALL_LEVELS, true)) {
             return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
+        }
+
+        $session_id = trim($session_id);
+
+        if (in_array($level, ['daily', 'misc', 'all'], true) && '' === $session_id) {
+            return ['status' => 'error', 'error' => 'daily/misc/all须指定会话ID'];
+        }
+
+        if (!$this->isValidDate($date)) {
+            return ['status' => 'error', 'error' => '日期须为有效的YYYYMMDD或0'];
+        }
+
+        if (0 > $offset || 0 > $length) {
+            return ['status' => 'error', 'error' => 'offset和length须为非负整数'];
         }
 
         $query = $this->libSQLite
@@ -617,18 +640,15 @@ class go extends Factory
         if ('all' !== $level) {
             $query->where(['level', $level]);
 
-            if ('' !== $session_id && in_array($level, ['daily', 'misc'], true)) {
+            if (in_array($level, ['daily', 'misc'], true)) {
                 $query->where(['session_id', $session_id]);
             }
         } else {
-            if ('' !== $session_id) {
-                $query->where(
-                    ['level', 'system'],
-                    ['or', 'level', 'important'],
-                    ['or', ['level', 'daily'], ['session_id', $session_id]],
-                    ['or', ['level', 'misc'], ['session_id', $session_id]],
-                );
-            }
+            $query->where(
+                ['level', ['system', 'important']],
+                ['or', ['level', 'daily'], ['session_id', $session_id]],
+                ['or', ['level', 'misc'], ['session_id', $session_id]],
+            );
         }
 
         if (0 < $create_id) {
@@ -675,20 +695,38 @@ class go extends Factory
      */
     public function search(array $keywords, string $level = 'all', int $date_start = 0, int $date_end = 0, int $offset = 0, int $length = 20, string $session_id = ''): array
     {
-        if (!in_array($level, self::ALL_LEVELS)) {
+        if (!in_array($level, self::ALL_LEVELS, true)) {
             return ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
         }
 
-        $keywords = array_filter(
-            $keywords,
-            function (string $word): bool
-            {
-                return '' !== trim($word);
+        $session_id = trim($session_id);
+
+        if (in_array($level, ['daily', 'misc', 'all'], true) && '' === $session_id) {
+            return ['status' => 'error', 'error' => 'daily/misc/all须指定会话ID'];
+        }
+
+        if (!$this->isValidDate($date_start) || !$this->isValidDate($date_end)) {
+            return ['status' => 'error', 'error' => '起止日期须为有效的YYYYMMDD或0'];
+        }
+
+        if (0 < $date_start && 0 < $date_end && $date_start > $date_end) {
+            return ['status' => 'error', 'error' => '起始日期不能晚于结束日期'];
+        }
+
+        if (0 > $offset || 0 > $length) {
+            return ['status' => 'error', 'error' => 'offset和length须为非负整数'];
+        }
+
+        foreach ($keywords as $word) {
+            if (!is_string($word)) {
+                return ['status' => 'error', 'error' => 'keywords须为字符串数组'];
             }
-        );
+        }
+
+        $keywords = array_values(array_unique(array_filter(array_map('trim', $keywords), 'strlen')));
 
         if ([] === $keywords) {
-            return ['status' => 'success', 'data' => [], 'total' => 0];
+            return ['status' => 'error', 'error' => 'keywords不能为空'];
         }
 
         $use_fts = true;
@@ -730,134 +768,74 @@ class go extends Factory
     }
 
     /**
-     * @param string $level
-     * @param array  $create_ids
-     * @param string $start_time
-     * @param string $end_time
-     * @param array  $keywords
-     * @param string $mode
-     * @param string $session_id
+     * @param array  $create_ids 非空时优先按ID删除，忽略范围参数
+     * @param string $level      范围删除的指定层级
+     * @param string $session_id daily/misc范围删除必填
+     * @param string $start_time 创建时间下界，含该秒
+     * @param string $end_time   创建时间上界，含该秒
      *
      * @return array|string[]
      * @throws \ReflectionException
      */
-    public function delete(string $level, array $create_ids = [], string $start_time = '', string $end_time = '', array $keywords = [], string $mode = 'and', string $session_id = ''): array
+    public function delete(array $create_ids = [], string $level = '', string $session_id = '', string $start_time = '', string $end_time = ''): array
     {
-        if (!in_array($level, self::ALL_LEVELS)) {
-            $result = ['status' => 'error', 'error' => '无效层级：' . $level . '，可用：system/important/daily/misc/all'];
-
-            unset($level, $create_ids, $start_time, $end_time, $keywords, $mode, $session_id);
-            return $result;
-        }
-
-        if ('' === $start_time) {
-            $start_time = 0;
-        } else {
-            $start_time = strtotime($start_time);
-
-            if (false === $start_time) {
-                return ['status' => 'error', 'error' => '开始时间格式无效，请使用YYYY-mm-dd HH:ii:ss'];
-            }
-        }
-
-        if ('' === $end_time) {
-            $end_time = 0;
-        } else {
-            $end_time = strtotime($end_time);
-
-            if (false === $end_time) {
-                return ['status' => 'error', 'error' => '结束时间格式无效，请使用YYYY-mm-dd HH:ii:ss'];
-            }
-        }
-
         if ([] !== $create_ids) {
-            $valid_ids = array_filter(
-                $create_ids,
-                function (int $id): bool
-                {
-                    return false !== filter_var($id, FILTER_VALIDATE_INT) && 0 < $id;
-                }
-            );
+            $create_ids = array_values(array_unique(array_filter($create_ids, 'is_int')));
 
-            $valid_ids = array_map('intval', $valid_ids);
-
-            if ([] === $valid_ids) {
-                $result = ['status' => 'error', 'error' => 'create_ids有误，须为正整数'];
-            } else {
-                $query = $this->libSQLite->table('agent_memory');
-
-                $query->where(['create_id', 'IN', $valid_ids])
-                    ->delete()
-                    ->execute();
-
-                $result = ['status' => 'success', 'deleted' => $this->libSQLite->getAffectedRows()];
+            if ([] === $create_ids) {
+                return ['status' => 'error', 'error' => '请提供待删除记忆的ID数组'];
             }
 
-            unset($valid_ids);
-        } elseif (0 < $start_time || 0 < $end_time || [] !== $keywords || '' !== $session_id) {
-            if (0 < $start_time && 0 < $end_time && $start_time > $end_time) {
-                $result = ['status' => 'error', 'error' => '起始时间不能大于结束时间'];
-            } else {
-                $query = $this->libSQLite->table('agent_memory');
+            $this->libSQLite->table('agent_memory')
+                ->where(['create_id', 'IN', array_values(array_unique($create_ids))])
+                ->delete()
+                ->execute();
 
-                if ('all' !== $level) {
-                    $query->where(['level', $level]);
-
-                    if ('' !== $session_id && in_array($level, ['daily', 'misc'], true)) {
-                        $query->where(['session_id', $session_id]);
-                    }
-                } else {
-                    if ('' !== $session_id) {
-                        $query->where(
-                            ['level', 'system'],
-                            ['or', 'level', 'important'],
-                            ['or', ['level', 'daily'], ['session_id', $session_id]],
-                            ['or', ['level', 'misc'], ['session_id', $session_id]],
-                        );
-                    }
-                }
-
-                if (0 < $start_time) {
-                    $query->where(['create_id', '>=', $start_time * 1000000]);
-                }
-
-                if (0 < $end_time) {
-                    $query->where(['create_id', '<=', $end_time * 1000000]);
-                }
-
-                if ([] !== $keywords) {
-                    if ('and' === $mode) {
-                        foreach ($keywords as $word) {
-                            $query->where(['content', 'LIKE', '%' . $word . '%']);
-                        }
-                    } else {
-                        $conditions = [];
-
-                        foreach ($keywords as $idx => $word) {
-                            if (0 === $idx) {
-                                $conditions[] = ['content', 'LIKE', '%' . $word . '%'];
-                            } else {
-                                $conditions[] = ['or', 'content', 'LIKE', '%' . $word . '%'];
-                            }
-                        }
-
-                        $query->where(...$conditions);
-
-                        unset($conditions);
-                    }
-
-                    unset($idx, $word);
-                }
-
-                $query->delete()->execute();
-                $result = ['status' => 'success', 'deleted' => $this->libSQLite->getAffectedRows()];
-            }
-        } else {
-            $result = ['status' => 'error', 'error' => '缺少删除条件，请补充必要条件后重试'];
+            return ['status' => 'success', 'deleted' => $this->libSQLite->getAffectedRows()];
         }
 
-        unset($level, $create_ids, $start_time, $end_time, $keywords, $mode, $session_id, $query);
-        return $result;
+        if (!in_array($level, self::LEVELS, true)) {
+            return ['status' => 'error', 'error' => '范围删除须指定层级：system/important/daily/misc'];
+        }
+
+        $session_id = trim($session_id);
+
+        if (in_array($level, ['daily', 'misc'], true) && '' === $session_id) {
+            return ['status' => 'error', 'error' => 'daily/misc范围删除须指定会话ID'];
+        }
+
+        if ('' === $start_time || '' === $end_time) {
+            return ['status' => 'error', 'error' => '范围删除须同时提供start_time和end_time'];
+        }
+
+        $start = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $start_time);
+        $end   = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $end_time);
+
+        if (
+            false === $start || $start->format('Y-m-d H:i:s') !== $start_time
+            || false === $end || $end->format('Y-m-d H:i:s') !== $end_time) {
+            return ['status' => 'error', 'error' => '时间格式无效，请使用YYYY-MM-DD HH:mm:ss'];
+        }
+
+        $start_ts = $start->getTimestamp();
+        $end_ts   = $end->getTimestamp();
+
+        if ($start_ts > $end_ts) {
+            return ['status' => 'error', 'error' => '开始时间不能晚于结束时间'];
+        }
+
+        $query = $this->libSQLite
+            ->table('agent_memory')
+            ->where(['create_id', '>=', $start_ts * 1000000], ['create_id', '<', ($end_ts + 1) * 1000000], ['level', $level]);
+
+        if (in_array($level, ['daily', 'misc'], true)) {
+            $query->where(['session_id', $session_id]);
+        }
+
+        $query->delete()->execute();
+
+        unset($create_ids, $level, $session_id, $start_time, $end_time, $start, $end, $start_ts, $end_ts, $query);
+        return ['status' => 'success', 'deleted' => $this->libSQLite->getAffectedRows()];
     }
 
     // =========================================================================
@@ -876,16 +854,26 @@ class go extends Factory
      */
     public function addTask(string $session_id, string $task_prompt, string $run_at, bool $repeat = false, int $repeat_interval = 0): array
     {
+        $session_id = trim($session_id);
+
+        if ('' === $session_id) {
+            return ['status' => 'error', 'error' => '缺少会话ID'];
+        }
+
+        $task_prompt = trim($task_prompt);
+
+        if ('' === $task_prompt) {
+            return ['status' => 'error', 'error' => '任务指令不能为空'];
+        }
+
+        $run_time = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $run_at);
+
+        if (false === $run_time || $run_time->format('Y-m-d H:i:s') !== $run_at) {
+            return ['status' => 'error', 'error' => '执行时间无效'];
+        }
+
         $now    = time();
-        $run_at = strtotime($run_at);
-
-        if (false === $run_at) {
-            return ['status' => 'error', 'error' => '执行时间格式无效，请使用YYYY-mm-dd HH:ii:ss'];
-        }
-
-        if ($run_at < $now) {
-            return ['status' => 'error', 'error' => '执行时间不能早于当前时间，请重新设置'];
-        }
+        $run_at = $run_time->getTimestamp();
 
         if ($repeat && 0 >= $repeat_interval) {
             return ['status' => 'error', 'error' => '重复间隔必须大于0'];
@@ -907,26 +895,29 @@ class go extends Factory
             'run_time'  => $this->formatMicroTime($run_at, $now),
         ];
 
-        unset($task_prompt, $run_at, $repeat, $repeat_interval, $now, $create_id);
+        unset($task_prompt, $run_at, $run_time, $repeat, $repeat_interval, $now, $create_id);
         return $result;
     }
 
     /**
-     * @param int $create_id
+     * @param array $create_ids
      *
      * @return array
      * @throws \ReflectionException
      */
-    public function removeTask(int $create_id): array
+    public function removeTasks(array $create_ids): array
     {
-        $this->libSQLite->table('agent_task')->where(['create_id', '=', $create_id])->delete()->execute();
-        $affected = $this->libSQLite->getAffectedRows();
+        $create_ids = array_values(array_unique(array_filter($create_ids, 'is_int')));
 
-        $result = 0 < $affected
-            ? ['status' => 'success', 'message' => '已删除' . $affected . '个任务']
-            : ['status' => 'error', 'error' => '任务不存在'];
+        if ([] === $create_ids) {
+            return ['status' => 'error', 'error' => '请提供待删除任务的ID数组'];
+        }
 
-        unset($create_id, $affected);
+        $this->libSQLite->table('agent_task')->where(['create_id', $create_ids])->delete()->execute();
+
+        $result = ['status' => 'success', 'affected_rows' => $this->libSQLite->getAffectedRows()];
+
+        unset($create_ids);
         return $result;
     }
 
@@ -961,7 +952,7 @@ class go extends Factory
      * @return array
      * @throws \ReflectionException
      */
-    public function runTask(string $session_id): array
+    public function runTasks(string $session_id): array
     {
         $now = time();
 
@@ -969,6 +960,7 @@ class go extends Factory
         $tasks = $this->libSQLite->table('agent_task')
             ->select('create_id', 'prompt', 'run_at', 'repeat', 'interval')
             ->where(['session_id', $session_id], ['run_at', '<=', $now])
+            ->order(['run_at' => 'ASC'])
             ->fetchAll();
 
         $result = [];
@@ -1015,8 +1007,8 @@ class go extends Factory
      */
     private function initDatabase(): void
     {
-        $db_file      = $this->db_path . 'agent_memory.db';
-        $this->libPDO = libPDO::new('sqlite', $db_file);
+        $db_file_path = $this->db_path . 'agent_memory.db';
+        $this->libPDO = libPDO::new('sqlite', $db_file_path);
         $this->libPDO->connect();
 
         $this->libSQLite = libSQLite::new();
@@ -1024,13 +1016,12 @@ class go extends Factory
         $this->libSQLite->autoCleanup();
 
         $this->libSQLite->pdo->setAttribute(\PDO::ATTR_EMULATE_PREPARES, true);
-        $this->libSQLite->exec('PRAGMA strict=OFF');
         $this->libSQLite->exec('PRAGMA journal_mode=WAL');
         $this->libSQLite->exec('PRAGMA busy_timeout = 5000');
         $this->libSQLite->exec('PRAGMA cache_size = -4000');
 
         $this->setupSchema();
-        unset($db_file);
+        unset($db_file_path);
     }
 
     /**
@@ -1076,24 +1067,53 @@ class go extends Factory
      */
     private function purgeExpired(): void
     {
-        $keep_ids = $this->libSQLite->table('agent_memory')
+        $now_time = time();
+        $keep_len = (int)($this->utils->config->agent_config['misc_save_len'] ?? 100000);
+        $boundary = $this->libSQLite->table('agent_memory')
             ->select('create_id')
             ->where(['level', 'misc'])
-            ->limit($this->utils->config->agent_config['misc_save_len'] ?? 200)
             ->order(['create_id' => 'DESC'])
-            ->fetchAll(\PDO::FETCH_COLUMN);
+            ->limit(max(0, $keep_len - 1), 1)
+            ->fetch(\PDO::FETCH_COLUMN);
 
-        $this->libSQLite->table('agent_memory');
-        $this->libSQLite->where(['level', 'misc']);
+        $this->libSQLite->table('agent_memory')
+            ->where(['level', 'misc']);
 
-        if ([] !== $keep_ids) {
-            $this->libSQLite->and(['create_id', '<', min($keep_ids)], ['or', 'expire_at', '<', time()]);
+        if ([] !== $boundary) {
+            $this->libSQLite->and(
+                ['create_id', '<', $boundary[0]],
+                ['or', ['expire_at', '>', 0], ['expire_at', '<', $now_time]]
+            );
         } else {
-            $this->libSQLite->and(['expire_at', '<', time()]);
+            $this->libSQLite->and(['expire_at', '>', 0], ['expire_at', '<', $now_time]);
         }
 
-        unset($keep_ids);
         $this->libSQLite->delete()->execute();
+        unset($now_time, $keep_len, $boundary);
+    }
+
+    /**
+     * @param int $date YYYYMMDD 或 0
+     *
+     * @return bool
+     */
+    private function isValidDate(int $date): bool
+    {
+        if (0 === $date) {
+            return true;
+        }
+
+        if (10000101 > $date || 99991231 < $date) {
+            return false;
+        }
+
+        $year   = intdiv($date, 10000);
+        $month  = intdiv($date, 100) % 100;
+        $day    = $date % 100;
+        $result = checkdate($month, $day, $year);
+
+        unset($date, $year, $month, $day);
+        return $result;
     }
 
     /**
@@ -1293,18 +1313,15 @@ class go extends Factory
         if ('all' !== $level) {
             $query->where(['agent_memory.level', $level]);
 
-            if ('' !== $session_id && in_array($level, ['daily', 'misc'], true)) {
+            if (in_array($level, ['daily', 'misc'], true)) {
                 $query->where(['agent_memory.session_id', $session_id]);
             }
         } else {
-            if ('' !== $session_id) {
-                $query->where(
-                    ['agent_memory.level', 'system'],
-                    ['or', 'agent_memory.level', 'important'],
-                    ['or', ['agent_memory.level', 'daily'], ['agent_memory.session_id', $session_id]],
-                    ['or', ['agent_memory.level', 'misc'], ['agent_memory.session_id', $session_id]],
-                );
-            }
+            $query->where(
+                ['agent_memory.level', ['system', 'important']],
+                ['or', ['agent_memory.level', 'daily'], ['agent_memory.session_id', $session_id]],
+                ['or', ['agent_memory.level', 'misc'], ['agent_memory.session_id', $session_id]],
+            );
         }
 
         if (0 < $date_start && 0 < $date_end) {
@@ -1315,7 +1332,7 @@ class go extends Factory
             $query->where(['agent_memory.date_key', '<=', $date_end]);
         }
 
-        $query->match(['agent_memory_fts', $kw_string])->order(['agent_memory.create_id' => 'ASC']);
+        $query->match(['agent_memory_fts', $kw_string])->order(['agent_memory.create_id' => 'DESC']);
 
         if (0 < $length) {
             $query->limit($offset, $length);
@@ -1349,18 +1366,15 @@ class go extends Factory
         if ('all' !== $level) {
             $query->where(['level', $level]);
 
-            if ('' !== $session_id && in_array($level, ['daily', 'misc'], true)) {
+            if (in_array($level, ['daily', 'misc'], true)) {
                 $query->where(['session_id', $session_id]);
             }
         } else {
-            if ('' !== $session_id) {
-                $query->where(
-                    ['level', 'system'],
-                    ['or', 'level', 'important'],
-                    ['or', ['level', 'daily'], ['session_id', $session_id]],
-                    ['or', ['level', 'misc'], ['session_id', $session_id]],
-                );
-            }
+            $query->where(
+                ['level', ['system', 'important']],
+                ['or', ['level', 'daily'], ['session_id', $session_id]],
+                ['or', ['level', 'misc'], ['session_id', $session_id]],
+            );
         }
 
         if (0 < $date_start && 0 < $date_end) {
@@ -1372,15 +1386,20 @@ class go extends Factory
         }
 
         foreach ($keywords as $kw) {
-            $query->where(['content', 'LIKE', '%' . $kw . '%']);
+            $pattern = '%' . strtr($kw, ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
+            $query->where(['content', 'LIKE', $pattern], [$query->useSql("ESCAPE '!' ")]);
         }
 
-        $query->order(['create_id' => 'ASC'])->limit($offset, $length);
+        $query->order(['create_id' => 'DESC']);
+
+        if (0 < $length) {
+            $query->limit($offset, $length);
+        }
 
         $data   = $query->fetchAll();
         $result = ['data' => $data, 'total' => $query->getLastFoundRows()];
 
-        unset($keywords, $level, $date_start, $date_end, $offset, $length, $session_id, $query, $kw, $data);
+        unset($keywords, $level, $date_start, $date_end, $offset, $length, $session_id, $query, $kw, $pattern, $data);
         return $result;
     }
 }

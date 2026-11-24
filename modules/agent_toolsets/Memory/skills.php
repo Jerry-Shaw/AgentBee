@@ -5,7 +5,7 @@
  *
  * This module provides memory management tools (save/read/search/update/delete),
  * session management (save/read/update session) and task scheduling
- * (add/remove/list/run tasks) for Agents.
+ * (add/remove/list tasks) for Agents.
  *
  * Copyright 2026 AgentBee self developed
  *
@@ -31,12 +31,12 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'createSession',
-                'description' => '创建新会话记录，不涉及记忆内容。用户明确要求"新建会话"并提供名称时才调用。返回：{status, session_id}或{status, error}。',
+                'description' => '新建会话，用户明确要求并提供名称时调用。返回session_id或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'session_id'   => ['type' => 'string', 'description' => '会话ID（标准 UUID v4 格式字符串）'],
-                        'session_name' => ['type' => 'string', 'description' => '会话名称']
+                        'session_id'   => ['type' => 'string', 'description' => '新会话ID，UUID v4'],
+                        'session_name' => ['type' => 'string', 'description' => '用户指定的会话名称，不可为空']
                     ],
                     'required'   => ['session_id', 'session_name']
                 ],
@@ -46,12 +46,12 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'listSessions',
-                'description' => '列出所有会话的ID、名称和状态。用于跨会话定位会话ID（如用户提及其他会话内容时，先获取会话列表，再读取对应会话的记忆）。返回：{status, sessions: [{session_id, session_name, session_status, create_time}]}。',
+                'description' => '查询会话信息，定位跨会话记忆。返回sessions或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'session_status' => ['type' => 'integer', 'default' => 1, 'description' => '会话状态过滤：1=启用（默认）；2=已删除；0=全部会话（含已删除）'],
-                        'session_id'     => ['type' => 'string', 'default' => '', 'description' => '指定查询会话ID，不传则返回会话列表']
+                        'session_status' => ['type' => 'integer', 'enum' => [0, 1, 2], 'default' => 1, 'description' => '状态：1=启用，2=已删除，0=全部；传session_id时忽略'],
+                        'session_id'     => ['type' => 'string', 'default' => '', 'description' => '指定ID查询，不受状态过滤；空=按状态列出']
                     ],
                     'required'   => []
                 ],
@@ -61,12 +61,12 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'renameSession',
-                'description' => '修改指定会话的名称。返回：{status, affected_rows}或{status, error}。',
+                'description' => '修改会话名称。返回affected_rows或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'session_id'   => ['type' => 'string', 'description' => '会话ID'],
-                        'session_name' => ['type' => 'string', 'description' => '新会话名称'],
+                        'session_name' => ['type' => 'string', 'description' => '新会话名称，不可为空'],
                     ],
                     'required'   => ['session_id', 'session_name']
                 ],
@@ -76,7 +76,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'deleteSession',
-                'description' => '软删除指定会话。不影响该会话下的记忆条目。返回：{status, affected_rows}或{status, error}。',
+                'description' => '软删除会话，保留记忆，可恢复。返回affected_rows或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -90,7 +90,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'restoreSession',
-                'description' => '恢复软删除的会话到启用状态。返回：{status, affected_rows}或{status, error}。',
+                'description' => '恢复软删除的会话。返回affected_rows或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -104,15 +104,15 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'save',
-                'description' => '新增记忆。level按内容：system(配置/人设/规则/权限/边界，全局)、important(事实/偏好/知识/长期规划，全局)、daily(决策/结论/进展/待办/工具结果，会话隔离)；role按来源：user(用户陈述/确认/事实)、assistant(助手推导/结论)、system(系统配置/规则)、tool(工具原始结果)。用户事实即使由助手归纳仍用user。内容需压缩提炼。返回：{status, create_id}或{status, error}。',
+                'description' => '保存新记忆，包括新增进展或跨层提炼，仅保存有信息价值的内容；返回create_id或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily'], 'description' => '层级'],
-                        'role'       => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool'], 'description' => '来源角色'],
-                        'content'    => ['type' => 'string', 'description' => '记忆内容'],
-                        'date'       => ['type' => 'integer', 'default' => 0, 'description' => '日期：YYYYMMDD (0=当天)'],
-                        'session_id' => ['type' => 'string', 'default' => '', 'description' => '会话ID']
+                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily'], 'description' => 'system=配置/规则/档案/偏好/关系；important=事实/规划/知识/教训/长期成果；daily=会话决策/进展/待办/经历/工具结果'],
+                        'role'       => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool'], 'description' => '来源：user=用户事实/要求（含助手归纳）；assistant=助手推导；system=系统配置/规则；tool=工具原始结果（如已总结存储则不再保存）'],
+                        'content'    => ['type' => 'string', 'description' => '提炼后的事实与结论，保留关键细节'],
+                        'date'       => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '归档日期YYYYMMDD；0=当天'],
+                        'session_id' => ['type' => 'string', 'default' => '', 'description' => 'daily必传所属会话ID；system/important不传（全局）']
                     ],
                     'required'   => ['level', 'role', 'content']
                 ],
@@ -122,18 +122,16 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'update',
-                'description' => '更新记忆(按create_id)，可改level/role/content/date/expire_at。仅实质变化时调用，内容需压缩提炼。返回：{status, affected_rows}或{status, error}。',
+                'description' => '按ID修正记忆，内容需总结提炼。返回affected_rows或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'create_id' => ['type' => 'integer', 'description' => '记忆ID(微秒)'],
-                        'level'     => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc'], 'description' => '新层级'],
-                        'role'      => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool'], 'description' => '新角色'],
-                        'content'   => ['type' => 'string', 'description' => '新内容'],
-                        'date'      => ['type' => 'integer', 'default' => 0, 'description' => '日期：YYYYMMDD (0=保留原值)'],
-                        'expire_at' => ['type' => 'string', 'default' => '', 'description' => '过期时间：YYYY-mm-dd HH:ii:ss']
+                        'create_id' => ['type' => 'integer', 'minimum' => 1, 'description' => '已核实的记忆ID'],
+                        'role'      => ['type' => 'string', 'enum' => ['user', 'assistant', 'system', 'tool'], 'description' => '省略保留原值；来源：user=用户事实/要求（含助手归纳）；assistant=助手推导；system=系统配置/规则；tool=工具原始结果'],
+                        'content'   => ['type' => 'string', 'description' => '完整的新内容'],
+                        'date'      => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '归档日期YYYYMMDD；0=保留原值']
                     ],
-                    'required'   => ['create_id', 'level', 'role', 'content']
+                    'required'   => ['create_id', 'content']
                 ],
             ],
         ],
@@ -141,16 +139,16 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'read',
-                'description' => '读取记忆。参数：level指定层级；date(YYYYMMDD)按日读取，0=不限；session_id限定会话；offset起始位置，length条数(0=全部)；create_id游标，仅取小于此值的记录。结果较多时，用offset跳跃采样(如总数1/2、1/3位置)，勿只读开头，以覆盖更完整的时间段。禁止重复读取。返回：{status, data: [{level, role, content, date, create_id, create_time, session_id}], total}或{status, error}。',
+                'description' => '按层级、日期读取记忆。返回data和匹配总数total或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级(含all)'],
-                        'date'       => ['type' => 'integer', 'default' => 0, 'description' => '指定日期：YYYYMMDD (0=不限)'],
-                        'offset'     => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length'     => ['type' => 'integer', 'default' => 10, 'description' => '条数（0=全部，建议5-20）'],
-                        'session_id' => ['type' => 'string', 'default' => '', 'description' => '会话ID'],
-                        'create_id'  => ['type' => 'integer', 'default' => 0, 'description' => '游标：仅取create_id小于此值的记录(0=不限)']
+                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '记忆层级；all=全局层＋指定会话记录'],
+                        'date'       => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '归档日期YYYYMMDD；0=不限'],
+                        'offset'     => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '从最新记录起跳过的条数；页内按ID正序'],
+                        'length'     => ['type' => 'integer', 'minimum' => 0, 'default' => 10, 'description' => '读取条数；0=全部并忽略offset'],
+                        'session_id' => ['type' => 'string', 'default' => '', 'description' => 'daily/misc/all必传目标会话ID；system/important不传'],
+                        'create_id'  => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '游标：仅取create_id小于此值的记录(0=不限)']
                     ],
                     'required'   => ['level']
                 ],
@@ -160,17 +158,17 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'search',
-                'description' => '全文搜索记忆。参数：keywords关键词1-5个(多个为AND，全部命中)；level指定层级，默认all；date_start/date_end限定日期范围(0=不限)；session_id限定会话；offset起始位置，length条数(0=全部)。结果较多时，用offset跳跃采样(如总数1/2、1/3位置)，或按日期分段查询，勿只取开头，以覆盖不同时间段。禁止重复搜索。返回：{status, data: [{level, role, content, date, create_id, create_time, session_id}], total}或{status, error}。',
+                'description' => '上下文不足且主题明确时搜索记忆。返回data和匹配总数total或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组（多个关键词间为AND）'],
-                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'default' => 'all', 'description' => '层级，默认all'],
-                        'date_start' => ['type' => 'integer', 'default' => 0, 'description' => '起始日期：YYYYMMDD (0=不限)'],
-                        'date_end'   => ['type' => 'integer', 'default' => 0, 'description' => '结束日期：YYYYMMDD (0=不限)'],
-                        'offset'     => ['type' => 'integer', 'default' => 0, 'description' => '偏移量'],
-                        'length'     => ['type' => 'integer', 'default' => 20, 'description' => '条数（0=全部，建议10-30）'],
-                        'session_id' => ['type' => 'string', 'default' => '', 'description' => '会话ID']
+                        'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '建议1–5个特征词，全部匹配；勿用表情或纯符号'],
+                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '记忆层级；all=全局层＋指定会话记录'],
+                        'date_start' => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '起始归档日期YYYYMMDD（含）；0=不限'],
+                        'date_end'   => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '结束归档日期YYYYMMDD（含）；0=不限'],
+                        'offset'     => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '从最新记录起跳过的条数；页内按ID倒序'],
+                        'length'     => ['type' => 'integer', 'minimum' => 0, 'default' => 20, 'description' => '读取条数；0=全部并忽略offset，建议10–30'],
+                        'session_id' => ['type' => 'string', 'default' => '', 'description' => 'daily/misc/all必传目标会话ID；system/important不传']
                     ],
                     'required'   => ['level', 'keywords']
                 ],
@@ -180,19 +178,17 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'delete',
-                'description' => '删除记忆。传create_ids按ID精确删；否则按层级+时间字符串(start/end_time)+关键词+session_id组合删（system/important不受会话过滤，daily/misc受会话过滤）。返回：{status, deleted}或{status, error}。',
+                'description' => '永久删除已确认的记忆。非空create_ids优先且忽略其他条件；否则按指定范围删除。返回deleted或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc', 'all'], 'description' => '层级'],
-                        'create_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => '微秒ID数组（优先）'],
-                        'start_time' => ['type' => 'string', 'description' => '开始时间：YYYY-mm-dd HH:ii:ss'],
-                        'end_time'   => ['type' => 'string', 'description' => '结束时间：YYYY-mm-dd HH:ii:ss'],
-                        'keywords'   => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '关键词数组（与时间范围AND）'],
-                        'mode'       => ['type' => 'string', 'enum' => ['and', 'or'], 'default' => 'and', 'description' => '关键词匹配模式'],
-                        'session_id' => ['type' => 'string', 'default' => '', 'description' => '会话ID(可选，默认空=不限)']
+                        'create_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1], 'default' => [], 'description' => '已核实的记忆ID数组；空=范围删除'],
+                        'level'      => ['type' => 'string', 'enum' => ['system', 'important', 'daily', 'misc'], 'description' => '范围删除必传的单个层级'],
+                        'session_id' => ['type' => 'string', 'default' => '', 'description' => '范围删除daily/misc必传；system/important为全局层，不传'],
+                        'start_time' => ['type' => 'string', 'default' => '', 'description' => '范围删除必传：创建时间起点YYYY-MM-DD HH:mm:ss，系统时区，含该秒'],
+                        'end_time'   => ['type' => 'string', 'default' => '', 'description' => '范围删除必传：创建时间终点YYYY-MM-DD HH:mm:ss，系统时区，含该秒']
                     ],
-                    'required'   => ['level']
+                    'required'   => []
                 ],
             ],
         ],
@@ -200,15 +196,15 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'addTask',
-                'description' => '添加定时任务，设置任务提示词、执行时间字符串，可设重复及间隔。返回：{status, create_id, run_time}或{status, error}。',
+                'description' => '为指定会话添加定时任务，可重复。返回create_id、run_time或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
                         'session_id'      => ['type' => 'string', 'description' => '会话ID'],
-                        'task_prompt'     => ['type' => 'string', 'description' => '任务提示词'],
-                        'run_at'          => ['type' => 'string', 'description' => '执行时间：YYYY-mm-dd HH:ii:ss'],
+                        'task_prompt'     => ['type' => 'string', 'description' => '到期执行的完整指令，包含必要上下文，不可为空'],
+                        'run_at'          => ['type' => 'string', 'description' => '执行时间YYYY-MM-DD HH:mm:ss，早于当前时间会立即执行'],
                         'repeat'          => ['type' => 'boolean', 'default' => false, 'description' => '是否重复'],
-                        'repeat_interval' => ['type' => 'integer', 'default' => 0, 'description' => '重复间隔(秒)，repeat=true时有效']
+                        'repeat_interval' => ['type' => 'integer', 'default' => 0, 'description' => '重复间隔（秒）；repeat=true时须大于0']
                     ],
                     'required'   => ['session_id', 'task_prompt', 'run_at']
                 ],
@@ -217,14 +213,14 @@ class skills
         [
             'type'     => 'function',
             'function' => [
-                'name'        => 'removeTask',
-                'description' => '按create_id删除定时任务。返回：{status, message}或{status, error}。',
+                'name'        => 'removeTasks',
+                'description' => '按任务ID数组取消定时任务。返回affected_rows或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'create_id' => ['type' => 'integer', 'description' => '任务ID(微秒)']
+                        'create_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1], 'description' => '已核实的任务ID数组']
                     ],
-                    'required'   => ['create_id']
+                    'required'   => ['create_ids']
                 ],
             ],
         ],
@@ -232,7 +228,7 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'listTasks',
-                'description' => '列出当前会话所有任务详情。返回：{status, tasks: [{create_id, repeat, interval, prompt, run_time, create_time}]}。',
+                'description' => '查询指定会话的定时任务。返回tasks或error。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
@@ -242,19 +238,5 @@ class skills
                 ],
             ],
         ],
-        [
-            'type'     => 'function',
-            'function' => [
-                'name'        => 'runTask',
-                'description' => '获取当前会话所有到期任务。返回：[{create_id, prompt}]。',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'session_id' => ['type' => 'string', 'description' => '会话ID'],
-                    ],
-                    'required'   => ['session_id']
-                ],
-            ],
-        ]
     ];
 }

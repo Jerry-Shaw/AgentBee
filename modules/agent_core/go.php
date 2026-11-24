@@ -382,14 +382,11 @@ class go extends Factory
             // Check session pending message/new message/task
             $pending_message = $this->core->context->isMessagePending($session['session_id']);
             $new_messages    = $this->core->context->refreshHistory($session['session_id'], WORKER_MAIN);
-            $task_list       = $this->core->memory->runTask($session['session_id']);
+            $task_list       = $this->core->memory->runTasks($session['session_id']);
 
             // Remove all tasks if session is deleted
             if ([] !== $task_list && 1 !== $session['session_status']) {
-                foreach ($task_list as $task) {
-                    $this->core->memory->removeTask($task['create_id']);
-                }
-
+                $this->core->memory->removeTasks(array_column($task_list, 'create_id'));
                 $task_list = [];
             }
 
@@ -617,7 +614,7 @@ class go extends Factory
                     $result['content'],
                     [
                         'type'    => 'text',
-                        'content' => '[系统指令] 新会话，必须读取`misc`记忆，建立上下文后再回复，偏移为"1"。建立上下文后，若用户有明确需求，且上下文仍不足，则搜索相关记忆。记忆读取过程不汇报。'
+                        'content' => '[系统指令] 新会话，必须读取`misc`记忆，建议10-30条，跳过1条，建立上下文后再回复。若用户有明确需求，且上下文仍不足，则搜索相关记忆。记忆读取过程不汇报。'
                     ]
                 );
             }

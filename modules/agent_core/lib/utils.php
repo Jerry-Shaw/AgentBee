@@ -845,13 +845,14 @@ class utils extends Factory
         $header = bin2hex(substr($binary, 0, 12));
 
         $magics = [
-            'ffd8ff'           => 'jpeg',   // JPEG
-            '52494646'         => 'webp',   // WebP (RIFF container)
-            '4949'             => 'tiff',   // TIFF (little-endian)
-            '4d4d'             => 'tiff',   // TIFF (big-endian)
-            '89504e470d0a1a0a' => 'png',    // PNG
-            '424d'             => 'bmp',    // BMP
-            '47494638'         => 'gif',    // GIF
+            'ffd8ff'           => 'jpeg',
+            '49492a00'         => 'tiff',
+            '4d4d002a'         => 'tiff',
+            '49492b0008000000' => 'tiff',
+            '4d4d002b00080000' => 'tiff',
+            '89504e470d0a1a0a' => 'png',
+            '474946383761'     => 'gif',
+            '474946383961'     => 'gif',
         ];
 
         foreach ($magics as $magic => $type) {
@@ -859,6 +860,19 @@ class utils extends Factory
                 $result = $type;
                 break;
             }
+        }
+
+        if (str_starts_with($binary, 'RIFF') && 'WEBP' === substr($binary, 8, 4)) {
+            $result = 'webp';
+        } elseif (26 <= strlen($binary) && str_starts_with($binary, 'BM') && "\0\0\0\0" === substr($binary, 6, 4)) {
+            $dib_size     = unpack('V', substr($binary, 14, 4))[1];
+            $pixel_offset = unpack('V', substr($binary, 10, 4))[1];
+
+            if (in_array($dib_size, [12, 16, 40, 52, 56, 64, 108, 124], true) && $pixel_offset >= 14 + $dib_size) {
+                $result = 'bmp';
+            }
+
+            unset($dib_size, $pixel_offset);
         }
 
         unset($binary, $header, $magics, $magic, $type);

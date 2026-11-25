@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Agent tools module for AgentBee core
+ * Agent System toolset for AgentBee core
  *
  * Copyright 2026 秋水之冰 <27206617@qq.com>
  *
@@ -47,7 +47,7 @@ class go extends Factory
      */
     public function cleanContext(string $history_summary, int $keep_normal = 6, int $max_tool_pairs = 2): array
     {
-        return [
+        $result = [
             'async'           => false,
             'action'          => __FUNCTION__,
             'worker_name'     => WORKER_MAIN,
@@ -56,6 +56,9 @@ class go extends Factory
             'max_tool_pairs'  => $max_tool_pairs,
             'handler'         => handler::class
         ];
+
+        unset($history_summary, $keep_normal, $max_tool_pairs);
+        return $result;
     }
 
     /**
@@ -66,16 +69,16 @@ class go extends Factory
     public function loadSkill(string $skill_name): array
     {
         $skill_path = $this->utils->app->root_path . DIRECTORY_SEPARATOR . 'skills' . DIRECTORY_SEPARATOR . $skill_name . DIRECTORY_SEPARATOR;
-        $md_file    = $skill_path . 'SKILL.md';
+        $skill_md   = $skill_path . 'SKILL.md';
 
-        if (!is_file($md_file)) {
+        if (!is_file($skill_md)) {
             return [
                 'status' => 'error',
                 'error'  => '技能 "' . $skill_name . '" 不存在或缺少 SKILL.md 文件，无法加载，请忽略。'
             ];
         }
 
-        $content = file_get_contents($md_file);
+        $content = file_get_contents($skill_md);
 
         if (false === $content) {
             return [
@@ -86,9 +89,9 @@ class go extends Factory
 
         $parts = explode('---', $content, 3);
 
-        if (count($parts) >= 3) {
+        if (3 <= count($parts)) {
             $body = trim($parts[2]);
-        } elseif (count($parts) === 2) {
+        } elseif (2 === count($parts)) {
             $body = trim($parts[1]);
         } else {
             $body = trim($content);
@@ -124,7 +127,7 @@ class go extends Factory
             $result['message'] = '警告：技能"' . $skill_name . '"的指令为空';
         }
 
-        unset($skill_name, $skill_path, $md_file, $content, $parts, $body, $resources, $dependencies, $value, $full_path);
+        unset($skill_name, $skill_path, $skill_md, $content, $parts, $body, $resources, $dependencies, $value, $full_path);
         return $result;
     }
 
@@ -286,16 +289,16 @@ class go extends Factory
         }
 
         $active  = time();
-        $procMgr = ProcMgr::new(in_array($descriptor, ['socket', 'pipe'], true) ? $descriptor : 'socket');
+        $ProcMgr = ProcMgr::new(in_array($descriptor, ['socket', 'pipe'], true) ? $descriptor : 'socket');
 
-        $proc_idx = $procMgr
+        $proc_idx = $ProcMgr
             ->command([$program, ...$argv])
             ->setWorkDir($work_path)
             ->run($this->utils->getProcIDX());
 
-        $proc_pid = $procMgr->getPid($proc_idx);
+        $proc_pid = $ProcMgr->getPid($proc_idx);
 
-        $procMgr->awaitProc(
+        $ProcMgr->awaitProc(
             $proc_idx,
             function (string $output) use (&$active, &$result): void
             {
@@ -327,13 +330,13 @@ class go extends Factory
 
                 unset($output);
             },
-            function () use ($active, $timeout, $proc_pid, &$result): void
+            function () use (&$active, $timeout, $proc_pid, &$result): void
             {
                 if (0 === $timeout) {
                     return;
                 }
 
-                if (time() - $active > $timeout) {
+                if ($timeout < time() - $active) {
                     $this->utils->OSMgr->killPid($proc_pid);
 
                     $result['status'] = 'error';
@@ -342,9 +345,9 @@ class go extends Factory
             }
         );
 
-        $procMgr->exit();
+        $ProcMgr->exit();
 
-        unset($program, $argv, $timeout, $descriptor, $work_path, $active, $procMgr, $proc_pid);
+        unset($program, $argv, $timeout, $descriptor, $work_path, $args, $active, $ProcMgr, $proc_idx, $proc_pid);
         return $result;
     }
 
@@ -352,102 +355,53 @@ class go extends Factory
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $file_path
-     * @param bool   $rendering
+     * @param array  $read_range
+     * @param string $pattern
+     * @param array  $context_lines
+     * @param bool   $render_image
      *
      * @return array
      */
-    public function readImage(string $file_path, bool $rendering = false): array
+    public function readFile(string $file_path, array $read_range = [1, 200], string $pattern = '', array $context_lines = [3, 3], bool $render_image = false): array
     {
-        return [
-            'async'     => false,
-            'action'    => __FUNCTION__,
-            'file_path' => $file_path,
-            'rendering' => $rendering,
-            'handler'   => handler::class
-        ];
-    }
-
-    /**
-     * Read file content.
-     *
-     * @param string $file_path
-     * @param int    $offset
-     * @param int    $limit
-     *
-     * @return array
-     */
-    public function readFile(string $file_path, int $offset = 0, int $limit = 0): array
-    {
-        $full_path = $this->utils->securePath($file_path);
-
-        if (!is_file($full_path)) {
-            return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
-        }
-
-        if (!is_readable($full_path)) {
-            return ['status' => 'error', 'error' => 'File not readable: ' . $full_path];
-        }
-
-        $file_handle = fopen($full_path, 'rb');
-
-        if (false === $file_handle) {
-            return ['status' => 'error', 'error' => 'Failed to open file: ' . $full_path];
-        }
-
-        fseek($file_handle, $offset);
-
-        $content = fread($file_handle, (0 === $limit) ? filesize($full_path) : $limit);
-        $charset = mb_detect_encoding($content, ['UTF-8', 'GBK', 'GB2312', 'BIG5', 'ISO-8859-1'], true);
-        $charset = is_string($charset) ? strtoupper($charset) : 'UTF-8';
-
-        if ('UTF-8' !== $charset) {
-            $content = (string)mb_convert_encoding($content, 'UTF-8', $charset);
-        }
-
-        fclose($file_handle);
-
         $result = [
-            'status'    => 'success',
-            'content'   => $content,
-            'file_path' => $full_path
+            'async'         => false,
+            'action'        => __FUNCTION__,
+            'file_path'     => $file_path,
+            'read_range'    => $read_range,
+            'pattern'       => $pattern,
+            'context_lines' => $context_lines,
+            'render_image'  => $render_image,
+            'handler'       => handler::class
         ];
 
-        unset($file_path, $offset, $limit, $full_path, $file_handle, $content, $charset);
+        unset($file_path, $read_range, $pattern, $context_lines, $render_image);
         return $result;
     }
 
     /**
-     * Write content to file.
+     * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $file_path
      * @param string $content
-     * @param bool   $append
+     * @param array  $line_range
+     * @param array  $text_replace
      *
      * @return array
      */
-    public function writeFile(string $file_path, string $content, bool $append = false): array
+    public function editFile(string $file_path, string $content, array $line_range = [], array $text_replace = []): array
     {
-        $full_path = $this->utils->securePath($file_path);
-
-        $dir_path = dirname($full_path);
-        $dir_path = $this->mkPath($dir_path);
-
-        $file_handle = fopen($full_path, $append ? 'ab' : 'wb');
-
-        if (false === $file_handle) {
-            return ['status' => 'error', 'error' => 'Failed to open file for writing: ' . $full_path];
-        }
-
-        $bytes = fwrite($file_handle, $content);
-        fclose($file_handle);
-
         $result = [
-            'status'        => 'success',
-            'file_path'     => $full_path,
-            'bytes_written' => $bytes ?: 0
+            'async'        => false,
+            'action'       => __FUNCTION__,
+            'file_path'    => $file_path,
+            'content'      => $content,
+            'line_range'   => $line_range,
+            'text_replace' => $text_replace,
+            'handler'      => handler::class
         ];
 
-        unset($file_path, $content, $append, $dir_path, $file_handle, $bytes);
+        unset($file_path, $content, $line_range, $text_replace);
         return $result;
     }
 
@@ -517,33 +471,6 @@ class go extends Factory
         }
 
         unset($file_path, $full_path, $deleted);
-        return $result;
-    }
-
-    /**
-     * Get file size.
-     *
-     * @param string $file_path
-     *
-     * @return array
-     */
-    public function getFileSize(string $file_path): array
-    {
-        $full_path = $this->utils->securePath($file_path);
-
-        if (!is_file($full_path)) {
-            return ['status' => 'error', 'error' => 'File not found: ' . $full_path];
-        }
-
-        $size = filesize($full_path);
-
-        $result = [
-            'status'    => 'success',
-            'file_path' => $full_path,
-            'filesize'  => $size
-        ];
-
-        unset($file_path, $full_path, $size);
         return $result;
     }
 
@@ -659,7 +586,7 @@ class go extends Factory
             'copied_files' => $copied
         ];
 
-        unset($src_dir_path, $dst_dir_path, $src_full, $dst_full, $copied);
+        unset($src_dir_path, $dst_dir_path, $overwrite, $src_full, $dst_full, $copied);
         return $result;
     }
 

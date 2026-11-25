@@ -50,7 +50,6 @@ class go extends Factory
         $result = [
             'async'           => false,
             'action'          => __FUNCTION__,
-            'skip_ctx'        => true,
             'worker_name'     => WORKER_MAIN,
             'history_summary' => $history_summary,
             'keep_normal'     => $keep_normal,

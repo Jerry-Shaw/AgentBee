@@ -908,7 +908,6 @@ class go extends Factory
                 'id'        => $data['tool_calls']['id'],
                 'type'      => $data['tool_calls']['type'],
                 'name'      => $data['tool_calls']['name'],
-                'skip_ctx'  => $data['handler_args']['skip_ctx'] ?? false,
                 'arguments' => json_encode($data['handler_args'], JSON_FORMAT)
             ];
 
@@ -979,23 +978,21 @@ class go extends Factory
                     ]
                 );
 
-                if (false === $tool_call['tools']['skip_ctx']) {
-                    // Context history
-                    $this->core->context->addToolCalls(
-                        $payload['sessionId'],
-                        $payload['workerName'],
-                        $tool_call['tools'],
-                        $tool_call['response']['content'],
-                        $tool_call['response']['reasoning_content'] ?? ''
-                    );
+                // Context history
+                $this->core->context->addToolCalls(
+                    $payload['sessionId'],
+                    $payload['workerName'],
+                    $tool_call['tools'],
+                    $tool_call['response']['content'],
+                    $tool_call['response']['reasoning_content'] ?? ''
+                );
 
-                    $this->core->context->addToolResults(
-                        $payload['sessionId'],
-                        $payload['workerName'],
-                        $tool_call['results']['id'],
-                        $tool_call['results']['content']
-                    );
-                }
+                $this->core->context->addToolResults(
+                    $payload['sessionId'],
+                    $payload['workerName'],
+                    $tool_call['results']['id'],
+                    $tool_call['results']['content']
+                );
 
                 // Chat history
                 $content = [

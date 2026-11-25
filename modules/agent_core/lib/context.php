@@ -424,7 +424,7 @@ class context extends Factory
             } elseif ('tool' === $message['role']) {
                 $results[$message['id']] = $index;
             } elseif ('assistant' === $message['role']) {
-                $groups[$index] = array_column($message['tool_calls'], 'id');
+                $groups[$index] = [$message['tool_calls']['id']];
             }
         }
 

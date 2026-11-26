@@ -1764,8 +1764,8 @@ body:has(.login-window-backdrop) {
     justify-content: flex-end;
 }
 
-.message.remote-history:hover .history-message-actions,
-.message.remote-history:focus-within .history-message-actions {
+.message:hover .history-message-actions,
+.message:focus-within .history-message-actions {
     opacity: 1;
 }
 
@@ -2250,7 +2250,23 @@ body:has(.login-window-backdrop) {
     box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
     font-size: 0.72rem;
     line-height: 1;
-    opacity: 0.82;
+opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.markdown-body:hover .markdown-code-copy {
+    opacity: 0.65;
+    pointer-events: auto;
+}
+
+.markdown-code-copy .check-icon,
+.markdown-code-copy.copied .copy-icon {
+    display: none;
+}
+
+.markdown-code-copy.copied .check-icon {
+    display: block;
 }
 
 .markdown-code-copy svg {

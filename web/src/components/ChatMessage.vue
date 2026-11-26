@@ -232,7 +232,7 @@ function roleName(role: ChatMessage['role']) {
 }
 
 async function copyMessage() {
-  await copyText(props.message.content || '');
+await copyText((props.message.content || '').trim());
   copied.value = true;
   window.setTimeout(() => {
     copied.value = false;
@@ -246,8 +246,8 @@ async function copyMarkdownBlock(event: MouseEvent) {
 
   const block = button.closest<HTMLElement>('.markdown-code-block');
   const code = block?.querySelector<HTMLElement>('pre code') || block?.querySelector<HTMLElement>('pre');
-  const text = code?.textContent || '';
-  if (!text.trim()) return;
+const text = (code?.textContent || '').trim();
+  if (!text) return;
 
   await copyText(text);
   const copyLabel = button.dataset.copyLabel || props.labels.copyMessage;
@@ -391,7 +391,7 @@ function renderMarkdownBlocks(markdown: string) {
     button.setAttribute('aria-label', props.labels.copyMessage);
     button.dataset.copyLabel = props.labels.copyMessage;
     button.dataset.copiedLabel = props.labels.copied;
-    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+button.innerHTML = '<svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"></path></svg>';
 
     pre.replaceWith(wrapper);
     wrapper.appendChild(button);
@@ -487,6 +487,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         <ToolEventsBlock
             v-if="message.toolEvents?.length"
             :events="message.toolEvents"
+:content-create-id="message.memoryCreateId"
             :delete-disabled="memoryDeleteDisabled"
             @delete-memory-message="emit('deleteMemoryMessage', $event)"
             :labels="labels"
@@ -644,7 +645,18 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         </button>
       </div>
     </template>
-    <div v-if="message.memoryCreateId && message.role !== 'user'" class="history-message-actions">
+<div v-if="message.role === 'assistant' || (message.memoryCreateId && message.role !== 'user')" class="history-message-actions">
+<button
+          v-if="message.role === 'assistant'"
+          type="button"
+          class="message-action-button"
+          :title="copied ? labels.copied : labels.copyMessage"
+          :aria-label="copied ? labels.copied : labels.copyMessage"
+          @click="copyMessage"
+      >
+        <Check v-if="copied" :size="14" aria-hidden="true" />
+        <Copy v-else :size="14" aria-hidden="true" />
+      </button>
       <button
           v-if="historyPreviewArtifact"
           type="button"
@@ -655,6 +667,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         <Eye :size="14" aria-hidden="true" />
       </button>
       <button
+v-if="message.memoryCreateId"
           type="button"
           class="message-action-button history-delete-button"
           :title="labels.deleteMemoryRecord"

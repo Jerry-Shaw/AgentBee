@@ -7,6 +7,7 @@ const props = defineProps<{
   events: ToolEvent[];
   title?: string;
 deleteDisabled?: boolean;
+  contentCreateId?: number;
   labels: Record<string, string>;
 }>();
 const emit = defineEmits<{ deleteMemoryMessage: [createId: number] }>();
@@ -83,7 +84,7 @@ function toggleRound(key: string) {
 }
 function recordIds(round: ToolRound): number[] {
 return [...new Set([round.call?.memoryCreateId, round.result?.memoryCreateId]
-.filter((id): id is number => typeof id === 'number' && id > 0))];
+.filter((id): id is number => typeof id === 'number' && id > 0 && id !== props.contentCreateId))];
 }
 function deleteRound(round: ToolRound) {
 if (props.deleteDisabled) return;

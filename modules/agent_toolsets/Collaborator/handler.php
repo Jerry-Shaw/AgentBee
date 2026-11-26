@@ -45,11 +45,12 @@ class handler extends Factory
 
         $agent_core->utils->debug('Collaborator', 'Started: ' . $payload_data['worker_name'] . ' (WorkerID: ' . $proc_idx . ', ' . $payload_data['worker_role'] . ')', 'trace');
 
+        $message_id  = $agent_core->utils->UUIDv4();
         $init_prompt = $payload_data['init_prompt'] . "\n" . '先阅读用户要求，用一句话介绍你的名字和角色，并回复“已就绪”。';
 
         $agent_core->core->memory->saveChat(
             $payload_data['session_id'],
-            $agent_core->utils->UUIDv4(),
+            $message_id,
             $payload_data['worker_name'],
             1,
             'user',
@@ -67,6 +68,7 @@ class handler extends Factory
         $this->sendMessage(
             $agent_core,
             $payload_data['session_id'],
+            $message_id,
             $worker_info,
             ['content' => $init_prompt]
         );
@@ -102,7 +104,7 @@ class handler extends Factory
 
         $message = '正在邀请"`' . $payload_data['worker_name'] . '`"，待其回复“已就绪”后即可开始交流。期间可处理其他任务。';
 
-        unset($payload_data, $agent_core, $proc_idx, $init_prompt, $worker_info, $metadata);
+        unset($payload_data, $agent_core, $proc_idx, $message_id, $init_prompt, $worker_info, $metadata);
         return $message;
     }
 
@@ -133,9 +135,11 @@ class handler extends Factory
             return '[协作者] "`' . $payload_data['worker_name'] . '`" 的交流已结束，消息发送失败';
         }
 
+        $message_id = $agent_core->utils->UUIDv4();
+
         $agent_core->core->memory->saveChat(
             $payload_data['session_id'],
-            $agent_core->utils->UUIDv4(),
+            $message_id,
             $payload_data['worker_name'],
             1,
             'user',
@@ -148,6 +152,7 @@ class handler extends Factory
             $this->sendMessage(
                 $agent_core,
                 $payload_data['session_id'],
+                $message_id,
                 $worker_info,
                 $payload_data
             );
@@ -172,6 +177,7 @@ class handler extends Factory
         $this->sendMessage(
             $agent_core,
             $payload_data['session_id'],
+            $message_id,
             $worker_info,
             $payload_data
         );
@@ -206,7 +212,7 @@ class handler extends Factory
 
         $message = '消息已送达。`' . $worker_info['worker_name'] . '`将异步回复，无需等待，禁止连续发送，可继续处理其他任务。';
 
-        unset($payload_data, $agent_core, $worker_info, $worker_message, $metadata);
+        unset($payload_data, $agent_core, $worker_info, $message_id, $worker_message, $metadata);
         return $message;
     }
 
@@ -232,6 +238,7 @@ class handler extends Factory
             $this->sendMessage(
                 $agent_core,
                 $payload_data['session_id'],
+                $agent_core->utils->UUIDv4(),
                 $worker_info,
                 ['content' => '协作者“' . $payload_data['worker_name'] . '”已结束交流。']
             );
@@ -272,6 +279,7 @@ class handler extends Factory
     /**
      * @param agent_core $agent_core
      * @param string     $session_id
+     * @param string     $message_id
      * @param array      $worker_info
      * @param array      $payload_data
      *
@@ -279,21 +287,24 @@ class handler extends Factory
      * @throws \Random\RandomException
      * @throws \ReflectionException
      */
-    private function sendMessage(agent_core $agent_core, string $session_id, array $worker_info, array $payload_data): void
+    private function sendMessage(agent_core $agent_core, string $session_id, string $message_id, array $worker_info, array $payload_data): void
     {
         $worker_message = $agent_core->utils->getMarker(
-                WORKER_MAIN,
-                AGENT_NAME,
-                'Assistant',
-                $worker_info['worker_name'],
-                1,
-                $session_id
-            ) + [
-                'type' => 'content',
-                'data' => $payload_data['content']
-            ];
+            WORKER_MAIN,
+            AGENT_NAME,
+            'Assistant',
+            $worker_info['worker_name'],
+            1,
+            $session_id,
+            $message_id
+        );
+
+        $worker_message += [
+            'type' => 'content',
+            'data' => $payload_data['content']
+        ];
 
         $agent_core->core->sendMessage($worker_message);
-        unset($agent_core, $worker_info, $payload_data, $worker_message);
+        unset($agent_core, $session_id, $message_id, $worker_info, $payload_data, $worker_message);
     }
 }

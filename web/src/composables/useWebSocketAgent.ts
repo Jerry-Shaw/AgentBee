@@ -817,7 +817,37 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
       if (!messageId || (!pendingTurns.value.has(messageId) && !turnSessionIds.has(messageId))) return;
     }
 
-    if (['content', 'assistant', 'message'].includes(type)) {
+// 主进程发给专家的内容是子窗口的输入，不属于 assistant 回复流。
+    if (msg.isSubTalk === 1 && msg.sender === 'AgentBee' && ['content', 'assistant', 'message'].includes(type)) {
+      const text = normalizePayload(msg);
+      const turn = resolveTurnSession(messageId);
+      if (!turn.session || !turn.messageId || !text) return;
+      let input = turn.session.messages.find((message) => (
+        message.role === 'user' &&
+        message.messageId === turn.messageId &&
+        message.isSubTalk === 1 &&
+        message.WindowName === msg.WindowName
+      ));
+      if (!input) {
+        input = {
+          id: makeId(),
+          role: 'user',
+          messageId: turn.messageId,
+          content: '',
+          status: 'done',
+          time: nowTime(),
+          isSubTalk: 1,
+        };
+        turn.session.messages.push(input);
+      }
+      applySenderMeta(input, msg);
+      input.content += text;
+      options.touchSession(turn.session);
+      options.scheduleCreateSession();
+      return;
+    }
+
+if (['content', 'assistant', 'message'].includes(type)) {
       queueAssistantContent(messageId, normalizePayload(msg), msg);
       // `/reset` 由后端以 need_llm=false 的 message 事件答复，后面不会再有 end，
       // 这里主动收尾，否则该轮会一直停在加载态。

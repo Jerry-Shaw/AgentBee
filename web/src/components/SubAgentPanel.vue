@@ -238,6 +238,7 @@ function getAgentStatusLabel(status: string) {
         :message="message"
         :show-debug-info="showDebugInfo"
         server-identity-only
+        copy-only
         @resend-user-message="onResendUserMessage"
         @update-user-message="onUpdateUserMessage"
         @preview-file="onPreviewFile"

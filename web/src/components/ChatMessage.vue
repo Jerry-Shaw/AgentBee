@@ -26,6 +26,7 @@ const props = defineProps<{
   memoryDeleteDisabled?: boolean;
   showDebugInfo?: boolean;
   serverIdentityOnly?: boolean;
+  copyOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -605,7 +606,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
 
       <div v-if="message.role === 'user'" class="user-message-actions">
         <button
-            v-if="!isEditing"
+            v-if="!copyOnly && !isEditing"
             type="button"
             class="message-action-button"
             :title="message.isRemoteHistory ? labels.resendHistoryTextOnly : labels.resendMessage"
@@ -625,7 +626,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
           <Copy v-else :size="14" aria-hidden="true" />
         </button>
         <button
-            v-if="!isEditing"
+            v-if="!copyOnly && !isEditing"
             type="button"
             class="message-action-button"
             :title="labels.editMessage"
@@ -634,7 +635,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
           <Pencil :size="14" aria-hidden="true" />
         </button>
         <button
-            v-if="message.memoryCreateId"
+            v-if="!copyOnly && message.memoryCreateId"
             type="button"
             class="message-action-button history-delete-button"
             :title="labels.deleteMemoryRecord"
@@ -658,7 +659,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         <Copy v-else :size="14" aria-hidden="true" />
       </button>
       <button
-          v-if="historyPreviewArtifact"
+          v-if="!copyOnly && historyPreviewArtifact"
           type="button"
           class="message-action-button history-preview-button"
           :title="historyPreviewLabel()"
@@ -667,7 +668,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         <Eye :size="14" aria-hidden="true" />
       </button>
       <button
-v-if="message.memoryCreateId"
+v-if="!copyOnly && message.memoryCreateId"
           type="button"
           class="message-action-button history-delete-button"
           :title="labels.deleteMemoryRecord"

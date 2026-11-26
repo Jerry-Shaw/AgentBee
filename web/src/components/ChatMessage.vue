@@ -192,6 +192,10 @@ const historyPreviewArtifact = computed<ChatFile | null>(() => {
 });
 
 const senderIdentity = computed(() => {
+  if (!props.serverIdentityOnly && props.message.isSubTalk !== 1 && props.message.role === 'assistant') {
+    const messageId = props.message.messageId?.trim();
+    return '蜂小秘 - AgentBee' + (props.showDebugInfo && messageId ? ` [${messageId}]` : '');
+  }
   // Human user bubbles use the localized role label, not transport sender metadata.
   // Child-agent panels keep their separate server identity rules.
   if (props.message.role === 'user' && !props.serverIdentityOnly) {
@@ -209,7 +213,9 @@ const senderIdentity = computed(() => {
   const messageId = props.message.messageId?.trim() || '';
 
   let identity = '';
-  if (senderName && senderRole) {
+  if (props.serverIdentityOnly) {
+    identity = senderName;
+  } else if (senderName && senderRole) {
     identity = `${senderName} - ${senderRole}`;
   } else {
     identity = senderName || senderRole || (props.serverIdentityOnly ? '' : roleName(props.message.role));
@@ -472,8 +478,8 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
     </div>
     <template v-else>
       <div class="meta">
-        <span class="sender-identity">{{ senderIdentity }}</span> <span class="meta-separator">·</span>
-        <span>{{ message.time }}</span>
+        <span class="sender-identity">{{ senderIdentity }}</span> <span v-if="message.time" class="meta-separator">·</span>
+        <span v-if="message.time">{{ message.time }}</span>
       </div>
       <div class="bubble">
         <FoldBlock

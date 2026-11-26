@@ -102,6 +102,7 @@ interface UseWebSocketAgentOptions {
 }
 
 export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
+  const streamReceivedTimes = new WeakMap<ServerMessage, string>();
   const wsUrl = ref(localStorage.getItem('agentbee.lastUrl') || 'ws://127.0.0.1:8686');
   const wsToken = ref(localStorage.getItem(WS_TOKEN_STORAGE_KEY) || '');
   const connected = ref(false);
@@ -817,7 +818,8 @@ export function useWebSocketAgent(options: UseWebSocketAgentOptions) {
       if (!messageId || (!pendingTurns.value.has(messageId) && !turnSessionIds.has(messageId))) return;
     }
 
-// 主进程发给专家的内容是子窗口的输入，不属于 assistant 回复流。
+    streamReceivedTimes.set(msg, nowTime());
+    // 主进程发给专家的内容是子窗口的输入，不属于 assistant 回复流。
     if (msg.isSubTalk === 1 && msg.sender === 'AgentBee' && ['content', 'assistant', 'message'].includes(type)) {
       const text = normalizePayload(msg);
       const turn = resolveTurnSession(messageId);
@@ -883,7 +885,10 @@ if (['content', 'assistant', 'message'].includes(type)) {
     if (!text) return;
     const pending = getPendingStreamUpdate(messageId);
     pending.content += text;
-    if (msg) pending.message = msg;
+    if (msg) {
+      ensureAssistantMessage(messageId, msg);
+      pending.message = msg;
+    }
     scheduleStreamFlush();
   }
 
@@ -891,7 +896,10 @@ if (['content', 'assistant', 'message'].includes(type)) {
     if (!text) return;
     const pending = getPendingStreamUpdate(messageId);
     pending.think += text;
-    if (msg) pending.message = msg;
+    if (msg) {
+      ensureAssistantMessage(messageId, msg);
+      pending.message = msg;
+    }
     scheduleStreamFlush();
   }
 
@@ -965,12 +973,15 @@ if (['content', 'assistant', 'message'].includes(type)) {
         think: '',
         toolEvents: [],
         status: 'loading',
-        time: nowTime(),
+        time: msg ? (streamReceivedTimes.get(msg) || nowTime()) : '',
         isSubTalk: isSubTalk ? 1 : 0,
       };
       session.messages.push(assistant);
     }
 
+    if (msg && !assistant.time && !assistant.isRemoteHistory) {
+      assistant.time = streamReceivedTimes.get(msg) || nowTime();
+    }
     turnSessionIds.set(resolvedMessageId, session.id);
     pendingTurns.value.set(resolvedMessageId, { assistantId: assistant.id, sessionId: session.id });
     return { session, assistant, messageId: resolvedMessageId };

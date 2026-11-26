@@ -7,7 +7,6 @@ export interface SubAgentSummary {
   count: number;
   lastActive: string;
   name: string;
-  role: string;
   status: string;
 }
 

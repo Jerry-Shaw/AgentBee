@@ -203,7 +203,7 @@ function getAgentStatusLabel(status: string) {
       <span class="subagent-identity">
         <strong>{{ agent.name }}</strong>
         <span>
-          {{ agent.role || labels.subAgent }} · {{ getAgentStatusLabel(agent.status) }} · {{ agent.count }} {{ labels.items }}
+          {{ getAgentStatusLabel(agent.status) }} · {{ agent.count }} {{ labels.items }}
         </span>
       </span>
       <Bot :size="16" class="subagent-type-icon" aria-hidden="true" />

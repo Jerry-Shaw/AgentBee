@@ -55,7 +55,7 @@ function getAgentStatusLabel(status: string, labels: Record<string, string>) {
         <span class="subagent-menu-copy">
           <strong>{{ agent.name }}</strong>
           <span>
-            {{ agent.role || labels.subAgent }} · {{ getAgentStatusLabel(agent.status, labels) }} · {{ agent.count }} {{ labels.items }}
+            {{ getAgentStatusLabel(agent.status, labels) }} · {{ agent.count }} {{ labels.items }}
           </span>
         </span>
         <Bot :size="15" aria-hidden="true" />

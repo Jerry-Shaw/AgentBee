@@ -446,7 +446,7 @@ const subAgents = computed<SubAgentSummary[]>(() => {
   const agents = new Map<string, SubAgentSummary>();
   const sessionId = sessions.activeSession.value?.id || '';
   for (const name of subAgentGroups.value[sessionId] || []) {
-    agents.set(name, { name, count: 0, lastActive: '', role: '', status: '' });
+    agents.set(name, { name, count: 0, lastActive: '', status: '' });
   }
   subAgentMessages.value.forEach((msg) => {
     const name = msg.WindowName;
@@ -455,14 +455,12 @@ const subAgents = computed<SubAgentSummary[]>(() => {
       if (existing) {
         existing.count += 1;
         existing.lastActive = msg.time || existing.lastActive;
-        existing.role ||= msg.senderRole?.trim() || msg.senderName?.trim() || '';
         existing.status = msg.status || existing.status;
       } else {
         agents.set(name, {
           name,
           count: 1,
           lastActive: msg.time || '',
-          role: msg.senderRole?.trim() || msg.senderName?.trim() || '',
           status: msg.status || '',
         });
       }

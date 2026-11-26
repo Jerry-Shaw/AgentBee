@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Wrench } from 'lucide-vue-next';
+import { Trash2, Wrench } from 'lucide-vue-next';
 import type { ToolEvent } from '../protocol/types';
 
 const props = defineProps<{
   events: ToolEvent[];
   title?: string;
+deleteDisabled?: boolean;
   labels: Record<string, string>;
 }>();
+const emit = defineEmits<{ deleteMemoryMessage: [createId: number] }>();
 const expanded = ref(false);
 const fullResults = ref(new Set<string>());
 const fullCalls = ref(new Set<string>());
@@ -79,6 +81,14 @@ function toggleRound(key: string) {
   else next.add(key);
   openEvents.value = next;
 }
+function recordIds(round: ToolRound): number[] {
+return [...new Set([round.call?.memoryCreateId, round.result?.memoryCreateId]
+.filter((id): id is number => typeof id === 'number' && id > 0))];
+}
+function deleteRound(round: ToolRound) {
+if (props.deleteDisabled) return;
+recordIds(round).forEach(id => emit('deleteMemoryMessage', id));
+}
 function roundName(round: ToolRound) {
   return round.call?.name || round.result?.name || props.labels.toolEvent;
 }
@@ -96,13 +106,21 @@ function roundName(round: ToolRound) {
     <div v-if="expanded" class="tool-stack-body tool-round-list">
       <article v-for="round in rounds" :key="round.key" class="tool-round"
         :class="{ failed: round.result?.ok === false || round.call?.ok === false }">
-        <button type="button" class="tool-event-head" :aria-expanded="openEvents.has(round.key)"
-          :title="roundName(round)" @click="toggleRound(round.key)">
-          <span class="fold-chevron" :class="{ open: openEvents.has(round.key) }" aria-hidden="true"></span>
-          <span class="tool-event-name">{{ roundName(round) }}</span>
-          <span v-if="round.result?.ok === false || round.call?.ok === false" class="tool-status-label">{{ labels.failed }}</span>
-          <span class="tool-event-time">{{ round.call?.time || round.result?.time }}</span>
-        </button>
+        <div class="tool-round-header">
+          <button type="button" class="tool-event-head" :aria-expanded="openEvents.has(round.key)"
+            :title="roundName(round)" @click="toggleRound(round.key)">
+            <span class="fold-chevron" :class="{ open: openEvents.has(round.key) }" aria-hidden="true"></span>
+            <span class="tool-event-name">{{ roundName(round) }}</span>
+            <span v-if="round.result?.ok === false || round.call?.ok === false" class="tool-status-label">{{ labels.failed }}</span>
+            <span class="tool-event-time">{{ round.call?.time || round.result?.time }}</span>
+          </button>
+          <button v-if="recordIds(round).length" type="button"
+            class="message-action-button history-delete-button tool-round-delete"
+            :title="labels.deleteMemoryRecord" :aria-label="`${labels.deleteMemoryRecord} · ${roundName(round)}`"
+            :disabled="deleteDisabled" @click.stop="deleteRound(round)">
+            <Trash2 :size="14" aria-hidden="true" />
+          </button>
+        </div>
         <div v-if="openEvents.has(round.key)" class="tool-round-body">
           <section v-if="round.call" class="tool-round-content tool-round-call">
             <div class="tool-round-label">{{ labels.toolCalls }}</div>
@@ -130,6 +148,10 @@ function roundName(round: ToolRound) {
 </template>
 
 <style scoped>
+.tool-round-header { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+.tool-round-header .tool-event-head { flex: 1 1 0; width: auto; min-width: 0; }
+.tool-round-delete { flex: 0 0 auto; margin-left: auto; }
+.tool-round-header .tool-event-time { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-round-list { min-width: 0; padding-block: 0; }
 .tool-round { padding: 6px 0; min-width: 0; }
 .tool-round:first-child { padding-top: 0; }

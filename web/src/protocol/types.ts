@@ -113,6 +113,8 @@ export interface ChatSession {
 }
 
 export interface ToolEvent {
+  /** Original history record, retained across display-only grouping. */
+  memoryCreateId?: number;
   callId?: string;
   calls?: ToolEvent[];
   /** Number and names of calls contained in this event (not result count). */

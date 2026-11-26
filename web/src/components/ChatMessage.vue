@@ -487,6 +487,8 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         <ToolEventsBlock
             v-if="message.toolEvents?.length"
             :events="message.toolEvents"
+            :delete-disabled="memoryDeleteDisabled"
+            @delete-memory-message="emit('deleteMemoryMessage', $event)"
             :labels="labels"
         />
 

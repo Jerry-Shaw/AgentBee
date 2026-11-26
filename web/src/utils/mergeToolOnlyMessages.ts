@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../protocol/types';
+import type { ChatMessage, ToolEvent } from '../protocol/types';
 
 /** Display-only grouping: never mutate stored messages or cross a conversation boundary. */
 export function mergeToolOnlyMessages(messages: ChatMessage[], options: { childWindow?: boolean } = {}): ChatMessage[] {
@@ -36,7 +36,14 @@ export function mergeToolOnlyMessages(messages: ChatMessage[], options: { childW
     pending = [];
   }
 
-  for (const message of messages) {
+  for (const source of messages) {
+const withSource = (event: ToolEvent): ToolEvent => ({
+...event,
+memoryCreateId: event.memoryCreateId ?? source.memoryCreateId,
+calls: event.calls?.map(withSource),
+});
+const message = source.toolEvents?.length
+? { ...source, toolEvents: source.toolEvents.map(withSource) } : source;
     // Main-process bubbles are not targets; keep pending child tools for the next reply.
     if (options.childWindow && message.role === 'assistant' && message.sender === 'AgentBee') {
       if (pending.length && (pending[0].WindowName || '') !== (message.WindowName || '')) flush();

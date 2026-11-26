@@ -38,7 +38,7 @@ import {
 } from './composables/useWebSocketAgent';
 import { normalizeServerError } from './protocol/normalizers';
 import { decodeMemoryData } from './protocol/memoryData';
-import { matchesHistoryIdentity, remainingLiveOutput, appendRemainingOutput } from './utils/historyIdentity';
+import { matchesHistoryIdentity, remainingLiveOutput } from './utils/historyIdentity';
 import { mergeToolOnlyMessages } from './utils/mergeToolOnlyMessages';
 import { extractMessageArtifacts, isAutoOpenCandidate } from './utils/artifacts';
 import { isBrowserLoadableUrl, resolveFileUrl } from './utils/fileUrl';
@@ -1637,7 +1637,8 @@ function parseMemoryRecords(value: unknown): MemoryRecord[] {
       : 'system';
     const time = typeof item.create_time === 'string' && item.create_time
       ? item.create_time : new Date(Math.floor(createId / 1000)).toLocaleString('zh-CN');
-    const messageId = typeof item.messageId === 'string' ? item.messageId.trim() : undefined;
+const messageId = (typeof item.message_id === 'string' ? item.message_id.trim() : '')
+      || (typeof item.messageId === 'string' ? item.messageId.trim() : '') || undefined;
     const payload = 'data' in item ? decodeMemoryData(item.data, createId, time) : undefined;
     if (payload) {
       payload.messageId = messageId;
@@ -1753,25 +1754,15 @@ function mergeLocalAndMemoryMessages(
   records: MemoryRecord[],
   onMatch?: (record: MemoryRecord, local: AgentChatMessage) => void,
 ): AgentChatMessage[] {
-  // An ID identifies a turn; retain every persisted row and subtract its output
-  // from the independent local stream before applying legacy content matching.
-  const identityRecords = new Map<string, MemoryRecord[]>();
-  for (const local of localMessages) {
-    const matches = records.filter(record => matchesHistoryIdentity(local, record));
-    if (matches.length) identityRecords.set(local.id, matches);
-  }
-  if (identityRecords.size) {
-    const legacyLocals = localMessages.filter(local => !identityRecords.has(local.id));
-    const merged = mergeLocalAndMemoryMessages(legacyLocals, records, onMatch);
-    for (const local of localMessages) {
-      const matches = identityRecords.get(local.id);
-      if (!matches) continue;
-      const last = matches[matches.length - 1];
-      const index = merged.findIndex(message => message.memoryCreateId === last.create_id);
-      if (index >= 0) merged[index] = appendRemainingOutput(merged[index], remainingLiveOutput(local, matches));
-    }
-    return merged;
-  }
+// Persisted messages own rendering once their ID matches a live message.
+  // Callers supply records and live messages for the same session/window.
+  const persistedMessageIds = new Set(records.map(record => record.messageId).filter(Boolean));
+  localMessages = localMessages.filter(local => {
+    if (!local.messageId || !persistedMessageIds.has(local.messageId)) return true;
+    records.filter(record => record.messageId === local.messageId)
+      .forEach(record => onMatch?.(record, local));
+    return false;
+  });
   const memoryToLocalIndex = new Map<number, number>();
   let localSearchEnd = localMessages.length;
 

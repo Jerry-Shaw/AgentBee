@@ -56,7 +56,8 @@ class go extends Factory
     private const DDL_CHAT = '
         CREATE TABLE IF NOT EXISTS agent_chat (
             create_id   INTEGER PRIMARY KEY,
-            session_id  CHAR(36) DEFAULT NULL,
+            session_id  CHAR(36) NOT NULL,
+            message_id  CHAR(36) NOT NULL,
             worker_name VARCHAR(64) NOT NULL,
             type        INTEGER NOT NULL,
             role        VARCHAR(16) NOT NULL,
@@ -329,6 +330,7 @@ class go extends Factory
 
     /**
      * @param string $session_id
+     * @param string $message_id
      * @param string $worker_name
      * @param int    $type
      * @param string $role
@@ -337,7 +339,7 @@ class go extends Factory
      * @return bool
      * @throws \ReflectionException
      */
-    public function saveChat(string $session_id, string $worker_name, int $type, string $role, array $data): bool
+    public function saveChat(string $session_id, string $message_id, string $worker_name, int $type, string $role, array $data): bool
     {
         $create_id = $this->generateMicroTimestamp('agent_chat');
 
@@ -345,6 +347,7 @@ class go extends Factory
             ->insert([
                 'create_id'   => $create_id,
                 'session_id'  => $session_id,
+                'message_id'  => $message_id,
                 'worker_name' => $worker_name,
                 'type'        => $type,
                 'role'        => $role,
@@ -352,7 +355,7 @@ class go extends Factory
             ])
             ->execute();
 
-        unset($session_id, $worker_name, $type, $role, $data, $create_id);
+        unset($session_id, $message_id, $worker_name, $type, $role, $data, $create_id);
         return $saved;
     }
 
@@ -371,7 +374,7 @@ class go extends Factory
         $query = $this->libSQLite
             ->table('agent_chat')
             ->where(['session_id', $session_id], ['type', $type])
-            ->select('create_id', 'worker_name', 'type', 'role', 'data');
+            ->select('create_id', 'message_id', 'worker_name', 'type', 'role', 'data');
 
         if ('' !== $worker_name) {
             $query->where(['worker_name', $worker_name]);

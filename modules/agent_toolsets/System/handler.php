@@ -518,6 +518,7 @@ class handler extends Factory
 
             $agent_core->core->memory->saveChat(
                 $payload_data['session_id'],
+                $agent_core->utils->UUIDv4(),
                 $payload_data['process_name'],
                 0,
                 'assistant',

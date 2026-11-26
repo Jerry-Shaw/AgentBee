@@ -78,6 +78,19 @@ class utils extends Factory
     }
 
     /**
+     * @return string
+     * @throws \Random\RandomException
+     */
+    public function UUIDv4(): string
+    {
+        $data    = random_bytes(16);
+        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
+        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
+
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+    }
+
+    /**
      * @return int
      */
     public function getMainIDX(): int
@@ -494,6 +507,7 @@ class utils extends Factory
      * @param string $message_id
      *
      * @return array
+     * @throws \Random\RandomException
      */
     public function getMarker(
         string $sender,
@@ -506,7 +520,7 @@ class utils extends Factory
     ): array
     {
         if ('' === $message_id) {
-            $message_id = hash('md5', uniqid(microtime(), true));
+            $message_id = $this->UUIDv4();
         }
 
         $marker = [

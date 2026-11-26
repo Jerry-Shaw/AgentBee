@@ -591,7 +591,7 @@ class go extends Factory
 
             // Save to session chat
             if ([] !== $result['chat']) {
-                $this->core->memory->saveChat($data['sessionId'], WORKER_MAIN, 0, 'user', $result['chat']);
+                $this->core->memory->saveChat($data['sessionId'], $data['messageId'], WORKER_MAIN, 0, 'user', $result['chat']);
             }
 
             // Save to misc memory
@@ -799,6 +799,7 @@ class go extends Factory
 
                 $this->core->memory->saveChat(
                     $payload['sessionId'],
+                    $payload['messageId'],
                     $payload['workerName'],
                     $payload['isSubTalk'],
                     'assistant',
@@ -845,6 +846,7 @@ class go extends Factory
 
                 $this->core->memory->saveChat(
                     $payload['sessionId'],
+                    $payload['messageId'],
                     $payload['workerName'],
                     $payload['isSubTalk'],
                     1 === $payload['isSubTalk'] && WORKER_MAIN === $payload['workerName'] ? 'user' : 'assistant',
@@ -1018,6 +1020,7 @@ class go extends Factory
 
                 $this->core->memory->saveChat(
                     $payload['sessionId'],
+                    $payload['messageId'],
                     $payload['workerName'],
                     $payload['isSubTalk'],
                     'assistant',

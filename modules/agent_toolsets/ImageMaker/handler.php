@@ -41,7 +41,7 @@ class handler extends Factory
      */
     private function loadConfig(agent_core $agent_core): array
     {
-        $this->message_id = hash('md5', uniqid(microtime() . true));
+        $this->message_id = $agent_core->utils->UUIDv4();
 
         if ([] !== $this->config) {
             return $this->config;
@@ -247,6 +247,7 @@ class handler extends Factory
 
                     $agent_core->core->memory->saveChat(
                         $session_id,
+                        $this->message_id,
                         $process_name,
                         0,
                         'assistant',

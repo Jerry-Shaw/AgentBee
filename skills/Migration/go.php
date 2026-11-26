@@ -58,6 +58,7 @@ class go extends Factory
      */
     public function memoryToChat(): void
     {
+        $utils = utils::new();
         $query = $this->libSQLite->query('SELECT create_id,session_id,role,content FROM agent_memory');
 
         while ($row = $query->fetch()) {
@@ -70,6 +71,7 @@ class go extends Factory
                     ->insert([
                         'create_id'   => $row['create_id'],
                         'session_id'  => $row['session_id'],
+                        'message_id'  => $utils->UUIDv4(),
                         'worker_name' => WORKER_MAIN,
                         'type'        => 0,
                         'role'        => $row['role'],

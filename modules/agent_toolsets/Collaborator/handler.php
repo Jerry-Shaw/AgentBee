@@ -49,6 +49,7 @@ class handler extends Factory
 
         $agent_core->core->memory->saveChat(
             $payload_data['session_id'],
+            $agent_core->utils->UUIDv4(),
             $payload_data['worker_name'],
             1,
             'user',
@@ -134,6 +135,7 @@ class handler extends Factory
 
         $agent_core->core->memory->saveChat(
             $payload_data['session_id'],
+            $agent_core->utils->UUIDv4(),
             $payload_data['worker_name'],
             1,
             'user',

@@ -910,7 +910,7 @@ class go extends Factory
                 'id'        => $data['tool_calls']['id'],
                 'type'      => $data['tool_calls']['type'],
                 'name'      => $data['tool_calls']['name'],
-                'arguments' => json_encode($data['handler_args'], JSON_FORMAT)
+                'arguments' => $data['tool_calls']['arguments']
             ];
 
             try {

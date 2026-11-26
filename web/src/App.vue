@@ -38,6 +38,7 @@ import {
 } from './composables/useWebSocketAgent';
 import { normalizeServerError } from './protocol/normalizers';
 import { decodeMemoryData } from './protocol/memoryData';
+import { matchesHistoryIdentity, remainingLiveOutput, appendRemainingOutput } from './utils/historyIdentity';
 import { mergeToolOnlyMessages } from './utils/mergeToolOnlyMessages';
 import { extractMessageArtifacts, isAutoOpenCandidate } from './utils/artifacts';
 import { isBrowserLoadableUrl, resolveFileUrl } from './utils/fileUrl';
@@ -1181,6 +1182,12 @@ function handleMemoryMessage(act: string, msg: ServerMessage) {
       });
     }
     if (session) {
+      const deletedRecord = memoryRecords.value.find(record => record.create_id === createId);
+      if (deletedRecord?.messageId) {
+        // Remove only this record's contribution, never the entire live turn.
+        session.messages = session.messages.map(message => matchesHistoryIdentity(message, deletedRecord)
+          ? remainingLiveOutput(message, [deletedRecord], true) : message);
+      }
       const index = session.messages.findIndex((message) =>
         message.memoryCreateId === createId || (localMessageId !== undefined && message.id === localMessageId));
       if (index >= 0) session.messages.splice(index, 1);
@@ -1630,12 +1637,24 @@ function parseMemoryRecords(value: unknown): MemoryRecord[] {
       : 'system';
     const time = typeof item.create_time === 'string' && item.create_time
       ? item.create_time : new Date(Math.floor(createId / 1000)).toLocaleString('zh-CN');
+    const messageId = typeof item.messageId === 'string' ? item.messageId.trim() : undefined;
     const payload = 'data' in item ? decodeMemoryData(item.data, createId, time) : undefined;
+    if (payload) {
+      payload.messageId = messageId;
+      if (typeof item.WindowName === 'string') payload.WindowName = item.WindowName;
+      if (typeof item.isSubTalk === 'number') payload.isSubTalk = item.isSubTalk;
+      const source = (event: NonNullable<AgentChatMessage['toolEvents']>[number]) => {
+        event.memoryCreateId = createId;
+        event.calls?.forEach(source);
+      };
+      payload.toolEvents?.forEach(source);
+    }
     const content = typeof item.content === 'string'
       ? item.content
       : JSON.stringify(item.content ?? '', null, 2);
 
     return [{
+      messageId,
       content: payload?.content ?? content,
       payload,
       rawData: JSON.stringify(item.data),
@@ -1723,6 +1742,7 @@ function memoryRecordListsEqual(left: MemoryRecord[], right: MemoryRecord[]): bo
       record.role === candidate.role &&
       record.level === candidate.level &&
       record.content === candidate.content &&
+      record.messageId === candidate.messageId &&
       record.rawData === candidate.rawData &&
       record.worker_name === candidate.worker_name;
   });
@@ -1733,6 +1753,25 @@ function mergeLocalAndMemoryMessages(
   records: MemoryRecord[],
   onMatch?: (record: MemoryRecord, local: AgentChatMessage) => void,
 ): AgentChatMessage[] {
+  // An ID identifies a turn; retain every persisted row and subtract its output
+  // from the independent local stream before applying legacy content matching.
+  const identityRecords = new Map<string, MemoryRecord[]>();
+  for (const local of localMessages) {
+    const matches = records.filter(record => matchesHistoryIdentity(local, record));
+    if (matches.length) identityRecords.set(local.id, matches);
+  }
+  if (identityRecords.size) {
+    const legacyLocals = localMessages.filter(local => !identityRecords.has(local.id));
+    const merged = mergeLocalAndMemoryMessages(legacyLocals, records, onMatch);
+    for (const local of localMessages) {
+      const matches = identityRecords.get(local.id);
+      if (!matches) continue;
+      const last = matches[matches.length - 1];
+      const index = merged.findIndex(message => message.memoryCreateId === last.create_id);
+      if (index >= 0) merged[index] = appendRemainingOutput(merged[index], remainingLiveOutput(local, matches));
+    }
+    return merged;
+  }
   const memoryToLocalIndex = new Map<number, number>();
   let localSearchEnd = localMessages.length;
 
@@ -1742,7 +1781,9 @@ function mergeLocalAndMemoryMessages(
     let localIndex = localSearchEnd - 1;
     while (
       localIndex >= 0 &&
-      (localMessages[localIndex].status === 'loading' ||
+      (Boolean(record.messageId && localMessages[localIndex].messageId) ||
+        !record.content.trim() ||
+        localMessages[localIndex].status === 'loading' ||
         getMessageSignature(localMessages[localIndex].role, localMessages[localIndex].content) !== signature)
     ) {
       localIndex -= 1;
@@ -1787,6 +1828,7 @@ function mergeLocalAndMemoryMessages(
 function memoryRecordToChatMessage(record: MemoryRecord): AgentChatMessage {
   return {
     id: `memory-${record.create_id}`,
+    messageId: record.messageId,
     role: record.role,
     ...record.payload,
     content: record.content,

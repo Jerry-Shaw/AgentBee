@@ -223,6 +223,7 @@ export interface ClientMemorySessionRequest {
 }
 
 export interface MemoryRecord {
+  messageId?: string;
   payload?: Partial<ChatMessage>;
   rawData?: string;
   worker_name?: string;

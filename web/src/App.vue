@@ -201,7 +201,7 @@ const memoryRecords = ref<MemoryRecord[]>([]);
 let memoryRequestSessionId = '';
 /** 服务端历史已经加载过的会话 id，用来避免对同一个会话重复拉取。 */
 let historyLoadedForSession = '';
-const memoryDeleteTargets = new Map<number, { sessionId: string; localMessageId?: string }>();
+const memoryDeleteTargets = new Map<number, { sessionId: string; localMessageId?: string; childHistoryKey?: string }>();
 let memoryResponseTimer: number | null = null;
 let pendingMemoryReadMode: MemoryReadMode | null = null;
 const sessionLoading = ref(false);
@@ -652,6 +652,21 @@ function runPendingMemoryRead() {
   pendingMemoryReadMode = null;
   if (!mode) return;
   window.setTimeout(() => requestMemoryRead(mode), 0);
+}
+
+function deleteChildMemoryMessage(createId: number) {
+  const sessionId = sessions.activeSessionId.value;
+  const worker = selectedSubAgentName.value;
+  if (!agent.canSend.value || !worker) return;
+  const key = childKey(sessionId, worker);
+  const state = childHistories.value[key];
+  if (!state || state.loading) return;
+  memoryDeleteTargets.set(createId, { sessionId, childHistoryKey: key });
+  if (!agent.deleteMemory(createId)) {
+    memoryDeleteTargets.delete(createId);
+    return;
+  }
+  state.error = '';
 }
 
 function deleteMemoryMessage(createId: number) {
@@ -1167,6 +1182,30 @@ function handleMemoryMessage(act: string, msg: ServerMessage) {
     if (createId === null || createId <= 0) return;
     const target = memoryDeleteTargets.get(createId);
     
+    if (target?.childHistoryKey) {
+      const state = childHistories.value[target.childHistoryKey];
+      if (errorMessage || msg.status !== 'success') {
+        if (state) state.error = errorMessage || '删除失败';
+        memoryDeleteTargets.delete(createId);
+        return;
+      }
+      const session = sessions.getSessionById(target.sessionId);
+      const record = state?.records.find(item => item.create_id === createId);
+      const worker = (JSON.parse(target.childHistoryKey) as [string, string])[1];
+      if (session) {
+        session.messages = session.messages
+          .filter(message => !(message.isSubTalk === 1 && message.WindowName === worker && message.memoryCreateId === createId))
+          .map(message => record?.messageId && message.isSubTalk === 1 && message.WindowName === worker && message.messageId === record.messageId
+            ? remainingLiveOutput(message, [record], true) : message);
+      }
+      if (state) {
+        state.records = state.records.filter(item => item.create_id !== createId);
+        state.error = '';
+      }
+      memoryDeleteTargets.delete(createId);
+      return;
+    }
+
     if (errorMessage || msg.status !== 'success') {
       memoryError.value = errorMessage;
       memoryDeleteTargets.delete(createId);
@@ -2384,6 +2423,8 @@ function redactConnectionUrl(value: string): string {
           :labels="t"
           :messages="subAgentMessages"
           :loading="selectedChildHistory?.loading || false"
+          :memory-delete-disabled="!agent.canSend.value || !!selectedChildHistory?.loading"
+          @delete-memory-message="deleteChildMemoryMessage"
           :history-error="selectedChildHistory?.error || ''"
           :has-more="selectedChildHistory?.hasMore || false"
           @load-older="requestChildHistory(true)"
@@ -2487,7 +2528,9 @@ function redactConnectionUrl(value: string): string {
     :labels="t"
     :messages="subAgentMessages"
     :loading="selectedChildHistory?.loading || false"
-    :history-error="selectedChildHistory?.error || ''"
+    :memory-delete-disabled="!agent.canSend.value || !!selectedChildHistory?.loading"
+          @delete-memory-message="deleteChildMemoryMessage"
+          :history-error="selectedChildHistory?.error || ''"
     :has-more="selectedChildHistory?.hasMore || false"
     @load-older="requestChildHistory(true)"
     @retry-history="requestChildHistory(selectedChildHistory?.mode === 'older')"

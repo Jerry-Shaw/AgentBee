@@ -11,6 +11,7 @@ const props = defineProps<{
   labels: Record<string, string>;
   messages: AgentChatMessage[];
   showDebugInfo: boolean;
+  memoryDeleteDisabled?: boolean;
   loading?: boolean;
   historyError?: string;
   hasMore?: boolean;
@@ -20,6 +21,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
+  deleteMemoryMessage: [createId: number];
   deleteSubAgent: [agentName: string];
   loadOlder: [];
   retryHistory: [];
@@ -237,6 +239,8 @@ function getAgentStatusLabel(status: string) {
         :labels="labels"
         :message="message"
         :show-debug-info="showDebugInfo"
+        :memory-delete-disabled="memoryDeleteDisabled"
+        @delete-memory-message="emit('deleteMemoryMessage', $event)"
         server-identity-only
         copy-only
         @resend-user-message="onResendUserMessage"

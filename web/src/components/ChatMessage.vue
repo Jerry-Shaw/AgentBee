@@ -635,7 +635,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
           <Pencil :size="14" aria-hidden="true" />
         </button>
         <button
-            v-if="!copyOnly && message.memoryCreateId"
+            v-if="message.memoryCreateId"
             type="button"
             class="message-action-button history-delete-button"
             :title="labels.deleteMemoryRecord"
@@ -668,7 +668,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         <Eye :size="14" aria-hidden="true" />
       </button>
       <button
-v-if="!copyOnly && message.memoryCreateId"
+v-if="message.memoryCreateId"
           type="button"
           class="message-action-button history-delete-button"
           :title="labels.deleteMemoryRecord"

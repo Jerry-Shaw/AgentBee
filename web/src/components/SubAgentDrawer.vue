@@ -24,6 +24,7 @@ const props = defineProps<{
   open: boolean;
   selectedAgentName: string | null;
   showDebugInfo: boolean;
+  memoryDeleteDisabled?: boolean;
   loading?: boolean;
   historyError?: string;
   hasMore?: boolean;
@@ -31,6 +32,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
+  deleteMemoryMessage: [createId: number];
   loadOlder: [];
   retryHistory: [];
   deleteSubAgent: [agentName: string];
@@ -123,6 +125,8 @@ onBeforeUnmount(() => {
           :agent="selectedAgent"
           :labels="labels"
           :messages="messages"
+          :memory-delete-disabled="memoryDeleteDisabled"
+          @delete-memory-message="emit('deleteMemoryMessage', $event)"
           :loading="loading"
           :history-error="historyError"
           :has-more="hasMore"

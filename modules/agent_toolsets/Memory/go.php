@@ -1019,7 +1019,10 @@ class go extends Factory
         $this->libSQLite->autoCleanup();
 
         $this->libSQLite->pdo->setAttribute(\PDO::ATTR_EMULATE_PREPARES, true);
-        $this->libSQLite->exec('PRAGMA journal_mode=WAL');
+
+        $this->libSQLite->exec('PRAGMA journal_mode = WAL');
+        $this->libSQLite->exec('PRAGMA synchronous = NORMAL');
+        $this->libSQLite->exec('PRAGMA wal_checkpoint(TRUNCATE)');
         $this->libSQLite->exec('PRAGMA busy_timeout = 5000');
         $this->libSQLite->exec('PRAGMA cache_size = -4000');
 

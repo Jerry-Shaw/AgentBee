@@ -31,7 +31,7 @@ const previewHtml = computed(() => {
     .map((part) => part.replace(/\s+/g, ' ').trim())
     .filter(Boolean)
     .map((part) => renderInlineMarkdown(part))
-    .join(' | ');
+    .join(' ');
 });
 </script>
 

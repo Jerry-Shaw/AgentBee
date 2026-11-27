@@ -35,7 +35,6 @@ final class core extends Factory
     use System;
 
     public utils     $utils;
-    public memory    $memory;
     public context   $context;
     public SocketMgr $socketMgr;
 
@@ -58,7 +57,6 @@ final class core extends Factory
         $this->utils     = utils::new();
         $this->error     = Error::new();
         $this->IOData    = IOData::new();
-        $this->memory    = memory::new();
         $this->context   = context::new();
         $this->socketMgr = SocketMgr::new(WORKER_MAIN);
 

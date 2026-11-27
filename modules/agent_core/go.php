@@ -23,6 +23,7 @@ namespace modules\agent_core;
 use modules\agent_core\lib\message;
 use modules\agent_core\lib\utils;
 use modules\agent_openai\go as openai;
+use modules\agent_toolsets\Memory\go as memory;
 use Nervsys\Core\Factory;
 use Nervsys\Core\Mgr\SocketMgr;
 
@@ -31,6 +32,7 @@ class go extends Factory
     public core    $core;
     public utils   $utils;
     public openai  $openai;
+    public memory  $memory;
     public message $message;
 
     public int $keep_pairs = 2;
@@ -193,7 +195,8 @@ class go extends Factory
             [$this, 'stdoutHandler']
         );
 
-        $this->session_list = array_column($this->core->memory->listSessions(0)['sessions'], 'session_id');
+        $this->memory       = memory::new();
+        $this->session_list = array_column($this->memory->listSessions(0)['sessions'], 'session_id');
 
         $agent_toolsets = $this->utils->fetchToolset('modules/agent_toolsets');
         $this->core->addSkills($agent_toolsets);
@@ -230,7 +233,7 @@ class go extends Factory
     public function getSystemPrompt(string $session_id): string
     {
         $prompt   = $this->utils->getMainPrompt();
-        $memories = $this->core->memory->read('system', 0, 0, 0);
+        $memories = $this->memory->read('system', 0, 0, 0);
 
         if ([] !== $memories['data']) {
             $memory = ['## 用户与人物设定'];
@@ -247,7 +250,7 @@ class go extends Factory
         $prompt .= "\n\n" . '---' . "\n\n";
 
         if ('' !== $session_id) {
-            $session = $this->core->memory->listSessions(0, $session_id, false);
+            $session = $this->memory->listSessions(0, $session_id, false);
             $prompt  .= isset($session['sessions'][0]['session_id']) && $session['sessions'][0]['session_id'] === $session_id
                 ? '【当前会话】**' . $session['sessions'][0]['session_name'] . '**，【会话ID】`' . $session_id . '`，读写记忆时必传。'
                 : '【会话ID】`' . $session_id . '`，读写记忆时必传。';
@@ -352,7 +355,7 @@ class go extends Factory
     {
         $now_time       = time();
         $session_active = $this->core->context->getSessionList();
-        $session_list   = $this->core->memory->listSessions(0, '', true);
+        $session_list   = $this->memory->listSessions(0, '', true);
 
         foreach ($session_list['sessions'] as $session) {
             // Remove session history when last response duration is too long
@@ -382,11 +385,11 @@ class go extends Factory
             // Check session pending message/new message/task
             $pending_message = $this->core->context->isMessagePending($session['session_id']);
             $new_messages    = $this->core->context->refreshHistory($session['session_id'], WORKER_MAIN);
-            $task_list       = $this->core->memory->runTasks($session['session_id']);
+            $task_list       = $this->memory->runTasks($session['session_id']);
 
             // Remove all tasks if session is deleted
             if ([] !== $task_list && 1 !== $session['session_status']) {
-                $this->core->memory->removeTasks(array_column($task_list, 'create_id'));
+                $this->memory->removeTasks(array_column($task_list, 'create_id'));
                 $task_list = [];
             }
 
@@ -545,7 +548,7 @@ class go extends Factory
             }
 
             if ('memory' === $data['type']) {
-                $data['content']['memory'] = $this->core->memory;
+                $data['content']['memory'] = $this->memory;
             }
 
             $result = $this->message->$type_method($data['content'], $data['sessionId'] ?? '');
@@ -591,7 +594,7 @@ class go extends Factory
 
             // Save to session chat
             if ([] !== $result['chat']) {
-                $this->core->memory->saveChat($data['sessionId'], $data['messageId'], WORKER_MAIN, 0, 'user', $result['chat']);
+                $this->memory->saveChat($data['sessionId'], $data['messageId'], WORKER_MAIN, 0, 'user', $result['chat']);
             }
 
             // Save to misc memory
@@ -599,10 +602,10 @@ class go extends Factory
                 // Save to session
                 if (!in_array($data['sessionId'], $this->session_list)) {
                     $this->session_list[] = $data['sessionId'];
-                    $this->core->memory->createSession($data['sessionId'], mb_substr($result['memory'], 0, 32, 'UTF-8'));
+                    $this->memory->createSession($data['sessionId'], mb_substr($result['memory'], 0, 32, 'UTF-8'));
                 }
 
-                $this->core->memory->save('misc', 'user', $result['memory'], 0, $data['sessionId']);
+                $this->memory->save('misc', 'user', $result['memory'], 0, $data['sessionId']);
             }
 
             if (isset($result['errors']) && [] !== $result['errors']) {
@@ -778,7 +781,7 @@ class go extends Factory
             // Save misc level memory
             case 'save':
                 if (WORKER_MAIN === $payload['sender'] && '' !== ($payload['data'] ?? '')) {
-                    $this->core->memory->save('misc', 'assistant', $payload['data'], 0, $payload['sessionId']);
+                    $this->memory->save('misc', 'assistant', $payload['data'], 0, $payload['sessionId']);
                 }
                 break;
 
@@ -797,7 +800,7 @@ class go extends Factory
                     $content['reasoning_content'] = $payload['data']['reasoning_content'];
                 }
 
-                $this->core->memory->saveChat(
+                $this->memory->saveChat(
                     $payload['sessionId'],
                     $payload['messageId'],
                     $payload['workerName'],
@@ -844,7 +847,7 @@ class go extends Factory
                     $content['reasoning_content'] = $payload['data']['reasoning_content'];
                 }
 
-                $this->core->memory->saveChat(
+                $this->memory->saveChat(
                     $payload['sessionId'],
                     $payload['messageId'],
                     $payload['workerName'],
@@ -1018,7 +1021,7 @@ class go extends Factory
                     $content['reasoning_content'] = $tool_call['response']['reasoning_content'];
                 }
 
-                $this->core->memory->saveChat(
+                $this->memory->saveChat(
                     $payload['sessionId'],
                     $payload['messageId'],
                     $payload['workerName'],

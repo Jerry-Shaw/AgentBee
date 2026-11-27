@@ -245,7 +245,7 @@ class handler extends Factory
                         'save_bytes' => $save_result ?: 0,
                     ];
 
-                    $agent_core->core->memory->saveChat(
+                    $agent_core->memory->saveChat(
                         $session_id,
                         $this->message_id,
                         $process_name,

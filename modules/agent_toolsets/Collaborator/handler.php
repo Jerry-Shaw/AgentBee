@@ -48,7 +48,7 @@ class handler extends Factory
         $message_id  = $agent_core->utils->UUIDv4();
         $init_prompt = $payload_data['init_prompt'] . "\n" . '先阅读用户要求，用一句话介绍你的名字和角色，并回复“已就绪”。';
 
-        $agent_core->core->memory->saveChat(
+        $agent_core->memory->saveChat(
             $payload_data['session_id'],
             $message_id,
             $payload_data['worker_name'],
@@ -137,7 +137,7 @@ class handler extends Factory
 
         $message_id = $agent_core->utils->UUIDv4();
 
-        $agent_core->core->memory->saveChat(
+        $agent_core->memory->saveChat(
             $payload_data['session_id'],
             $message_id,
             $payload_data['worker_name'],

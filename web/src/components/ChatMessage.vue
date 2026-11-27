@@ -630,6 +630,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
           <RotateCcw :size="14" aria-hidden="true" />
         </button>
         <button
+v-if="message.content?.trim()"
             type="button"
             class="message-action-button"
             :title="copied ? labels.copied : labels.copyMessage"
@@ -661,7 +662,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
     </template>
 <div v-if="message.role === 'assistant' || (message.memoryCreateId && message.role !== 'user')" class="history-message-actions">
 <button
-          v-if="message.role === 'assistant'"
+v-if="message.role === 'assistant' && message.content?.trim()"
           type="button"
           class="message-action-button"
           :title="copied ? labels.copied : labels.copyMessage"

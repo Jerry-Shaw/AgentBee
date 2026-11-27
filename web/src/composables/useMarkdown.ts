@@ -7,8 +7,8 @@ marked.use({
 });
 
 export function useMarkdown() {
-  function renderMarkdown(markdown: string): string {
-    return DOMPurify.sanitize(marked.parse(markdown || '', { async: false }));
+  function renderMarkdown(markdown: string, breaks = false): string {
+    return DOMPurify.sanitize(marked.parse(markdown || '', { async: false, breaks }));
   }
 
   function renderInlineMarkdown(markdown: string): string {

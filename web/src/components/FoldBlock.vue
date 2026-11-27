@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<{
 });
 
 const { renderMarkdown, renderInlineMarkdown } = useMarkdown();
-const markdownHtml = computed(() => props.markdown ? renderMarkdown(props.text) : '');
+const markdownHtml = computed(() => props.markdown ? renderMarkdown(props.text, true) : '');
 const expanded = ref(false);
 const preview = computed(() => {
   const plain = (props.summary || props.text).replace(/\s+/g, ' ').trim();

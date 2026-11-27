@@ -55,6 +55,13 @@ const previewHtml = computed(() => {
 </template>
 
 <style scoped>
+.think-card .codex-fold-title {
+  flex: 0 0 auto;
+}
+.think-card .codex-fold-preview {
+  flex: 1 1 0%;
+  min-width: 0;
+}
 .markdown-preview {
   display: block;
   min-width: 0;

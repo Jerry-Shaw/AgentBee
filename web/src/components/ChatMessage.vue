@@ -495,6 +495,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
             :collapse-label="labels.collapse"
             :title="message.status === 'loading' ? labels.thinking : labels.thinkingProcess"
             :text="message.think"
+            :markdown="true"
         />
 
         <ToolEventsBlock

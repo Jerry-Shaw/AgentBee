@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { Brain } from 'lucide-vue-next';
+import { useMarkdown } from '../composables/useMarkdown';
 
 const props = withDefaults(defineProps<{
   collapseLabel: string;
   className?: string;
+  markdown?: boolean;
   expandLabel: string;
   summary?: string;
   text: string;
   title: string;
 }>(), {
   className: '',
+  markdown: false,
   summary: '',
 });
 
+const { renderMarkdown } = useMarkdown();
+const markdownHtml = computed(() => props.markdown ? renderMarkdown(props.text) : '');
 const expanded = ref(false);
 const preview = computed(() => {
   const plain = (props.summary || props.text).replace(/\s+/g, ' ').trim();
@@ -34,6 +39,7 @@ const preview = computed(() => {
       <span v-if="!expanded" class="codex-fold-preview">{{ preview }}</span>
     </button>
     <div v-if="expanded && summary" class="fold-summary">{{ summary }}</div>
-    <div v-if="expanded" class="fold-content">{{ text }}</div>
+    <div v-if="expanded && markdown" class="fold-content markdown-body" style="white-space: normal" v-html="markdownHtml"></div>
+    <div v-else-if="expanded" class="fold-content">{{ text }}</div>
   </section>
 </template>

@@ -1440,7 +1440,7 @@ const sidebarIsCollapsed = computed(() => sidebarCollapsed.value && !isMobileLay
 
 /**
  * 移动端在抽屉里操作完（选会话 / 新建会话）后的收尾：收起抽屉并回到聊天。
- * 桌面端不动 `currentView`——那边侧栏和聊天区是并列的，点会话不该把设置页关掉。
+ * 桌面端的会话选择由 selectSession 切回聊天；此处只负责移动端抽屉收尾。
  */
 function leaveMobileDrawer() {
   closeSessionDrawer();
@@ -1448,6 +1448,8 @@ function leaveMobileDrawer() {
 }
 
 function selectSession(sessionId: string) {
+  // 从右侧设置页点击左侧会话时，回到会话聊天视图。
+  currentView.value = 'chat';
   if (sessionId === sessions.activeSessionId.value) {
     // 移动端点的是当前会话：把抽屉收起来看聊天就好（不用重拉历史）。
     leaveMobileDrawer();

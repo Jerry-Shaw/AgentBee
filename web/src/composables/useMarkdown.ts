@@ -11,5 +11,11 @@ export function useMarkdown() {
     return DOMPurify.sanitize(marked.parse(markdown || '', { async: false }));
   }
 
-  return { renderMarkdown };
+  function renderInlineMarkdown(markdown: string): string {
+    return DOMPurify.sanitize(marked.parseInline(markdown || '', { async: false }), {
+      FORBID_TAGS: ['a', 'img', 'button', 'input'],
+    });
+  }
+
+  return { renderMarkdown, renderInlineMarkdown };
 }

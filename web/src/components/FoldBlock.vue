@@ -17,12 +17,21 @@ const props = withDefaults(defineProps<{
   summary: '',
 });
 
-const { renderMarkdown } = useMarkdown();
+const { renderMarkdown, renderInlineMarkdown } = useMarkdown();
 const markdownHtml = computed(() => props.markdown ? renderMarkdown(props.text) : '');
 const expanded = ref(false);
 const preview = computed(() => {
   const plain = (props.summary || props.text).replace(/\s+/g, ' ').trim();
   return plain.length > 56 ? `${plain.slice(0, 56)}...` : plain;
+});
+const previewHtml = computed(() => {
+  if (!props.markdown) return '';
+  return (props.summary || props.text)
+    .split(/\r?\n[ \t]*\r?\n+/)
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .map((part) => renderInlineMarkdown(part))
+    .join(' | ');
 });
 </script>
 
@@ -36,10 +45,36 @@ const preview = computed(() => {
     >
       <Brain class="codex-fold-icon" :size="14" aria-hidden="true" />
       <span class="codex-fold-title">{{ title }}</span>
-      <span v-if="!expanded" class="codex-fold-preview">{{ preview }}</span>
+      <span v-if="!expanded && !markdown" class="codex-fold-preview">{{ preview }}</span>
+      <span v-else-if="!expanded" class="codex-fold-preview markdown-preview" v-html="previewHtml"></span>
     </button>
     <div v-if="expanded && summary" class="fold-summary">{{ summary }}</div>
     <div v-if="expanded && markdown" class="fold-content markdown-body" style="white-space: normal" v-html="markdownHtml"></div>
     <div v-else-if="expanded" class="fold-content">{{ text }}</div>
   </section>
 </template>
+
+<style scoped>
+.markdown-preview {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.markdown-preview :deep(strong) {
+  font-weight: 700;
+}
+.think-card .fold-content.markdown-body {
+  line-height: 1.45;
+}
+.think-card .fold-content.markdown-body :deep(p) {
+  margin: 0 0 0.35em;
+}
+.think-card .fold-content.markdown-body :deep(> :first-child) {
+  margin-top: 0;
+}
+.think-card .fold-content.markdown-body :deep(> :last-child) {
+  margin-bottom: 0;
+}
+</style>

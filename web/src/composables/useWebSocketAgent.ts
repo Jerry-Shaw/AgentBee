@@ -896,17 +896,15 @@ if (['content', 'assistant', 'message'].includes(type)) {
     if (!text) return;
     const pending = getPendingStreamUpdate(messageId);
     // 按当前展示约定，在非空 think 包之间补 Markdown 段落分隔。
-    const previous = (ensureAssistantMessage(messageId, msg)?.assistant.think || '') + pending.think;
+    const turn = ensureAssistantMessage(messageId, msg);
+    const previous = (turn?.assistant.think || '') + pending.think;
     if (previous) {
       const trailing = previous.match(/\n*$/)?.[0].length || 0;
       const leading = text.match(/^\n*/)?.[0].length || 0;
       pending.think += '\n'.repeat(Math.max(0, 2 - trailing - leading));
     }
     pending.think += text;
-    if (msg) {
-      ensureAssistantMessage(messageId, msg);
-      pending.message = msg;
-    }
+    if (msg) pending.message = msg;
     scheduleStreamFlush();
   }
 

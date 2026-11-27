@@ -112,6 +112,12 @@ const hasAssistantOutput = computed(() => (
     Boolean(props.message.toolEvents?.length)
 ));
 
+const hasBottomDeletableContent = computed(() => (
+    props.message.isRemoteHistory === true &&
+    Boolean(props.message.memoryCreateId) &&
+    (Boolean(props.message.content?.trim()) || Boolean(props.message.think?.trim()))
+));
+
 const isWaitingForResponse = computed(() => (
     props.message.role === 'assistant' &&
     props.message.status === 'loading' &&
@@ -494,7 +500,8 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         <ToolEventsBlock
             v-if="message.toolEvents?.length"
             :events="message.toolEvents"
-:content-create-id="message.memoryCreateId"
+:content-create-id="hasBottomDeletableContent ? message.memoryCreateId : undefined"
+            :allow-delete="message.isRemoteHistory === true"
             :delete-disabled="memoryDeleteDisabled"
             @delete-memory-message="emit('deleteMemoryMessage', $event)"
             :labels="labels"
@@ -641,7 +648,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
           <Pencil :size="14" aria-hidden="true" />
         </button>
         <button
-            v-if="message.memoryCreateId"
+            v-if="message.isRemoteHistory && message.memoryCreateId"
             type="button"
             class="message-action-button history-delete-button"
             :title="labels.deleteMemoryRecord"
@@ -674,7 +681,7 @@ function splitStreamingMarkdown(markdown: string): { stable: string; tail: strin
         <Eye :size="14" aria-hidden="true" />
       </button>
       <button
-v-if="message.memoryCreateId"
+v-if="hasBottomDeletableContent && message.memoryCreateId"
           type="button"
           class="message-action-button history-delete-button"
           :title="labels.deleteMemoryRecord"

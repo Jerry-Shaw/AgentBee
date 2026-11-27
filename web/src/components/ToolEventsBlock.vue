@@ -8,6 +8,7 @@ const props = defineProps<{
   title?: string;
 deleteDisabled?: boolean;
   contentCreateId?: number;
+  allowDelete?: boolean;
   labels: Record<string, string>;
 }>();
 const emit = defineEmits<{ deleteMemoryMessage: [createId: number] }>();
@@ -87,7 +88,7 @@ return [...new Set([round.call?.memoryCreateId, round.result?.memoryCreateId]
 .filter((id): id is number => typeof id === 'number' && id > 0 && id !== props.contentCreateId))];
 }
 function deleteRound(round: ToolRound) {
-if (props.deleteDisabled) return;
+if (!props.allowDelete || props.deleteDisabled) return;
 recordIds(round).forEach(id => emit('deleteMemoryMessage', id));
 }
 function roundName(round: ToolRound) {
@@ -115,7 +116,7 @@ function roundName(round: ToolRound) {
             <span v-if="round.result?.ok === false || round.call?.ok === false" class="tool-status-label">{{ labels.failed }}</span>
             <span class="tool-event-time">{{ round.call?.time || round.result?.time }}</span>
           </button>
-          <button v-if="recordIds(round).length" type="button"
+          <button v-if="allowDelete && recordIds(round).length" type="button"
             class="message-action-button history-delete-button tool-round-delete"
             :title="labels.deleteMemoryRecord" :aria-label="`${labels.deleteMemoryRecord} · ${roundName(round)}`"
             :disabled="deleteDisabled" @click.stop="deleteRound(round)">

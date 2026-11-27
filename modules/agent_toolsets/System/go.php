@@ -383,25 +383,21 @@ class go extends Factory
      * Placeholder — intercepted by procWorker, forwarded to main process.
      *
      * @param string $file_path
-     * @param string $content
-     * @param array  $line_range
-     * @param array  $text_replace
+     * @param array  $edits
      *
      * @return array
      */
-    public function editFile(string $file_path, string $content, array $line_range = [], array $text_replace = []): array
+    public function editFile(string $file_path, array $edits): array
     {
         $result = [
-            'async'        => false,
-            'action'       => __FUNCTION__,
-            'file_path'    => $file_path,
-            'content'      => $content,
-            'line_range'   => $line_range,
-            'text_replace' => $text_replace,
-            'handler'      => handler::class
+            'async'     => false,
+            'action'    => __FUNCTION__,
+            'file_path' => $file_path,
+            'edits'     => $edits,
+            'handler'   => handler::class
         ];
 
-        unset($file_path, $content, $line_range, $text_replace);
+        unset($file_path, $edits);
         return $result;
     }
 

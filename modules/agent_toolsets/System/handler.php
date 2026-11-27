@@ -155,193 +155,124 @@ class handler extends Factory
      */
     public function editFile(array $payload_data, agent_core $agent_core): array
     {
-        $file_path = $agent_core->utils->securePath($payload_data['file_path']);
+        $source_handle = false;
+        $temp_handle   = false;
+        $temp_path     = false;
 
-        if (file_exists($file_path) && !is_file($file_path)) {
-            return ['status' => 'error', 'error' => '目标不是可操作文件：' . $file_path];
-        }
+        try {
+            $edits = $payload_data['edits'] ?? null;
 
-        $content      = $payload_data['content'];
-        $line_range   = $payload_data['line_range'];
-        $text_replace = $payload_data['text_replace'];
-
-        if ([] !== $line_range && [] !== $text_replace) {
-            return ['status' => 'error', 'error' => 'line_range与text_replace不能同时使用'];
-        }
-
-        if (str_contains($content, "\0")) {
-            return ['status' => 'error', 'error' => 'content须为不含NUL的UTF-8文本'];
-        }
-
-        $content       = $this->normalizeLineEndings($content);
-        $edit_type     = 'full';
-        $matched_text  = '';
-        $replace_limit = 0;
-        $replacements  = 0;
-
-        if ([] !== $text_replace) {
-            if (
-                !array_is_list($text_replace)
-                || 2 !== count($text_replace)
-                || !is_string($text_replace[0] ?? null)
-                || '' === $text_replace[0]
-                || !is_int($text_replace[1] ?? null)
-                || 0 > $text_replace[1]
-            ) {
-                return ['status' => 'error', 'error' => 'text_replace为[非空原文,非负替换次数上限]，0表示全部替换'];
+            if (!is_array($edits) || !array_is_list($edits) || [] === $edits) {
+                return ['status' => 'error', 'error' => 'edits须为非空编辑数组'];
             }
 
-            $edit_type     = 'replace';
-            $matched_text  = $text_replace[0];
-            $replace_limit = $text_replace[1];
+            foreach ($edits as $index => $edit) {
+                $error = $this->validateEdit($edit);
 
-            if (str_contains($matched_text, "\0")) {
-                return ['status' => 'error', 'error' => '匹配文本须为不含NUL的UTF-8文本'];
-            }
-
-            $matched_text = $this->normalizeLineEndings($matched_text);
-        } elseif ([] !== $line_range) {
-            if (!array_is_list($line_range) || !in_array(count($line_range), [1, 2], true)) {
-                return ['status' => 'error', 'error' => 'line_range为[行号]或[起始行,结束行]'];
-            }
-
-            foreach ($line_range as $line_number) {
-                if (!is_int($line_number) || 1 > $line_number) {
-                    return ['status' => 'error', 'error' => '行号须为正整数'];
+                if ('' !== $error) {
+                    return ['status' => 'error', 'error' => '第' . ($index + 1) . '项：' . $error];
                 }
             }
 
-            if (2 === count($line_range) && $line_range[0] > $line_range[1]) {
-                return ['status' => 'error', 'error' => '起始行不能大于结束行'];
+            $file_path = $agent_core->utils->securePath($payload_data['file_path']);
+            $file_dir  = dirname($file_path);
+            $exists    = is_file($file_path);
+
+            if (file_exists($file_path) && !$exists) {
+                return ['status' => 'error', 'error' => '目标不是文件'];
             }
 
-            $edit_type = 1 === count($line_range) ? 'insert' : 'lines';
-        }
-
-        if (!is_file($file_path)) {
-            if ('full' !== $edit_type) {
-                return ['status' => 'error', 'error' => '文件不存在，仅支持全文模式创建文件'];
+            if (!$exists && 'write' !== $edits[0]['op']) {
+                return ['status' => 'error', 'error' => '文件不存在，首项须为全文写入'];
             }
-
-            $file_dir = dirname($file_path);
 
             if (!is_dir($file_dir)) {
                 try {
-                    mkdir($file_dir, 0777, true);
+                    $mkdir = mkdir($file_dir, 0777, true);
                 } catch (\Throwable) {
+                    $mkdir = true;
                 }
-            }
 
-            $lines = explode("\n", $content);
-
-            foreach ($lines as $line) {
-                if (strlen($line) > 16777216) {
-                    return ['status' => 'error', 'error' => '单行长度超过16MB限制'];
+                if (!$mkdir) {
+                    return ['status' => 'error', 'error' => '无法创建目标目录'];
                 }
+
+                unset($mkdir);
             }
 
-            $new_handle = fopen($file_path, 'wb');
+            $source_handle = $exists ? fopen($file_path, 'rb') : tmpfile();
 
-            if (false === $new_handle) {
-                return ['status' => 'error', 'error' => '文件创建失败：' . $file_path];
+            if (false === $source_handle) {
+                return ['status' => 'error', 'error' => '无法打开输入文件'];
             }
 
-            $written = $this->writeAll($new_handle, $content) && fflush($new_handle);
+            $results = [];
 
-            fclose($new_handle);
+            foreach ($edits as $index => $edit) {
+                $temp_handle = tmpfile();
 
-            if (!$written) {
-                return ['status' => 'error', 'error' => unlink($file_path) ? '文件写入失败，已清理' : '文件写入失败，清理失败：' . $file_path];
+                if (false === $temp_handle) {
+                    return ['status' => 'error', 'error' => '无法创建临时流'];
+                }
+
+                $result = $this->applyEdit($source_handle, $temp_handle, $edit);
+
+                if ('success' !== $result['status']) {
+                    return ['status' => 'error', 'error' => '第' . ($index + 1) . '项：' . $result['error'] . '，目标文件未改'];
+                }
+
+                fclose($source_handle);
+                $source_handle = $temp_handle;
+
+                $results[]   = $result;
+                $temp_handle = false;
             }
 
-            unset($file_dir, $lines, $line, $new_handle, $written);
+            $temp_path   = tempnam($file_dir, '.edit-');
+            $temp_handle = false !== $temp_path ? fopen($temp_path, 'w+b') : false;
+
+            if (false === $temp_handle || false === stream_copy_to_stream($source_handle, $temp_handle) || !fflush($temp_handle)) {
+                return ['status' => 'error', 'error' => '最终文件准备失败，目标文件未改'];
+            }
+
+            $bytes_written = ftell($temp_handle);
+
+            fclose($temp_handle);
+            $temp_handle = false;
+            fclose($source_handle);
+            $source_handle = false;
+
+            if (false === $bytes_written || !@rename($temp_path, $file_path)) {
+                return ['status' => 'error', 'error' => '无法提交编辑文件，目标文件未改'];
+            }
+
+            clearstatcache(true, $file_path);
+
             return [
                 'status'        => 'success',
                 'file_path'     => $file_path,
-                'edit_type'     => 'full',
-                'bytes_written' => strlen($content)
+                'edit_type'     => 'batch',
+                'bytes_written' => $bytes_written,
+                'edits'         => $results,
+                'replacements'  => array_sum(array_column($results, 'replacements'))
             ];
-        }
-
-        $source_handle = fopen($file_path, 'rb');
-
-        if (false === $source_handle || !flock($source_handle, LOCK_EX)) {
-            is_resource($source_handle) && fclose($source_handle);
-            return ['status' => 'error', 'error' => '无法打开或锁定文件：' . $file_path];
-        }
-
-        $file_sample = fread($source_handle, 8192);
-
-        if (false === $file_sample) {
-            flock($source_handle, LOCK_UN);
-            fclose($source_handle);
-            return ['status' => 'error', 'error' => '文件读取失败：' . $file_path];
-        }
-
-        if ('' !== $agent_core->utils->getImageType($file_sample) || str_contains($file_sample, "\0")) {
-            flock($source_handle, LOCK_UN);
-            fclose($source_handle);
-            return ['status' => 'error', 'error' => '只支持编辑文本文件'];
-        }
-
-        $temp_path   = tempnam(dirname($file_path), '.' . WORKER_MAIN . '-');
-        $temp_handle = false !== $temp_path ? fopen($temp_path, 'w+b') : false;
-
-        if (false === $temp_handle) {
-            false !== $temp_path && unlink($temp_path);
-            flock($source_handle, LOCK_UN);
-            fclose($source_handle);
-            return ['status' => 'error', 'error' => '无法创建临时文件'];
-        }
-
-        if (!rewind($source_handle)) {
-            return $this->closeEditWithError($source_handle, $temp_handle, $temp_path, '文件定位失败');
-        }
-
-        if (in_array($edit_type, ['insert', 'lines'], true) && str_starts_with($file_sample, "\xEF\xBB\xBF")) {
-            if (0 !== fseek($source_handle, 3) || !$this->writeAll($temp_handle, "\xEF\xBB\xBF")) {
-                return $this->closeEditWithError($source_handle, $temp_handle, $temp_path, 'BOM处理失败，原文件未改');
+        } catch (\Throwable) {
+            return ['status' => 'error', 'error' => '文件编辑失败，请检查文件权限及输入'];
+        } finally {
+            if (is_resource($source_handle)) {
+                fclose($source_handle);
             }
-        }
 
-        $edit_error = match ($edit_type) {
-            'full' => $this->overwriteTextFile($source_handle, $temp_handle, $content),
-            'replace' => $this->replaceTextFile($source_handle, $temp_handle, $content, $matched_text, $replace_limit, $replacements),
-            default => $this->editTextLines($source_handle, $temp_handle, $content, $line_range, $edit_type),
-        };
-
-        if ('' !== $edit_error) {
-            return $this->closeEditWithError($source_handle, $temp_handle, $temp_path, $edit_error);
-        }
-
-        if ('replace' === $edit_type && 0 === $replacements) {
-            return $this->closeEditWithError($source_handle, $temp_handle, $temp_path, '未找到匹配文本，原文件未改');
-        }
-
-        if (!fflush($temp_handle)) {
-            return $this->closeEditWithError($source_handle, $temp_handle, $temp_path, '临时文件写入失败');
-        }
-
-        if (!rewind($temp_handle)) {
-            return $this->closeEditWithError($source_handle, $temp_handle, $temp_path, '临时文件定位失败');
-        }
-
-        while (false !== ($output_line = fgets($temp_handle, 16777216 + 3))) {
-            $output_length = strlen($output_line) - (str_ends_with($output_line, "\n") ? 1 : 0);
-
-            if ($output_length > 16777216) {
-                return $this->closeEditWithError($source_handle, $temp_handle, $temp_path, '编辑后单行长度超过16MB限制，原文件未改');
+            if (is_resource($temp_handle)) {
+                fclose($temp_handle);
             }
+
+            if (false !== $temp_path && is_file($temp_path)) {
+                unlink($temp_path);
+            }
+
+            unset($payload_data, $agent_core, $source_handle, $temp_handle, $temp_path, $edits, $index, $edit, $error, $file_path, $file_dir, $exists, $results, $result, $bytes_written);
         }
-
-        if (!feof($temp_handle)) {
-            return $this->closeEditWithError($source_handle, $temp_handle, $temp_path, '临时文件读取失败');
-        }
-
-        $result = $this->commitTextEdit($source_handle, $temp_handle, $temp_path, $file_path, $edit_type, $replacements);
-
-        unset($payload_data, $agent_core, $file_path, $content, $line_range, $text_replace, $edit_type, $matched_text, $replace_limit, $replacements, $line_number, $source_handle, $file_sample, $temp_path, $temp_handle, $edit_error);
-        return $result;
     }
 
     /**
@@ -459,6 +390,57 @@ class handler extends Factory
 
         unset($handle, $file_path, $range, $pattern, $context, $start, $end, $total, $matches, $remaining, $previous, $output, $matched, $line, $number, $text, $formatted, $last);
         return $result;
+    }
+
+    /**
+     * @param      $handle
+     * @param bool $tolerant
+     *
+     * @return array
+     */
+    private function readTextLine($handle, bool $tolerant = false): array
+    {
+        $bytes = 16777216; // max line bytes 16MB
+        $line  = fgets($handle, $bytes + 3);
+
+        if (false === $line) {
+            return ['line' => false, 'error' => feof($handle) ? '' : '文本文件读取失败'];
+        }
+
+        $line_length   = strlen($line);
+        $ending_length = str_ends_with($line, "\r\n") ? 2 : (str_ends_with($line, "\n") ? 1 : 0);
+
+        if ($bytes < $line_length - $ending_length || (0 === $ending_length && !feof($handle))) {
+            return ['line' => false, 'error' => '单行长度超过16MB限制'];
+        }
+
+        if ($tolerant) {
+            try {
+                $detected = mb_detect_encoding($line, ['GB18030', 'UTF-8', 'BIG-5', 'ASCII'], true);
+                $line     = iconv($detected ?: 'UTF-8', 'UTF-8//IGNORE', $line) ?: '';
+
+                if ('' === $line) {
+                    throw new \RuntimeException('文本编码转换失败');
+                }
+            } catch (\Throwable) {
+                return ['line' => false, 'error' => '文本编码转换失败'];
+            }
+        } elseif (!mb_check_encoding($line, 'UTF-8') || str_contains($line, "\0")) {
+            return ['line' => false, 'error' => '仅支持不含NUL的UTF-8文本'];
+        }
+
+        $body = 0 < $ending_length ? substr($line, 0, -$ending_length) : $line;
+
+        if (str_contains($body, "\r")) {
+            return ['line' => false, 'error' => '换行仅支持LF或CRLF'];
+        }
+
+        if (2 === $ending_length) {
+            $line = $body . "\n";
+        }
+
+        unset($handle, $tolerant, $bytes, $line_length, $ending_length, $detected, $body);
+        return ['line' => $line, 'error' => ''];
     }
 
     /**
@@ -612,56 +594,142 @@ class handler extends Factory
     }
 
     /**
-     * @param      $handle
-     * @param bool $tolerant
+     * Validate one operation before execution.
      *
-     * @return array
+     * @param mixed $edit
+     *
+     * @return string
      */
-    private function readTextLine($handle, bool $tolerant = false): array
+    private function validateEdit(mixed $edit): string
     {
-        $bytes = 16777216; // max line bytes 16MB
-        $line  = fgets($handle, $bytes + 3);
-
-        if (false === $line) {
-            return ['line' => false, 'error' => feof($handle) ? '' : '文本文件读取失败'];
+        if (!is_array($edit)) {
+            return '编辑项须为对象';
         }
 
-        $line_length   = strlen($line);
-        $ending_length = str_ends_with($line, "\r\n") ? 2 : (str_ends_with($line, "\n") ? 1 : 0);
+        $op = $edit['op'] ?? null;
 
-        if ($line_length - $ending_length > $bytes || (0 === $ending_length && !feof($handle))) {
-            return ['line' => false, 'error' => '单行长度超过16MB限制'];
+        if (!is_string($op)) {
+            return 'op须为字符串';
         }
 
-        if ($tolerant) {
-            try {
-                $detected = mb_detect_encoding($line, ['GB18030', 'UTF-8', 'BIG-5', 'ASCII'], true);
-                $line     = iconv($detected ?: 'UTF-8', 'UTF-8//IGNORE', $line) ?: '';
+        $allowed = match ($op) {
+            'write' => ['op', 'new'],
+            'replace' => ['op', 'old', 'new', 'limit'],
+            'insert_lines' => ['op', 'line', 'new'],
+            'replace_lines' => ['op', 'start', 'end', 'new'],
+            default => []
+        };
 
-                if ('' === $line) {
-                    throw new \RuntimeException('文本编码转换失败');
-                }
-            } catch (\Throwable) {
-                return ['line' => false, 'error' => '文本编码转换失败'];
-            }
-        } elseif (!mb_check_encoding($line, 'UTF-8') || str_contains($line, "\0")) {
-            return ['line' => false, 'error' => '仅支持不含NUL的UTF-8文本'];
+        if ([] === $allowed) {
+            return '不支持的op';
         }
 
-        $body = 0 < $ending_length ? substr($line, 0, -$ending_length) : $line;
-
-        if (str_contains($body, "\r")) {
-            return ['line' => false, 'error' => '换行仅支持LF或CRLF'];
+        if ([] !== array_diff(array_keys($edit), $allowed)) {
+            return '包含不适用于' . $op . '的字段';
         }
 
-        if (2 === $ending_length) {
-            $line = $body . "\n";
+        $error = $this->validateEditText($edit['new'] ?? null, 'new');
+
+        if ('' !== $error) {
+            return $error;
         }
 
-        $result = ['line' => $line, 'error' => ''];
+        $result = match ($op) {
+            'write' => '',
+            'replace' => $this->validateReplaceEdit($edit),
+            'insert_lines', 'replace_lines' => $this->validateLineEdit($edit)
+        };
 
-        unset($handle, $tolerant, $bytes, $line, $line_length, $ending_length, $body);
+        unset($edit, $op, $allowed, $error);
         return $result;
+    }
+
+    /**
+     * Validate required UTF-8 text without coercing missing or null values.
+     *
+     * @param mixed  $text
+     * @param string $field
+     *
+     * @return string
+     */
+    private function validateEditText(mixed $text, string $field): string
+    {
+        if (!is_string($text)) {
+            return $field . '须为字符串';
+        }
+
+        if (!mb_check_encoding($text, 'UTF-8')) {
+            return $field . '须为有效UTF-8文本';
+        }
+
+        if (str_contains($text, "\0")) {
+            return $field . '不能包含NUL';
+        }
+
+        unset($text, $field);
+        return '';
+    }
+
+    /**
+     * Validate line numbers; file-dependent upper bounds are checked during execution.
+     *
+     * @param array $edit
+     *
+     * @return string
+     */
+    private function validateLineEdit(array $edit): string
+    {
+        $fields = 'insert_lines' === $edit['op'] ? ['line'] : ['start', 'end'];
+
+        foreach ($fields as $field) {
+            if (!is_int($edit[$field] ?? null)) {
+                return $field . '须为整数';
+            }
+
+            if (1 > $edit[$field]) {
+                return $field . '须大于0';
+            }
+        }
+
+        if ('replace_lines' === $edit['op'] && $edit['start'] > $edit['end']) {
+            return 'start不能大于end';
+        }
+
+        unset($edit, $fields, $field);
+        return '';
+    }
+
+    /**
+     * Validate literal replacement fields.
+     *
+     * @param array $edit
+     *
+     * @return string
+     */
+    private function validateReplaceEdit(array $edit): string
+    {
+        $error = $this->validateEditText($edit['old'] ?? null, 'old');
+
+        if ('' !== $error) {
+            return $error;
+        }
+
+        if ('' === $edit['old']) {
+            return 'old不能为空';
+        }
+
+        if (array_key_exists('limit', $edit)) {
+            if (!is_int($edit['limit'])) {
+                return 'limit须为整数';
+            }
+
+            if (0 > $edit['limit']) {
+                return 'limit不能为负数';
+            }
+        }
+
+        unset($edit, $error);
+        return '';
     }
 
     /**
@@ -672,8 +740,8 @@ class handler extends Factory
      */
     private function writeAll($handle, string $data): bool
     {
-        $length = strlen($data);
         $offset = 0;
+        $length = strlen($data);
 
         while ($offset < $length) {
             $written = fwrite($handle, substr($data, $offset, 1048576));
@@ -685,100 +753,72 @@ class handler extends Factory
             $offset += $written;
         }
 
-        unset($handle, $data, $length, $offset, $written);
+        unset($handle, $data, $offset, $length, $written);
         return true;
     }
 
     /**
-     * @param        $source_handle
-     * @param        $temp_handle
-     * @param string $content
-     * @param string $matched_text
-     * @param int    $replace_limit
-     * @param int    $replacements
+     * Apply one validated operation to streams without committing the target file.
      *
-     * @return string
+     * @param       $source_handle
+     * @param       $temp_handle
+     * @param array $edit
+     *
+     * @return array|string[]
      */
-    private function replaceTextFile($source_handle, $temp_handle, string $content, string $matched_text, int $replace_limit, int &$replacements): string
+    private function applyEdit($source_handle, $temp_handle, array $edit): array
     {
-        $carry        = '';
-        $write_failed = false;
-        $match_length = strlen($matched_text);
+        $edit_type = $edit['op'];
+        $content   = $this->normalizeLineEndings($edit['new']);
+
+        $replacements = 0;
+
+        if (in_array($edit_type, ['insert_lines', 'replace_lines'], true)) {
+            $sample = fread($source_handle, 3);
+
+            if (false === $sample || !rewind($source_handle)) {
+                return ['status' => 'error', 'error' => '输入流读取失败'];
+            }
+
+            if ("\xEF\xBB\xBF" === $sample && (0 !== fseek($source_handle, 3) || !$this->writeAll($temp_handle, $sample))) {
+                return ['status' => 'error', 'error' => 'BOM处理失败'];
+            }
+        }
+
+        $error = match ($edit_type) {
+            'write' => $this->overwriteTextFile($source_handle, $temp_handle, $content),
+            'replace' => $this->replaceTextFile($source_handle, $temp_handle, $content, $this->normalizeLineEndings($edit['old']), $edit['limit'] ?? 0, $replacements),
+            'insert_lines' => $this->editTextLines($source_handle, $temp_handle, $content, [$edit['line']], 'insert'),
+            'replace_lines' => $this->editTextLines($source_handle, $temp_handle, $content, [$edit['start'], $edit['end']], 'lines')
+        };
+
+        if ('' !== $error || ('replace' === $edit_type && 0 === $replacements)) {
+            return ['status' => 'error', 'error' => $error ?: '未找到匹配文本'];
+        }
+
+        if (!fflush($temp_handle) || !rewind($temp_handle)) {
+            return ['status' => 'error', 'error' => '临时流定位失败'];
+        }
 
         while (true) {
-            $line_result = $this->readTextLine($source_handle);
+            $line_result = $this->readTextLine($temp_handle);
+
+            if ('' !== $line_result['error']) {
+                return ['status' => 'error', 'error' => '编辑后：' . $line_result['error']];
+            }
 
             if (false === $line_result['line']) {
-                if ('' !== $line_result['error']) {
-                    return $line_result['error'];
-                }
-
-                break;
-            }
-
-            $carry  = '';
-            $line   = $line_result['line'];
-            $buffer = $carry . $line;
-
-            while ((0 === $replace_limit || $replacements < $replace_limit) && false !== ($match_position = strpos($buffer, $matched_text))) {
-                if (!$this->writeAll($temp_handle, substr($buffer, 0, $match_position)) || !$this->writeAll($temp_handle, $content)) {
-                    $write_failed = true;
-                    break 2;
-                }
-
-                ++$replacements;
-
-                $buffer = substr($buffer, $match_position + $match_length);
-            }
-
-            $keep_length = 0 < $replace_limit && $replacements >= $replace_limit
-                ? 0
-                : min(strlen($buffer), $match_length - 1);
-
-            $flush_length = strlen($buffer) - $keep_length;
-
-            if (0 < $flush_length && !$this->writeAll($temp_handle, substr($buffer, 0, $flush_length))) {
-                $write_failed = true;
-                break;
-            }
-
-            $carry = 0 < $keep_length ? substr($buffer, -$keep_length) : '';
-        }
-
-        if (!$write_failed && '' !== $carry && !$this->writeAll($temp_handle, $carry)) {
-            $write_failed = true;
-        }
-
-        $result = $write_failed ? '临时文件写入失败' : '';
-
-        unset($source_handle, $temp_handle, $content, $matched_text, $replace_limit, $replacements, $write_failed, $match_length, $carry, $line_result, $line, $buffer, $match_position, $keep_length, $flush_length);
-        return $result;
-    }
-
-    /**
-     * @param        $source_handle
-     * @param        $temp_handle
-     * @param string $content
-     *
-     * @return string
-     */
-    private function overwriteTextFile($source_handle, $temp_handle, string $content): string
-    {
-        while (true) {
-            $line_result = $this->readTextLine($source_handle);
-
-            if (false === $line_result['line']) {
-                if ('' !== $line_result['error']) {
-                    return $line_result['error'];
-                }
-
                 break;
             }
         }
 
-        $result = $this->writeAll($temp_handle, $content) ? '' : '临时文件写入失败';
+        if (!rewind($temp_handle)) {
+            return ['status' => 'error', 'error' => '临时流定位失败'];
+        }
 
-        unset($source_handle, $temp_handle, $content, $line_result);
+        $result = ['status' => 'success', 'edit_type' => $edit_type, 'replacements' => $replacements];
+
+        unset($source_handle, $temp_handle, $edit, $edit_type, $content, $replacements, $sample, $error, $line_result);
         return $result;
     }
 
@@ -900,86 +940,98 @@ class handler extends Factory
             }
         }
 
-        $result = $write_failed ? '临时文件写入失败' : '';
-
-        unset($source_handle, $temp_handle, $content, $line_range, $edit_type, $write_failed, $start_line, $end_line, $line_number, $last_had_newline, $inserted, $replacement_written, $line_result, $line, $insert_content, $replace_content, $append_content, $separator);
-        return $result;
+        unset($source_handle, $temp_handle, $content, $line_range, $edit_type, $line_number, $start_line, $end_line, $last_had_newline, $inserted, $replacement_written, $line_result, $line, $insert_content, $replace_content, $append_content, $separator);
+        return $write_failed ? '临时文件写入失败' : '';
     }
 
     /**
      * @param        $source_handle
      * @param        $temp_handle
-     * @param string $temp_path
-     * @param string $file_path
-     * @param string $edit_type
+     * @param string $content
+     * @param string $matched_text
+     * @param int    $replace_limit
      * @param int    $replacements
      *
-     * @return array|string[]
+     * @return string
      */
-    private function commitTextEdit($source_handle, $temp_handle, string $temp_path, string $file_path, string $edit_type, int $replacements): array
+    private function replaceTextFile($source_handle, $temp_handle, string $content, string $matched_text, int $replace_limit, int &$replacements): string
     {
-        $bytes_written = ftell($temp_handle);
-        $backup_path   = $temp_path . '.original';
+        $carry        = '';
+        $write_failed = false;
+        $match_length = strlen($matched_text);
 
-        fclose($temp_handle);
-        flock($source_handle, LOCK_UN);
-        fclose($source_handle);
+        while (true) {
+            $line_result = $this->readTextLine($source_handle);
 
-        if (!rename($file_path, $backup_path)) {
-            unlink($temp_path);
-            return ['status' => 'error', 'error' => '无法备份原文件，未提交修改内容'];
-        }
+            if (false === $line_result['line']) {
+                if ('' !== $line_result['error']) {
+                    return $line_result['error'];
+                }
 
-        if (!rename($temp_path, $file_path)) {
-            $restored = rename($backup_path, $file_path);
-            unlink($temp_path);
-
-            if (!$restored) {
-                return ['status' => 'error', 'error' => '替换失败且原文件恢复失败；原内容保留于：' . $backup_path];
+                break;
             }
 
-            return ['status' => 'error', 'error' => '替换编辑文件失败，原文件已恢复'];
+            $line   = $line_result['line'];
+            $buffer = $carry . $line;
+
+            while ((0 === $replace_limit || $replacements < $replace_limit) && false !== ($match_position = strpos($buffer, $matched_text))) {
+                if (!$this->writeAll($temp_handle, substr($buffer, 0, $match_position)) || !$this->writeAll($temp_handle, $content)) {
+                    $write_failed = true;
+                    break 2;
+                }
+
+                ++$replacements;
+
+                $buffer = substr($buffer, $match_position + $match_length);
+            }
+
+            $keep_length = 0 < $replace_limit && $replacements >= $replace_limit
+                ? 0
+                : min(strlen($buffer), $match_length - 1);
+
+            $flush_length = strlen($buffer) - $keep_length;
+
+            if (0 < $flush_length && !$this->writeAll($temp_handle, substr($buffer, 0, $flush_length))) {
+                $write_failed = true;
+                break;
+            }
+
+            $carry = 0 < $keep_length ? substr($buffer, -$keep_length) : '';
         }
 
-        clearstatcache(true, $file_path);
-
-        $result = [
-            'status'        => 'success',
-            'file_path'     => $file_path,
-            'edit_type'     => $edit_type,
-            'bytes_written' => $bytes_written
-        ];
-
-        if ('replace' === $edit_type) {
-            $result['replacements'] = $replacements;
+        if (!$write_failed && '' !== $carry && !$this->writeAll($temp_handle, $carry)) {
+            $write_failed = true;
         }
 
-        if (!unlink($backup_path)) {
-            $result['message'] = '已完成编辑，文件备份删除失败：' . $backup_path;
-        }
-
-        unset($source_handle, $temp_handle, $temp_path, $file_path, $edit_type, $replacements, $bytes_written, $backup_path, $restored);
-        return $result;
+        unset($source_handle, $temp_handle, $content, $matched_text, $replace_limit, $replacements, $carry, $match_length, $line_result, $line, $buffer, $match_position, $keep_length, $flush_length);
+        return $write_failed ? '临时文件写入失败' : '';
     }
 
     /**
      * @param        $source_handle
      * @param        $temp_handle
-     * @param string $temp_path
-     * @param string $error
+     * @param string $content
      *
-     * @return string[]
+     * @return string
      */
-    private function closeEditWithError($source_handle, $temp_handle, string $temp_path, string $error): array
+    private function overwriteTextFile($source_handle, $temp_handle, string $content): string
     {
-        fclose($temp_handle);
-        unlink($temp_path);
+        while (true) {
+            $line_result = $this->readTextLine($source_handle);
 
-        flock($source_handle, LOCK_UN);
-        fclose($source_handle);
+            if (false === $line_result['line']) {
+                if ('' !== $line_result['error']) {
+                    return $line_result['error'];
+                }
 
-        unset($source_handle, $temp_handle, $temp_path);
-        return ['status' => 'error', 'error' => $error];
+                break;
+            }
+        }
+
+        $result = $this->writeAll($temp_handle, $content) ? '' : '临时文件写入失败';
+
+        unset($source_handle, $temp_handle, $content, $line_result);
+        return $result;
     }
 
     /**

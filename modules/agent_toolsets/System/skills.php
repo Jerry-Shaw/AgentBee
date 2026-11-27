@@ -109,16 +109,30 @@ class skills
             'type'     => 'function',
             'function' => [
                 'name'        => 'editFile',
-                'description' => '创建、覆盖或局部编辑文本。返回edit_type、bytes_written（最终字节数），精确替换另含replacements。',
+                'description' => '顺序编辑单个UTF-8文本文件，后项基于前项结果；整批成功才提交，失败不改目标文件。原文及输入禁NUL，LF/CRLF统一为LF，单行≤16MiB。返回bytes_written（最终字节数）、edits（逐项结果）、replacements（仅replace计数之和）。',
                 'parameters'  => [
                     'type'       => 'object',
                     'properties' => [
-                        'file_path'    => ['type' => 'string', 'description' => '文本路径；文件不存在时，全文模式可自动创建文件及目录。原文无NUL，支持LF/CRLF，单行≤16MB；编辑前先读取核对行号及内容。'],
-                        'content'      => ['type' => 'string', 'description' => 'UTF-8文本，无NUL，最终单行≤16MB；全文件换行统一LF，字面转义不解码。空串用于清空或删除，插入时无操作。'],
-                        'line_range'   => ['type' => 'array', 'items' => ['type' => 'integer'], 'default' => [], 'description' => '[n]在第n行前插入，1≤n≤总行数+1；[a,b]替换含首尾行，1≤a≤b≤总行数，必要时补换行分隔后文。与text_replace互斥，均为空时全文写入。'],
-                        'text_replace' => ['type' => 'array', 'items' => ['anyOf' => [['type' => 'string'], ['type' => 'integer']]], 'default' => [], 'description' => '有丢失原文风险，暂传[]，改用line_range。[非空原文,替换上限]，原文无NUL，上限为非负整数，0=全部；从头匹配，以content替换，无匹配报错且不修改。']
+                        'file_path' => ['type' => 'string', 'description' => '目标文件路径；不存在时首项须为write，自动创建缺失目录。'],
+                        'edits'     => [
+                            'type'        => 'array', 'minItems' => 1,
+                            'description' => '非空列表，每项必填op/new，禁止无关字段。行号从1起，按前项结果计算；空文件0行，末尾换行不另计一行。按行编辑前先读取核对。',
+                            'items'       => [
+                                'type'       => 'object', 'additionalProperties' => false,
+                                'properties' => [
+                                    'op'    => ['type' => 'string', 'enum' => ['write', 'replace', 'insert_lines', 'replace_lines'], 'description' => 'write全文写入；replace字面替换，另需old、可选limit；insert_lines行前插入，另需line；replace_lines替换闭区间行，另需start/end。'],
+                                    'old'   => ['type' => 'string', 'description' => '仅replace必填：非空原文，区分大小写的跨行字面匹配，换行归一为LF；无匹配则整批失败。'],
+                                    'new'   => ['type' => 'string', 'description' => '写入文本，字面转义不解码；按行编辑必要时补换行。空串：write清空，replace/replace_lines删除，insert_lines不插入。'],
+                                    'limit' => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => '仅replace可用：从头非重叠替换上限，0=全部。'],
+                                    'line'  => ['type' => 'integer', 'minimum' => 1, 'description' => '仅insert_lines必填：1≤line≤当前总行数+1，末行+1为追加。'],
+                                    'start' => ['type' => 'integer', 'minimum' => 1, 'description' => '仅replace_lines必填：起始行，含本行。'],
+                                    'end'   => ['type' => 'integer', 'minimum' => 1, 'description' => '仅replace_lines必填：结束行，含本行；start≤end≤当前总行数，越界整批失败。']
+                                ],
+                                'required'   => ['op', 'new']
+                            ]
+                        ]
                     ],
-                    'required'   => ['file_path', 'content']
+                    'required'   => ['file_path', 'edits']
                 ]
             ]
         ],

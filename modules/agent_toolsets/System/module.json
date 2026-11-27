@@ -1,7 +1,7 @@
 {
   "name": "System",
-  "version": "3.0.0",
-  "description": "System-level tools: execute commands, file operations (read/write/copy/delete/directory), get time, and clean context.",
+  "version": "4.0.0",
+  "description": "System-level tools: execute commands, file/dir operations (read/edit/copy/delete/directory), clean context, load skill, etc.",
   "author": "秋水之冰",
   "email": "27206617@qq.com",
   "entry": "go.php",

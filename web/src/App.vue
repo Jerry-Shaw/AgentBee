@@ -1850,7 +1850,54 @@ function mergeLocalAndMemoryMessages(
     messages.push(localMessages[nextLocalIndex]);
     nextLocalIndex += 1;
   }
-  return messages;
+return groupToolMessages(messages);
+}
+
+// Accumulate consecutive tool-only records into the next assistant response.
+function groupToolMessages(messages: AgentChatMessage[]): AgentChatMessage[] {
+  const grouped: AgentChatMessage[] = [];
+  let pending: AgentChatMessage | undefined;
+  const hasText = (message: AgentChatMessage) =>
+    Boolean(message.content?.trim() || message.think?.trim());
+  const isAssistantOrTool = (message: AgentChatMessage) =>
+    message.role === 'assistant' || message.role === 'tool';
+  const flush = () => {
+    if (pending) grouped.push(pending);
+    pending = undefined;
+  };
+
+  for (const message of messages) {
+    const compatible = pending && isAssistantOrTool(message) &&
+      Boolean(pending.isRemoteHistory) === Boolean(message.isRemoteHistory) &&
+      pending.WindowName === message.WindowName &&
+      pending.isSubTalk === message.isSubTalk &&
+      (!pending.sender || !message.sender || pending.sender === message.sender);
+    if (pending && !compatible) flush();
+
+    const toolOnly = isAssistantOrTool(message) && !hasText(message) &&
+      Boolean(message.toolEvents?.length) && !message.images?.length &&
+      !message.files?.length && !message.attachments?.length;
+    if (toolOnly) {
+      pending = pending
+        ? {...pending, toolEvents: [...(pending.toolEvents || []), ...(message.toolEvents || [])]}
+        : {...message, toolEvents: [...(message.toolEvents || [])]};
+      continue;
+    }
+
+    if (pending && message.role === 'assistant' && hasText(message)) {
+      grouped.push({
+        ...message,
+        toolEvents: [...(pending.toolEvents || []), ...(message.toolEvents || [])],
+      });
+      pending = undefined;
+      continue;
+    }
+
+    flush();
+    grouped.push(message);
+  }
+  flush();
+  return grouped;
 }
 
 function memoryRecordToChatMessage(record: MemoryRecord): AgentChatMessage {

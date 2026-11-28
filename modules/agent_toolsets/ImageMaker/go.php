@@ -49,7 +49,6 @@ class go extends Factory
     ): array
     {
         return [
-            'async'         => false,
             'action'        => __FUNCTION__,
             'prompt'        => $prompt,
             'n'             => $n,
@@ -127,7 +126,6 @@ class go extends Factory
         unset($utils, $key, $path);
 
         return [
-            'async'         => false,
             'action'        => __FUNCTION__,
             'prompt'        => $prompt,
             'edit_images'   => $edit_images,

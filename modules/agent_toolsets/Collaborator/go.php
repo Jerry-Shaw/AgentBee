@@ -36,7 +36,6 @@ class go extends Factory
     public function invite(string $worker_name, string $worker_role, string $init_prompt): array
     {
         return [
-            'async'       => true,
             'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'worker_role' => $worker_role,
@@ -56,7 +55,6 @@ class go extends Factory
     public function talk(string $worker_name, string $content): array
     {
         return [
-            'async'       => true,
             'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'content'     => $content,
@@ -74,7 +72,6 @@ class go extends Factory
     public function close(string $worker_name): array
     {
         return [
-            'async'       => false,
             'action'      => __FUNCTION__,
             'worker_name' => $worker_name,
             'handler'     => handler::class
@@ -89,7 +86,6 @@ class go extends Factory
     public function list(): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'handler' => handler::class
         ];

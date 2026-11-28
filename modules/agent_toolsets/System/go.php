@@ -48,7 +48,6 @@ class go extends Factory
     public function cleanContext(string $history_summary, int $keep_normal = 6, int $max_tool_pairs = 2): array
     {
         $result = [
-            'async'           => false,
             'action'          => __FUNCTION__,
             'worker_name'     => WORKER_MAIN,
             'history_summary' => $history_summary,
@@ -365,7 +364,6 @@ class go extends Factory
     public function readFile(string $file_path, array $read_range = [1, 200], string $pattern = '', array $context_lines = [3, 3], bool $render_image = false): array
     {
         $result = [
-            'async'         => false,
             'action'        => __FUNCTION__,
             'file_path'     => $file_path,
             'read_range'    => $read_range,
@@ -390,7 +388,6 @@ class go extends Factory
     public function editFile(string $file_path, array $edits): array
     {
         $result = [
-            'async'     => false,
             'action'    => __FUNCTION__,
             'file_path' => $file_path,
             'edits'     => $edits,

@@ -32,7 +32,6 @@ class go extends Factory
     public function start(bool $headless = true): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['headless' => $headless],
             'handler' => handler::class,
@@ -45,7 +44,6 @@ class go extends Factory
     public function close(): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => [],
             'handler' => handler::class,
@@ -60,7 +58,6 @@ class go extends Factory
     public function createTab(string $url = 'about:blank'): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['url' => $url],
             'handler' => handler::class,
@@ -75,7 +72,6 @@ class go extends Factory
     public function switchTab(string $target_id): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['target_id' => $target_id],
             'handler' => handler::class,
@@ -88,7 +84,6 @@ class go extends Factory
     public function listTabs(): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => [],
             'handler' => handler::class,
@@ -103,7 +98,6 @@ class go extends Factory
     public function closeTab(string $target_id): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['target_id' => $target_id],
             'handler' => handler::class,
@@ -118,7 +112,6 @@ class go extends Factory
     public function navigate(string $url): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['url' => $url],
             'handler' => handler::class,
@@ -133,7 +126,6 @@ class go extends Factory
     public function click(string $selector): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector],
             'handler' => handler::class,
@@ -149,7 +141,6 @@ class go extends Factory
     public function type(string $selector, string $text): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector, 'text' => $text],
             'handler' => handler::class,
@@ -164,7 +155,6 @@ class go extends Factory
     public function submit(string $selector = 'form'): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector],
             'handler' => handler::class,
@@ -177,7 +167,6 @@ class go extends Factory
     public function getUrl(): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => [],
             'handler' => handler::class,
@@ -190,7 +179,6 @@ class go extends Factory
     public function getTitle(): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => [],
             'handler' => handler::class,
@@ -205,7 +193,6 @@ class go extends Factory
     public function getContent(bool $html = false): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['html' => $html],
             'handler' => handler::class,
@@ -220,7 +207,6 @@ class go extends Factory
     public function getValue(string $selector): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector],
             'handler' => handler::class,
@@ -236,7 +222,6 @@ class go extends Factory
     public function getAttribute(string $selector, string $attribute): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector, 'attribute' => $attribute],
             'handler' => handler::class,
@@ -253,7 +238,6 @@ class go extends Factory
     public function setAttribute(string $selector, string $attribute, string $value): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector, 'attribute' => $attribute, 'value' => $value],
             'handler' => handler::class,
@@ -268,7 +252,6 @@ class go extends Factory
     public function scrollIntoView(string $selector): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector],
             'handler' => handler::class,
@@ -284,7 +267,6 @@ class go extends Factory
     public function selectOption(string $selector, string $value): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector, 'value' => $value],
             'handler' => handler::class,
@@ -300,7 +282,6 @@ class go extends Factory
     public function evaluate(string $script, bool $return_by_value = true): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['script' => $script, 'return_by_value' => $return_by_value],
             'handler' => handler::class,
@@ -321,7 +302,6 @@ class go extends Factory
         }
 
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['filename' => $filename, 'format' => $format, 'quality' => $quality],
             'handler' => handler::class,
@@ -336,7 +316,6 @@ class go extends Factory
     public function waitForSelector(string $selector): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector],
             'handler' => handler::class,
@@ -349,7 +328,6 @@ class go extends Factory
     public function waitForPageLoad(): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => [],
             'handler' => handler::class,
@@ -364,7 +342,6 @@ class go extends Factory
     public function waitForText(string $text): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['text' => $text],
             'handler' => handler::class,
@@ -379,7 +356,6 @@ class go extends Factory
     public function waitForElementVisible(string $selector): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector],
             'handler' => handler::class,
@@ -394,7 +370,6 @@ class go extends Factory
     public function waitForUrl(string $url_pattern): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['url_pattern' => $url_pattern],
             'handler' => handler::class,
@@ -409,7 +384,6 @@ class go extends Factory
     public function hover(string $selector): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['selector' => $selector],
             'handler' => handler::class,
@@ -425,7 +399,6 @@ class go extends Factory
     public function pressKey(string $key, array $modifiers = []): array
     {
         return [
-            'async'   => false,
             'action'  => __FUNCTION__,
             'params'  => ['key' => $key, 'modifiers' => $modifiers],
             'handler' => handler::class,
